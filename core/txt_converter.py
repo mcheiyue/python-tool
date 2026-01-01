@@ -1,6 +1,7 @@
 from fpdf import FPDF
 import os
 from PyQt6.QtCore import QObject, pyqtSignal
+from core.font_finder import FontFinder
 
 class TxtConverter(QObject):
     finished = pyqtSignal(int, int) # success, fail
@@ -12,13 +13,16 @@ class TxtConverter(QObject):
         fail = 0
         total = len(files)
         
-        # 尝试使用微软雅黑字体以支持中文
-        font_path = "C:/Windows/Fonts/msyh.ttc"
-        font_name = "YaHei"
+        # 尝试使用系统 CJK 字体
+        font_info = FontFinder.find_cjk_font()
+        font_path = None
+        font_name = "Arial" # 默认回退
         
-        if not os.path.exists(font_path):
-            font_path = None
-            self.log.emit("警告: 未找到 C:/Windows/Fonts/msyh.ttc，中文可能会显示为乱码。")
+        if font_info:
+            font_path, font_name = font_info
+            self.log.emit(f"✅ 使用字体: {font_name}")
+        else:
+            self.log.emit("⚠️ 未找到中文字体，中文可能会显示为乱码。")
 
         for i, file_path in enumerate(files):
             try:

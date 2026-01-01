@@ -1,11 +1,8 @@
 PyQt6
 PyQt6-Fluent-Widgets
-PyQt6-WebEngine
 comtypes
 pypdf
-scikit-learn
 Pillow
-numpy
 markdown
 vtracer
 fpdf2

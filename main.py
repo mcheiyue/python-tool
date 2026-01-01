@@ -1,11 +1,9 @@
 import sys
 import os
-# 禁用 GPU 加速，解决 WebEngine 兼容性问题
-os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu --disable-software-rasterizer --disable-gpu-compositing"
-os.environ["QT_OPENGL"] = "software"
 
 import markdown
-from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWidgets import QTextBrowser
+from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QListWidget, QAbstractItemView, QFrame, QScrollArea, QGridLayout, QLabel, QSplitter, QCheckBox, QGroupBox
 
@@ -25,6 +23,7 @@ from core.color_extractor import ColorExtractor
 from core.image_vectorizer import ImageVectorizer
 from core.txt_converter import TxtConverter
 from core.code_extractor import CodeExtractor
+from core.environment_checker import EnvironmentChecker
 
 class ImageVectorThread(QThread):
     def __init__(self, vectorizer, input_path, output_path, **kwargs):
@@ -465,6 +464,22 @@ class PDFCompressInterface(QWidget):
         self.gs_layout.addWidget(self.gs_edit)
         self.gs_layout.addWidget(self.gs_browse)
         
+        # GS 环境检测行
+        self.env_layout = QHBoxLayout()
+        self.check_env_btn = PushButton(FIF.SEARCH, "检测环境", self)
+        self.check_env_btn.clicked.connect(self.check_gs_env)
+        
+        self.env_status = BodyLabel("", self)
+        
+        self.download_btn = PushButton(FIF.DOWNLOAD, "下载 Ghostscript", self)
+        self.download_btn.clicked.connect(lambda: os.startfile(EnvironmentChecker.get_gs_download_url()) if os.name == 'nt' else None)
+        self.download_btn.hide()
+        
+        self.env_layout.addWidget(self.check_env_btn)
+        self.env_layout.addWidget(self.env_status)
+        self.env_layout.addWidget(self.download_btn)
+        self.env_layout.addStretch(1)
+
         # 质量选择行
         self.quality_layout = QHBoxLayout()
         self.quality_label = BodyLabel("压缩质量:", self)
@@ -476,6 +491,8 @@ class PDFCompressInterface(QWidget):
         self.quality_layout.addStretch(1)
 
         self.settings_layout.addLayout(self.gs_layout)
+        self.settings_layout.addSpacing(5)
+        self.settings_layout.addLayout(self.env_layout) # 添加检测行
         self.settings_layout.addSpacing(10)
         self.settings_layout.addLayout(self.quality_layout)
         
@@ -543,6 +560,23 @@ class PDFCompressInterface(QWidget):
         self.compressor.log.connect(self.append_log)
         self.compressor.progress.connect(self.update_progress)
         self.compressor.finished.connect(self.on_finished)
+
+    def check_gs_env(self):
+        self.env_status.setText("正在搜索...")
+        self.download_btn.hide()
+        QApplication.processEvents()
+        
+        result = EnvironmentChecker.find_ghostscript()
+        if result['found']:
+            self.env_status.setText(f"✅ 已检测到: {result.get('version', '未知版本')}")
+            self.env_status.setTextColor("#009900", "#00cc00") # Green
+            self.gs_edit.setText(result['path'])
+            self.settings.setValue("gs_path", result['path'])
+            self.check_state()
+        else:
+            self.env_status.setText("❌ 未检测到 Ghostscript")
+            self.env_status.setTextColor("#cc0000", "#ff3333") # Red
+            self.download_btn.show()
 
     def browse_gs(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择 gswin64c.exe", "", "Executable (*.exe)")
@@ -1027,7 +1061,7 @@ class MarkdownInterface(QWidget):
         # 占位符
         self.placeholder_widget = QWidget()
         self.placeholder_layout = QVBoxLayout(self.placeholder_widget)
-        self.placeholder_label = BodyLabel("点击加载预览 (WebEngine 组件可能导致部分系统卡顿)", self)
+        self.placeholder_label = BodyLabel("点击加载预览 (使用轻量级 QTextBrowser)", self)
         self.placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.load_btn = PrimaryPushButton("加载预览 / 启用导出", self)
         self.load_btn.clicked.connect(self.init_webview)
@@ -1038,33 +1072,17 @@ class MarkdownInterface(QWidget):
         
         self.webview = None
         
-        # CSS 样式
+        # CSS 样式 (适配 QTextBrowser 的简化版)
         self.css_style = """
         <style>
-            body { 
-                font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; 
-                padding: 30px; 
-                line-height: 1.6; 
-                color: #333;
-                background-color: #fff;
-            }
-            table { border-collapse: collapse; width: 100%; margin: 20px 0; font-size: 14px; }
-            th, td { 
-                border: 1px solid #ddd;
-                padding: 8px 12px; 
-                text-align: left; 
-            }
-            th { 
-                background-color: #f2f2f2;
-                font-weight: bold; 
-            }
-            tr:nth-child(even) { background-color: #f9f9f9; }
-            h1, h2, h3 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; margin-top: 24px; color: #333; }
-            code { background: #f0f0f0; padding: 3px 6px; border-radius: 3px; font-family: Consolas, monospace; color: #c7254e; }
-            pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; border: 1px solid #ddd; }
-            blockquote { border-left: 4px solid #ddd; padding: 0 15px; color: #777; margin: 0; }
-            a { color: #007acc; text-decoration: none; }
-            img { max-width: 100%; border-radius: 4px; }
+            body { font-family: "Microsoft YaHei", sans-serif; padding: 20px; color: #333; }
+            h1, h2, h3 { color: #2c3e50; margin-top: 20px; border-bottom: 1px solid #eee; }
+            code { background-color: #f0f0f0; color: #c7254e; }
+            pre { background-color: #f8f8f8; padding: 10px; border: 1px solid #ddd; margin: 10px 0; }
+            blockquote { border-left: 4px solid #ddd; padding-left: 10px; color: #777; }
+            table { border-collapse: collapse; width: 100%; margin: 10px 0; border: 1px solid #ddd; }
+            th, td { border: 1px solid #ddd; padding: 8px; }
+            th { background-color: #f2f2f2; font-weight: bold; }
         </style>
         """
 
@@ -1079,14 +1097,16 @@ class MarkdownInterface(QWidget):
 
     def init_webview(self):
         try:
-            self.webview = QWebEngineView()
-            self.webview.setStyleSheet("background-color: white;")
+            self.webview = QTextBrowser()
+            self.webview.setStyleSheet("background-color: white; border: none;")
+            self.webview.setOpenExternalLinks(True)
+            
             self.preview_layout.removeWidget(self.placeholder_widget)
             self.placeholder_widget.deleteLater()
             self.preview_layout.addWidget(self.webview)
             self.update_preview()
         except Exception as e:
-            InfoBar.error("初始化失败", f"无法加载 WebEngine: {e}", parent=self)
+            InfoBar.error("初始化失败", f"无法加载预览组件: {e}", parent=self)
 
     def update_preview(self):
         if not self.webview: return
@@ -1107,8 +1127,17 @@ class MarkdownInterface(QWidget):
             
         path, _ = QFileDialog.getSaveFileName(self, "保存 PDF", "markdown_output.pdf", "PDF Files (*.pdf)")
         if path:
-            self.webview.page().printToPdf(path)
-            InfoBar.success("任务已提交", f"正在后台生成 PDF 到: {path}", duration=3000, parent=self)
+            try:
+                printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+                printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                printer.setOutputFileName(path)
+                
+                # 打印 QTextBrowser 的文档
+                self.webview.print(printer)
+                
+                InfoBar.success("任务完成", f"PDF 已保存到: {path}", duration=3000, parent=self)
+            except Exception as e:
+                InfoBar.error("导出失败", f"无法生成 PDF: {e}", parent=self)
 
 class ImageVectorInterface(QWidget):
     def __init__(self, parent=None):
