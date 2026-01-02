@@ -17,6 +17,7 @@
 11. **TXT 转 PDF**: 将文本文件批量转换为 PDF，支持自动换行和中文。
 12. **代码提取**: 遍历项目目录，提取指定扩展名的代码文件到一个文本文件中，便于分析。
 13. **图片格式转换**: 支持 JPG, PNG, WEBP, BMP, ICO 格式的互转，支持批量处理和质量调节。
+14. **设置**: 支持切换应用主题（跟随系统、浅色模式、深色模式）。
 
 ## 未来计划 (Roadmap)
 
@@ -26,6 +27,7 @@
 *   **PDF转WORD**: 将PDF文档转换为可编辑的Word文档。
 *   **PDF转EXCEL**: 将PDF表格转换为Excel电子表格。
 *   **PDF转PPT**: 将PDF转换为PowerPoint演示文稿。
+*   **PPT转图片**: 将PPT演示文稿的每一页导出为图片。
 *   **HTML转PDF**: 将HTML网页转换为PDF文档。
 *   **图片转PDF**: 将图片合并转换为PDF文件。
 *   **WORD转EXCEL**: 将Word文档内容转换为Excel。
@@ -45,6 +47,9 @@
 ### 图片与其他
 *   **文档转图片功能**: 将各类文档页面转换为图片。
 *   **压缩图片**: 压缩图片体积。
+*   **图片批量缩放**: 按固定尺寸或百分比调整图片大小。
+*   **图片加水印**: 为图片添加文字或图片水印。
+*   **图片旋转/翻转**: 批量旋转或翻转图片方向。
 *   **Twain设备调试**: 用于扫描仪等Twain设备的调试工具。
 
 ## 环境要求
@@ -74,17 +79,25 @@ python main.py
 
 ## 目录结构
 
-*   `main.py`: 主程序入口和 UI 实现。
+*   `main.py`: 主程序入口。
 *   `core/`: 核心功能模块。
     *   `ppt_converter.py`: PPT 转 PDF 逻辑。
     *   `word_converter.py`: Word 转 PDF 逻辑。
     *   `excel_converter.py`: Excel 转 PDF 逻辑。
     *   `pdf_merger.py`: PDF 合并逻辑。
     *   `pdf_compressor.py`: PDF 压缩逻辑 (调用 Ghostscript)。
+    *   `pdf_splitter.py`: PDF 拆分逻辑。
+    *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
     *   `color_extractor.py`: 颜色提取逻辑 (KMeans)。
+    *   `image_converter.py`: 图片格式转换逻辑。
     *   `image_vectorizer.py`: 位图转矢量图逻辑 (vtracer)。
     *   `txt_converter.py`: 文本转 PDF 逻辑。
     *   `code_extractor.py`: 代码提取逻辑。
-    *   `pdf_splitter.py`: PDF 拆分逻辑。
-    *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
-    *   `image_converter.py`: 图片格式转换逻辑。
+    *   `environment_checker.py`: 运行环境检测工具。
+    *   `font_finder.py`: 系统字体查找工具。
+*   `ui/`: 用户界面模块。
+    *   `main_window.py`: 主窗口布局与导航。
+    *   `threads.py`: 后台任务线程。
+    *   `interfaces/`: 各功能页面界面。
+    *   `widgets/`: 自定义可复用控件。
+*   `tests/`: 测试文件。
