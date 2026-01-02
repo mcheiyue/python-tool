@@ -6,15 +6,16 @@
 
 1.  **PPT 转 PDF**: 批量将 PowerPoint 演示文稿转换为 PDF。
 2.  **Word 转 PDF**: 批量将 Word 文档转换为 PDF。
-3.  **PDF 合并**: 将多个 PDF 文件合并为一个，支持拖拽排序。
-4.  **PDF 压缩**: 使用 Ghostscript 压缩 PDF 文件体积。
-5.  **图片取色**: 提取图片中的主色调并生成配色方案 (Hex/RGB)。
-6.  **Markdown 转 PDF**: 实时预览 Markdown 并导出为 PDF。
-7.  **PNG 转 SVG**: 将位图转换为 SVG 矢量图，适合 Logo 和图标。
-8.  **TXT 转 PDF**: 将文本文件批量转换为 PDF，支持自动换行和中文。
-9.  **代码提取**: 遍历项目目录，提取指定扩展名的代码文件到一个文本文件中，便于分析。
-10. **PDF 拆分/提取页面**: 按页面范围（如 "1-5, 8, 10-end"）将 PDF 拆分为新文件。
-11. **PDF 图片提取**: 批量提取 PDF 文档中嵌入的所有图片。
+3.  **Excel 转 PDF**: 批量将 Excel 工作簿转换为 PDF。
+4.  **PDF 合并**: 将多个 PDF 文件合并为一个，支持拖拽排序。
+5.  **PDF 压缩**: 使用 Ghostscript 压缩 PDF 文件体积。
+6.  **PDF 拆分/提取页面**: 按页面范围（如 "1-5, 8, 10-end"）将 PDF 拆分为新文件。
+7.  **PDF 图片提取**: 批量提取 PDF 文档中嵌入的所有图片。
+8.  **图片取色**: 提取图片中的主色调并生成配色方案 (Hex/RGB)。
+9.  **Markdown 转 PDF**: 实时预览 Markdown 并导出为 PDF。
+10. **PNG 转 SVG**: 将位图转换为 SVG 矢量图，适合 Logo 和图标。
+11. **TXT 转 PDF**: 将文本文件批量转换为 PDF，支持自动换行和中文。
+12. **代码提取**: 遍历项目目录，提取指定扩展名的代码文件到一个文本文件中，便于分析。
 
 ## 未来计划 (Roadmap)
 
@@ -24,7 +25,6 @@
 *   **PDF转WORD**: 将PDF文档转换为可编辑的Word文档。
 *   **PDF转EXCEL**: 将PDF表格转换为Excel电子表格。
 *   **PDF转PPT**: 将PDF转换为PowerPoint演示文稿。
-*   **Excel转PDF**: 将Excel表格转换为PDF文档。
 *   **HTML转PDF**: 将HTML网页转换为PDF文档。
 *   **图片转PDF**: 将图片合并转换为PDF文件。
 *   **WORD转EXCEL**: 将Word文档内容转换为Excel。
@@ -50,7 +50,7 @@
 
 *   Windows 10/11 (推荐)
 *   Python 3.8+
-*   Microsoft Office (Word 和 PowerPoint 功能需要)
+*   Microsoft Office (Word, Excel 和 PowerPoint 功能需要)
 *   Ghostscript (PDF 压缩功能需要)
 
 ## 安装依赖
@@ -77,6 +77,7 @@ python main.py
 *   `core/`: 核心功能模块。
     *   `ppt_converter.py`: PPT 转 PDF 逻辑。
     *   `word_converter.py`: Word 转 PDF 逻辑。
+    *   `excel_converter.py`: Excel 转 PDF 逻辑。
     *   `pdf_merger.py`: PDF 合并逻辑。
     *   `pdf_compressor.py`: PDF 压缩逻辑 (调用 Ghostscript)。
     *   `color_extractor.py`: 颜色提取逻辑 (KMeans)。

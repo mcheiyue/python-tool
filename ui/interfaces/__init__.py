@@ -1,4 +1,5 @@
 from .word_interface import WordInterface
+from .excel_interface import ExcelInterface
 from .ppt_interface import PPTInterface
 from .pdf_compress_interface import PDFCompressInterface
 from .pdf_merge_interface import PDFMergeInterface
