@@ -4,7 +4,7 @@ from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, TextEdit, InfoBar, 
-                            FluentIcon as FIF, isDarkTheme, qconfig)
+                            FluentIcon as FIF, isDarkTheme, qconfig, ComboBox)
 
 class MarkdownInterface(QWidget):
     def __init__(self, parent=None):
@@ -23,8 +23,17 @@ class MarkdownInterface(QWidget):
 
         # 工具栏
         self.toolbar = QHBoxLayout()
+        
+        # 背景选择
+        self.bg_combo = ComboBox(self)
+        self.bg_combo.addItems(["跟随主题", "白色背景"])
+        # self.bg_combo.currentIndexChanged.connect(self.update_preview) # 预览不再随背景选项变化
+        self.bg_combo.setFixedWidth(120)
+        
         self.export_btn = PrimaryPushButton(FIF.SAVE, "导出 PDF", self)
         self.export_btn.clicked.connect(self.export_pdf)
+        
+        self.toolbar.addWidget(self.bg_combo)
         self.toolbar.addWidget(self.export_btn)
         self.toolbar.addStretch(1)
         self.vbox.addLayout(self.toolbar)
@@ -73,9 +82,11 @@ class MarkdownInterface(QWidget):
         # 默认文本
         self.editor.setText("# Hello World\\n\\n欢迎使用 **Markdown 转 PDF** 工具！")
 
-    def get_css_style(self):
+    def get_css_style(self, force_light=False):
         """根据主题返回对应的 CSS 样式"""
-        if isDarkTheme():
+        is_dark = isDarkTheme() and not force_light
+
+        if is_dark:
             # 深色模式样式
             return """
             <style>
@@ -136,8 +147,6 @@ class MarkdownInterface(QWidget):
         # 2. 如果预览组件存在，也更新其样式
         if self.webview:
             # 设置 QTextBrowser 的容器样式 (主要是背景色和边框)
-            # 注意：实际内容的背景色由 HTML 中的 body { background-color } 控制
-            # 这里设置的是 widget 本身的背景，防止加载瞬间闪白
             web_bg = "#2b2b2b" if dark else "#ffffff"
             self.webview.setStyleSheet(f"""
                 QTextBrowser {{
@@ -156,17 +165,7 @@ class MarkdownInterface(QWidget):
             self.webview.setOpenExternalLinks(True)
             
             # 初始化时应用当前样式
-            dark = isDarkTheme()
-            web_bg = "#2b2b2b" if dark else "#ffffff"
-            border_color = "#3d3d3d" if dark else "#e0e0e0"
-            
-            self.webview.setStyleSheet(f"""
-                QTextBrowser {{
-                    background-color: {web_bg};
-                    border: 1px solid {border_color};
-                    border-radius: 8px;
-                }}
-            """)
+            self.update_style()
             
             self.preview_layout.removeWidget(self.placeholder_widget)
             self.placeholder_widget.deleteLater()
@@ -182,8 +181,8 @@ class MarkdownInterface(QWidget):
         extensions = ['markdown.extensions.tables', 'markdown.extensions.fenced_code', 'markdown.extensions.extra']
         try:
             html_content = markdown.markdown(text, extensions=extensions)
-            # 获取当前主题对应的 CSS
-            css = self.get_css_style()
+            # 获取当前主题对应的 CSS (不强制浅色，始终跟随主题)
+            css = self.get_css_style(force_light=False)
             final_html = f"<!DOCTYPE html><html><head>{css}</head><body>{html_content}</body></html>"
             self.webview.setHtml(final_html)
         except Exception as e:
@@ -201,8 +200,27 @@ class MarkdownInterface(QWidget):
                 printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
                 printer.setOutputFileName(path)
                 
-                # 打印 QTextBrowser 的文档
-                self.webview.print(printer)
+                # 判断是否需要强制白色背景
+                force_light = self.bg_combo.currentText() == "白色背景"
+                
+                if force_light:
+                    # 如果需要白色背景，创建一个临时的 QTextBrowser 进行打印
+                    temp_browser = QTextBrowser()
+                    # 获取强制浅色的 CSS
+                    css = self.get_css_style(force_light=True)
+                    
+                    text = self.editor.toPlainText()
+                    extensions = ['markdown.extensions.tables', 'markdown.extensions.fenced_code', 'markdown.extensions.extra']
+                    html_content = markdown.markdown(text, extensions=extensions)
+                    final_html = f"<!DOCTYPE html><html><head>{css}</head><body>{html_content}</body></html>"
+                    
+                    temp_browser.setHtml(final_html)
+                    # 打印临时组件
+                    temp_browser.print(printer)
+                    temp_browser.deleteLater()
+                else:
+                    # 否则直接打印当前的预览组件
+                    self.webview.print(printer)
                 
                 InfoBar.success("任务完成", f"PDF 已保存到: {path}", duration=3000, parent=self)
             except Exception as e:
