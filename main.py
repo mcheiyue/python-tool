@@ -25,6 +25,8 @@ from core.image_vectorizer import ImageVectorizer
 from core.txt_converter import TxtConverter
 from core.code_extractor import CodeExtractor
 from core.environment_checker import EnvironmentChecker
+from core.pdf_splitter import PDFSplitter
+from core.pdf_image_extractor import PDFImageExtractor
 
 class ImageVectorThread(QThread):
     def __init__(self, vectorizer, input_path, output_path, **kwargs):
@@ -97,6 +99,27 @@ class CompressThread(QThread):
 
     def run(self):
         self.compressor.compress(self.files, self.quality, self.gs_path)
+
+class PDFSplitThread(QThread):
+    def __init__(self, splitter, file_path, ranges, output_dir):
+        super().__init__()
+        self.splitter = splitter
+        self.file_path = file_path
+        self.ranges = ranges
+        self.output_dir = output_dir
+
+    def run(self):
+        self.splitter.split(self.file_path, self.ranges, self.output_dir)
+
+class PDFImageExtractThread(QThread):
+    def __init__(self, extractor, files, output_dir):
+        super().__init__()
+        self.extractor = extractor
+        self.files = files
+        self.output_dir = output_dir
+
+    def run(self):
+        self.extractor.extract(self.files, self.output_dir)
 
 class DragDropListWidget(QListWidget):
     files_dropped = pyqtSignal(list)
@@ -1361,6 +1384,225 @@ class TxtPdfInterface(QWidget):
         else:
             InfoBar.success("完成", f"成功 {success}", duration=3000, parent=self)
 
+class PDFSplitInterface(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setObjectName("pdf_split_interface")
+        self.splitter = PDFSplitter()
+        
+        self.vbox = QVBoxLayout(self)
+        self.vbox.setContentsMargins(30, 30, 30, 30)
+        self.vbox.setSpacing(20)
+
+        self.title = SubtitleLabel("PDF 拆分/提取", self)
+        self.desc = BodyLabel("按范围拆分 PDF 或提取特定页面 (如: 1-5, 8, 10-end)", self)
+        self.desc.setTextColor("#606060", "#d0d0d0")
+        self.vbox.addWidget(self.title)
+        self.vbox.addWidget(self.desc)
+
+        # 输入区域
+        self.card = CardWidget(self)
+        self.card_layout = QGridLayout(self.card)
+        self.card_layout.setContentsMargins(20, 20, 20, 20)
+        self.card_layout.setSpacing(15)
+
+        self.file_label = BodyLabel("源文件:", self)
+        self.file_edit = LineEdit(self)
+        self.file_edit.setPlaceholderText("请选择 PDF 文件...")
+        self.file_btn = PushButton(FIF.FOLDER, "浏览", self)
+        self.file_btn.clicked.connect(self.browse_file)
+
+        self.range_label = BodyLabel("页码范围:", self)
+        self.range_edit = LineEdit(self)
+        self.range_edit.setPlaceholderText("示例: 1-5, 8, 10-15 (逗号分隔)")
+        
+        self.out_label = BodyLabel("输出目录:", self)
+        self.out_edit = LineEdit(self)
+        self.out_btn = PushButton(FIF.FOLDER, "浏览", self)
+        self.out_btn.clicked.connect(self.browse_output)
+
+        self.card_layout.addWidget(self.file_label, 0, 0)
+        self.card_layout.addWidget(self.file_edit, 0, 1)
+        self.card_layout.addWidget(self.file_btn, 0, 2)
+        
+        self.card_layout.addWidget(self.range_label, 1, 0)
+        self.card_layout.addWidget(self.range_edit, 1, 1, 1, 2)
+        
+        self.card_layout.addWidget(self.out_label, 2, 0)
+        self.card_layout.addWidget(self.out_edit, 2, 1)
+        self.card_layout.addWidget(self.out_btn, 2, 2)
+
+        self.vbox.addWidget(self.card)
+
+        # 日志
+        self.log_text = TextEdit(self)
+        self.log_text.setReadOnly(True)
+        self.log_text.setFont(QFont("Consolas", 10))
+        self.vbox.addWidget(self.log_text)
+
+        # 按钮
+        self.start_btn = PrimaryPushButton(FIF.PLAY, "开始拆分", self)
+        self.start_btn.clicked.connect(self.start_split)
+        self.start_btn.setEnabled(False)
+        self.vbox.addWidget(self.start_btn, 0, Qt.AlignmentFlag.AlignRight)
+
+        self.thread = None
+        self.splitter.log.connect(self.log_text.append)
+        self.splitter.finished.connect(self.on_finished)
+        self.splitter.progress.connect(self.update_btn) # 简单复用
+
+    def browse_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "选择 PDF", "", "PDF (*.pdf)")
+        if path:
+            self.file_edit.setText(path)
+            if not self.out_edit.text():
+                self.out_edit.setText(os.path.dirname(path))
+            self.check_state()
+
+    def browse_output(self):
+        path = QFileDialog.getExistingDirectory(self, "选择输出目录")
+        if path:
+            self.out_edit.setText(path)
+            self.check_state()
+
+    def check_state(self):
+        self.start_btn.setEnabled(
+            bool(self.file_edit.text()) and 
+            bool(self.out_edit.text())
+        )
+
+    def start_split(self):
+        file_path = self.file_edit.text()
+        ranges = self.range_edit.text()
+        output_dir = self.out_edit.text()
+        
+        if not ranges:
+            InfoBar.error("错误", "请输入页码范围", parent=self)
+            return
+
+        self.start_btn.setEnabled(False)
+        self.log_text.clear()
+        self.thread = PDFSplitThread(self.splitter, file_path, ranges, output_dir)
+        self.thread.start()
+
+    def update_btn(self, curr, total, msg):
+        self.start_btn.setText(f"处理中... {curr}/{total}")
+
+    def on_finished(self, success, msg):
+        self.start_btn.setEnabled(True)
+        self.start_btn.setText("开始拆分")
+        if success:
+            InfoBar.success("完成", msg, parent=self)
+        else:
+            InfoBar.error("错误", msg, parent=self)
+
+class PDFImageExtractInterface(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setObjectName("pdf_img_extract_interface")
+        self.extractor = PDFImageExtractor()
+        
+        self.vbox = QVBoxLayout(self)
+        self.vbox.setContentsMargins(30, 30, 30, 30)
+        self.vbox.setSpacing(20)
+
+        self.title = SubtitleLabel("PDF 图片提取", self)
+        self.desc = BodyLabel("批量从 PDF 文件中提取所有嵌入的图片资源", self)
+        self.desc.setTextColor("#606060", "#d0d0d0")
+        self.vbox.addWidget(self.title)
+        self.vbox.addWidget(self.desc)
+
+        # 文件列表
+        self.content_layout = QHBoxLayout()
+        self.list_widget = DragDropListWidget(self)
+        self.list_widget.files_dropped.connect(self.on_files_dropped)
+        
+        self.log_text = TextEdit(self)
+        self.log_text.setReadOnly(True)
+        self.log_text.setFont(QFont("Consolas", 10))
+        
+        self.content_layout.addWidget(self.list_widget, 6)
+        self.content_layout.addWidget(self.log_text, 4)
+        self.vbox.addLayout(self.content_layout)
+
+        # 底部
+        self.bottom_layout = QHBoxLayout()
+        self.out_label = BodyLabel("输出目录:", self)
+        self.out_edit = LineEdit(self)
+        self.browse_btn = PushButton(FIF.FOLDER, "浏览", self)
+        self.browse_btn.clicked.connect(self.browse_output)
+        
+        self.add_btn = PushButton(FIF.ADD, "添加 PDF", self)
+        self.add_btn.clicked.connect(self.add_files)
+        self.clear_btn = PushButton(FIF.DELETE, "清空", self)
+        self.clear_btn.clicked.connect(self.clear_files)
+        
+        self.start_btn = PrimaryPushButton(FIF.PLAY, "开始提取", self)
+        self.start_btn.clicked.connect(self.start_extract)
+        self.start_btn.setEnabled(False)
+
+        self.bottom_layout.addWidget(self.out_label)
+        self.bottom_layout.addWidget(self.out_edit)
+        self.bottom_layout.addWidget(self.browse_btn)
+        self.bottom_layout.addSpacing(20)
+        self.bottom_layout.addWidget(self.add_btn)
+        self.bottom_layout.addWidget(self.clear_btn)
+        self.bottom_layout.addWidget(self.start_btn)
+        
+        self.vbox.addLayout(self.bottom_layout)
+
+        self.files = []
+        self.thread = None
+        self.extractor.log.connect(self.log_text.append)
+        self.extractor.finished.connect(self.on_finished)
+        self.extractor.progress.connect(self.update_progress)
+
+    def add_files(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
+        if paths: self.on_files_dropped(paths)
+
+    def on_files_dropped(self, paths):
+        for p in paths:
+            if p not in self.files:
+                self.files.append(p)
+                self.list_widget.addItem(os.path.basename(p))
+        
+        if self.files and not self.out_edit.text():
+            self.out_edit.setText(os.path.dirname(self.files[0]))
+        self.check_state()
+
+    def browse_output(self):
+        path = QFileDialog.getExistingDirectory(self, "选择输出目录")
+        if path:
+            self.out_edit.setText(path)
+            self.check_state()
+
+    def clear_files(self):
+        self.files = []
+        self.list_widget.clear()
+        self.log_text.clear()
+        self.check_state()
+
+    def check_state(self):
+        self.start_btn.setEnabled(bool(self.files) and bool(self.out_edit.text()))
+
+    def start_extract(self):
+        out_dir = self.out_edit.text()
+        if not self.files or not out_dir: return
+        
+        self.start_btn.setEnabled(False)
+        self.log_text.clear()
+        self.thread = PDFImageExtractThread(self.extractor, self.files, out_dir)
+        self.thread.start()
+
+    def update_progress(self, curr, total, msg):
+        self.start_btn.setText(f"处理中... {curr}/{total}")
+
+    def on_finished(self, success, fail):
+        self.start_btn.setEnabled(True)
+        self.start_btn.setText("开始提取")
+        InfoBar.success("完成", f"成功处理 {success} 个文件", duration=3000, parent=self)
+
 class CodeExtractInterface(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -1549,27 +1791,35 @@ class MainWindow(FluentWindow):
         self.compress_interface = PDFCompressInterface(self)
         self.addSubInterface(self.compress_interface, FIF.ZIP_FOLDER, "PDF 压缩")
 
-        # 5. 图片取色界面
+        # 5. PDF 拆分界面
+        self.pdf_split_interface = PDFSplitInterface(self)
+        self.addSubInterface(self.pdf_split_interface, FIF.CUT, "PDF 拆分/提取")
+
+        # 6. PDF 图片提取界面
+        self.pdf_img_extract_interface = PDFImageExtractInterface(self)
+        self.addSubInterface(self.pdf_img_extract_interface, FIF.PHOTO, "PDF 图片提取")
+
+        # 7. 图片取色界面
         self.color_interface = ColorInterface(self)
         self.addSubInterface(self.color_interface, FIF.PALETTE, "图片取色")
 
-        # 6. Markdown 转 PDF
+        # 8. Markdown 转 PDF
         self.markdown_interface = MarkdownInterface(self)
         self.addSubInterface(self.markdown_interface, FIF.EDIT, "Markdown 转 PDF")
 
-        # 7. PNG 转 SVG
+        # 9. PNG 转 SVG
         self.image_vector_interface = ImageVectorInterface(self)
         self.addSubInterface(self.image_vector_interface, FIF.PHOTO, "PNG 转 SVG")
 
-        # 8. TXT 转 PDF
+        # 10. TXT 转 PDF
         self.txt_pdf_interface = TxtPdfInterface(self)
         self.addSubInterface(self.txt_pdf_interface, FIF.DOCUMENT, "TXT 转 PDF")
 
-        # 9. 代码提取
+        # 11. 代码提取
         self.code_extract_interface = CodeExtractInterface(self)
         self.addSubInterface(self.code_extract_interface, FIF.CODE, "代码提取")
 
-        # 10. 设置界面
+        # 12. 设置界面
         self.settings_interface = SettingsInterface(self)
         self.addSubInterface(self.settings_interface, FIF.SETTING, "设置", position=NavigationItemPosition.BOTTOM)
 

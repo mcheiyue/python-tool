@@ -13,6 +13,8 @@
 7.  **PNG 转 SVG**: 将位图转换为 SVG 矢量图，适合 Logo 和图标。
 8.  **TXT 转 PDF**: 将文本文件批量转换为 PDF，支持自动换行和中文。
 9.  **代码提取**: 遍历项目目录，提取指定扩展名的代码文件到一个文本文件中，便于分析。
+10. **PDF 拆分/提取页面**: 按页面范围（如 "1-5, 8, 10-end"）将 PDF 拆分为新文件。
+11. **PDF 图片提取**: 批量提取 PDF 文档中嵌入的所有图片。
 
 ## 未来计划 (Roadmap)
 
@@ -33,7 +35,6 @@
 
 ### 文档编辑与工具
 *   **合并WORD功能**: 将多个Word文档合并为一个。
-*   **拆分PDF**: 将一个PDF文件拆分为多个文件。
 *   **拆分WORD**: 将一个Word文档拆分为多个文件。
 *   **WORD内容批量替换**: 批量替换Word文档中的指定内容。
 *   **EXCEL内容批量替换**: 批量替换Excel表格中的指定内容。
@@ -82,3 +83,5 @@ python main.py
     *   `image_vectorizer.py`: 位图转矢量图逻辑 (vtracer)。
     *   `txt_converter.py`: 文本转 PDF 逻辑。
     *   `code_extractor.py`: 代码提取逻辑。
+    *   `pdf_splitter.py`: PDF 拆分逻辑。
+    *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
