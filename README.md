@@ -1,4 +1,4 @@
-# AI Office Tool
+# Office Tool
 
 这是一个基于 PyQt6 和 Fluent Widgets 的多功能办公工具箱，集成了多种文档处理和图像处理功能。
 
