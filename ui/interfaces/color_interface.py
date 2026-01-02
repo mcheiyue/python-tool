@@ -1,9 +1,9 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QGridLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QGridLayout, QFileDialog
 from PyQt6.QtCore import Qt
-from qfluentwidgets import SubtitleLabel, BodyLabel, Slider, InfoBar
+from qfluentwidgets import SubtitleLabel, BodyLabel, Slider, InfoBar, PushButton
 
 from core.color_extractor import ColorExtractor
-from ui.widgets import DropImageWidget, ColorCard
+from ui.widgets import DropImageWidget, ColorCard, ColorBar
 from ui.threads import ExtractionThread
 
 class ColorInterface(QWidget):
@@ -38,6 +38,13 @@ class ColorInterface(QWidget):
         self.settings_layout.addWidget(self.slider_label)
         self.settings_layout.addWidget(self.slider)
         self.settings_layout.addStretch(1)
+
+        # 导出按钮
+        self.export_btn = PushButton("导出色条", self)
+        self.export_btn.clicked.connect(self.export_color_bar)
+        self.export_btn.hide()
+        self.settings_layout.addWidget(self.export_btn)
+
         self.vbox.addLayout(self.settings_layout)
 
         # 结果显示区域 (滚动)
@@ -46,6 +53,7 @@ class ColorInterface(QWidget):
         self.scroll.setStyleSheet("QScrollArea {border: none; background: transparent;}")
         
         self.result_container = QWidget()
+        self.result_container.setStyleSheet("background: transparent;")
         self.grid_layout = QGridLayout(self.result_container)
         self.grid_layout.setSpacing(20)
         self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
@@ -63,6 +71,7 @@ class ColorInterface(QWidget):
         n_colors = self.slider.value()
         self.drop_area.setEnabled(False)
         self.clear_results()
+        self.export_btn.hide()
         
         # 显示加载状态
         self.loading_label = BodyLabel("正在分析图片颜色...", self)
@@ -91,7 +100,12 @@ class ColorInterface(QWidget):
             return
 
         # 布局结果
-        row, col = 0, 0
+        # 添加色条
+        self.color_bar = ColorBar(results)
+        self.grid_layout.addWidget(self.color_bar, 0, 0, 1, 4) # 跨越4列
+        self.export_btn.show()
+
+        row, col = 1, 0
         max_cols = 4 # 每行4个
         
         for data in results:
@@ -101,3 +115,20 @@ class ColorInterface(QWidget):
             if col >= max_cols:
                 col = 0
                 row += 1
+
+    def export_color_bar(self):
+        if not hasattr(self, 'color_bar') or not self.color_bar:
+            return
+            
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存色条",
+            "color_bar.png",
+            "PNG Images (*.png)"
+        )
+        
+        if file_path:
+            if self.color_bar.export_to_image(file_path):
+                InfoBar.success("导出成功", f"色条已保存至 {file_path}", parent=self)
+            else:
+                InfoBar.error("导出失败", "无法保存图片", parent=self)
