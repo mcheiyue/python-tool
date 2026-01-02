@@ -10,7 +10,8 @@ from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFi
 from qfluentwidgets import (FluentWindow, SubtitleLabel, PrimaryPushButton, 
                             PushButton, ProgressBar, TextEdit, InfoBar, 
                             BodyLabel, FluentIcon as FIF, CardWidget, IconWidget,
-                            LineEdit, ToolButton, ComboBox, Slider, StrongBodyLabel, CheckBox)
+                            LineEdit, ToolButton, ComboBox, Slider, StrongBodyLabel, CheckBox,
+                            setTheme, Theme, NavigationItemPosition)
 from PyQt6.QtCore import QSettings
 
 from PyQt6.QtGui import QFont, QDragEnterEvent, QDropEvent, QPixmap, QColor
@@ -107,12 +108,12 @@ class DragDropListWidget(QListWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setFont(QFont("Microsoft YaHei UI", 10))
         
-        # 美化样式
+        # 美化样式 - 使用透明背景以适配深色模式
         self.setStyleSheet("""
             QListWidget {
                 border: 1px solid rgba(0, 0, 0, 0.08);
                 border-radius: 8px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: transparent;
                 outline: none;
             }
             QListWidget::item {
@@ -120,14 +121,12 @@ class DragDropListWidget(QListWidget):
                 padding-left: 10px;
                 margin: 2px 4px;
                 border-radius: 4px;
-                color: #333333;
             }
             QListWidget::item:hover {
                 background-color: rgba(0, 0, 0, 0.04);
             }
             QListWidget::item:selected {
                 background-color: rgba(0, 0, 0, 0.08);
-                color: #000000;
             }
         """)
 
@@ -194,14 +193,7 @@ class WordInterface(QWidget):
         self.log_text = TextEdit(self)
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 10))
-        self.log_text.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid rgba(0, 0, 0, 0.08);
-                border-radius: 8px;
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #555555;
-            }
-        """)
+        # 移除硬编码样式以支持深色模式
         
         self.content_layout.addWidget(self.list_widget, 6)
         self.content_layout.addWidget(self.log_text, 4)
@@ -337,14 +329,7 @@ class PPTInterface(QWidget):
         self.log_text = TextEdit(self)
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 10))
-        self.log_text.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid rgba(0, 0, 0, 0.08);
-                border-radius: 8px;
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #555555;
-            }
-        """)
+        # 移除硬编码样式以支持深色模式
         
         self.content_layout.addWidget(self.list_widget, 6)
         self.content_layout.addWidget(self.log_text, 4)
@@ -698,14 +683,7 @@ class PDFMergeInterface(QWidget):
         self.log_text = TextEdit(self)
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 10))
-        self.log_text.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid rgba(0, 0, 0, 0.08);
-                border-radius: 8px;
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #555555;
-            }
-        """)
+        # 移除硬编码样式以支持深色模式
         
         self.content_layout.addWidget(self.list_widget, 6)
         self.content_layout.addWidget(self.log_text, 4)
@@ -1488,6 +1466,63 @@ class CodeExtractInterface(QWidget):
         else:
             InfoBar.error("错误", msg, parent=self)
 
+class SettingsInterface(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setObjectName("settings_interface")
+        
+        self.vbox = QVBoxLayout(self)
+        self.vbox.setContentsMargins(30, 30, 30, 30)
+        self.vbox.setSpacing(20)
+
+        self.title = SubtitleLabel("设置", self)
+        self.vbox.addWidget(self.title)
+
+        self.card = CardWidget(self)
+        self.card_layout = QHBoxLayout(self.card)
+        self.card_layout.setContentsMargins(20, 10, 20, 10)
+
+        self.icon = IconWidget(FIF.BRUSH)
+        self.icon.setFixedSize(18, 18)
+        
+        self.label = BodyLabel("应用主题", self)
+        
+        self.combo = ComboBox(self)
+        self.combo.addItems(["跟随系统", "浅色模式", "深色模式"])
+        self.combo.setFixedWidth(150)
+        
+        # Load saved theme
+        self.settings = QSettings("AI_Office_Tool", "Config")
+        mode = self.settings.value("themeMode", "Auto")
+        if mode == "Light":
+            self.combo.setCurrentIndex(1)
+        elif mode == "Dark":
+            self.combo.setCurrentIndex(2)
+        else:
+            self.combo.setCurrentIndex(0)
+            
+        self.combo.currentIndexChanged.connect(self.on_changed)
+        
+        self.card_layout.addWidget(self.icon)
+        self.card_layout.addSpacing(10)
+        self.card_layout.addWidget(self.label)
+        self.card_layout.addStretch(1)
+        self.card_layout.addWidget(self.combo)
+        
+        self.vbox.addWidget(self.card)
+        self.vbox.addStretch(1)
+
+    def on_changed(self, index):
+        if index == 0:
+            setTheme(Theme.AUTO)
+            self.settings.setValue("themeMode", "Auto")
+        elif index == 1:
+            setTheme(Theme.LIGHT)
+            self.settings.setValue("themeMode", "Light")
+        elif index == 2:
+            setTheme(Theme.DARK)
+            self.settings.setValue("themeMode", "Dark")
+
 class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
@@ -1534,12 +1569,26 @@ class MainWindow(FluentWindow):
         self.code_extract_interface = CodeExtractInterface(self)
         self.addSubInterface(self.code_extract_interface, FIF.CODE, "代码提取")
 
+        # 10. 设置界面
+        self.settings_interface = SettingsInterface(self)
+        self.addSubInterface(self.settings_interface, FIF.SETTING, "设置", position=NavigationItemPosition.BOTTOM)
+
         self.navigationInterface.setCurrentItem(self.ppt_interface.objectName())
 
 if __name__ == "__main__":
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
     os.environ["QT_SCALE_FACTOR"] = "1.25"
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    
+    # 加载主题设置
+    settings = QSettings("AI_Office_Tool", "Config")
+    mode = settings.value("themeMode", "Auto")
+    if mode == "Light":
+        setTheme(Theme.LIGHT)
+    elif mode == "Dark":
+        setTheme(Theme.DARK)
+    else:
+        setTheme(Theme.AUTO)
     
     app = QApplication(sys.argv)
     w = MainWindow()
