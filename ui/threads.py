@@ -92,3 +92,15 @@ class PDFImageExtractThread(QThread):
 
     def run(self):
         self.extractor.extract(self.files, self.output_dir)
+
+class ImageConvertThread(QThread):
+    def __init__(self, converter, input_path, output_path, output_format, quality):
+        super().__init__()
+        self.converter = converter
+        self.input_path = input_path
+        self.output_path = output_path
+        self.output_format = output_format
+        self.quality = quality
+
+    def run(self):
+        self.converter.convert(self.input_path, self.output_path, self.output_format, self.quality)

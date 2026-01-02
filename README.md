@@ -16,6 +16,7 @@
 10. **PNG 转 SVG**: 将位图转换为 SVG 矢量图，适合 Logo 和图标。
 11. **TXT 转 PDF**: 将文本文件批量转换为 PDF，支持自动换行和中文。
 12. **代码提取**: 遍历项目目录，提取指定扩展名的代码文件到一个文本文件中，便于分析。
+13. **图片格式转换**: 支持 JPG, PNG, WEBP, BMP, ICO 格式的互转，支持批量处理和质量调节。
 
 ## 未来计划 (Roadmap)
 
@@ -86,3 +87,4 @@ python main.py
     *   `code_extractor.py`: 代码提取逻辑。
     *   `pdf_splitter.py`: PDF 拆分逻辑。
     *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
+    *   `image_converter.py`: 图片格式转换逻辑。

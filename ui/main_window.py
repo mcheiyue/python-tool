@@ -4,7 +4,7 @@ from qfluentwidgets import FluentWindow, FluentIcon as FIF, NavigationItemPositi
 from ui.interfaces import (
     PPTInterface, WordInterface, ExcelInterface, PDFMergeInterface, PDFCompressInterface,
     PDFSplitInterface, PDFImageExtractInterface, ColorInterface, MarkdownInterface,
-    ImageVectorInterface, TxtPdfInterface, CodeExtractInterface, SettingsInterface
+    ImageVectorInterface, ImageConvertInterface, TxtPdfInterface, CodeExtractInterface, SettingsInterface
 )
 
 class MainWindow(FluentWindow):
@@ -65,7 +65,11 @@ class MainWindow(FluentWindow):
         self.code_extract_interface = CodeExtractInterface(self)
         self.addSubInterface(self.code_extract_interface, FIF.CODE, "代码提取")
 
-        # 13. 设置界面
+        # 13. 图片格式转换
+        self.image_convert_interface = ImageConvertInterface(self)
+        self.addSubInterface(self.image_convert_interface, FIF.PHOTO, "图片格式转换")
+
+        # 14. 设置界面
         self.settings_interface = SettingsInterface(self)
         self.addSubInterface(self.settings_interface, FIF.SETTING, "设置", position=NavigationItemPosition.BOTTOM)
 
