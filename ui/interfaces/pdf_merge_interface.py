@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QFont
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton, 
                             ToolButton, TextEdit, LineEdit, ProgressBar, InfoBar, 
-                            FluentIcon as FIF)
+                            CardWidget, FluentIcon as FIF)
 
 from core.pdf_merger import PDFMerger
 from ui.widgets import DragDropListWidget
@@ -58,8 +58,10 @@ class PDFMergeInterface(QWidget):
 
         self.vbox.addLayout(self.toolbar_layout)
 
-        # 主要内容区域 (列表 + 日志)
-        self.content_layout = QHBoxLayout()
+        # 主要内容区域 (列表 + 日志) - 使用卡片容器
+        self.content_card = CardWidget(self)
+        self.content_layout = QHBoxLayout(self.content_card)
+        self.content_layout.setContentsMargins(20, 20, 20, 20)
         self.content_layout.setSpacing(15)
         
         self.list_widget = DragDropListWidget(self)
@@ -68,10 +70,17 @@ class PDFMergeInterface(QWidget):
         self.log_text = TextEdit(self)
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 10))
+        self.log_text.setStyleSheet("""
+            TextEdit {
+                background-color: rgba(255, 255, 255, 0.5);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 6px;
+            }
+        """)
         
         self.content_layout.addWidget(self.list_widget, 6)
         self.content_layout.addWidget(self.log_text, 4)
-        self.vbox.addLayout(self.content_layout)
+        self.vbox.addWidget(self.content_card, 1)
 
         # 底部区域 (输出路径 + 开始按钮)
         self.bottom_layout = QHBoxLayout()

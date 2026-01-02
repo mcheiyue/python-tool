@@ -48,7 +48,10 @@ class WordInterface(QWidget):
 
         self.vbox.addWidget(self.card)
 
-        self.content_layout = QHBoxLayout()
+        # 内容区域容器
+        self.content_card = CardWidget(self)
+        self.content_layout = QHBoxLayout(self.content_card)
+        self.content_layout.setContentsMargins(20, 20, 20, 20)
         self.content_layout.setSpacing(15)
         
         self.list_widget = DragDropListWidget(self)
@@ -57,11 +60,18 @@ class WordInterface(QWidget):
         self.log_text = TextEdit(self)
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 10))
+        self.log_text.setStyleSheet("""
+            TextEdit {
+                background-color: rgba(255, 255, 255, 0.5);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 6px;
+            }
+        """)
         
         self.content_layout.addWidget(self.list_widget, 6)
         self.content_layout.addWidget(self.log_text, 4)
         
-        self.vbox.addLayout(self.content_layout)
+        self.vbox.addWidget(self.content_card, 1) # stretch=1 使其占据主要空间
 
         self.bottom_layout = QHBoxLayout()
         

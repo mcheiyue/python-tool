@@ -13,10 +13,10 @@ class DragDropListWidget(QListWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setFont(QFont("Microsoft YaHei UI", 10))
         
-        # 美化样式 - 使用透明背景以适配深色模式
+        # 美化样式 - 增强对比度
         self.setStyleSheet("""
             QListWidget {
-                border: 1px solid rgba(0, 0, 0, 0.08);
+                border: 1px solid rgba(0, 0, 0, 0.12);
                 border-radius: 8px;
                 background-color: transparent;
                 outline: none;
@@ -26,12 +26,14 @@ class DragDropListWidget(QListWidget):
                 padding-left: 10px;
                 margin: 2px 4px;
                 border-radius: 4px;
+                color: rgba(0, 0, 0, 0.8);
             }
             QListWidget::item:hover {
-                background-color: rgba(0, 0, 0, 0.04);
+                background-color: rgba(0, 0, 0, 0.06);
             }
             QListWidget::item:selected {
-                background-color: rgba(0, 0, 0, 0.08);
+                background-color: rgba(0, 120, 212, 0.1);
+                color: #0078d4;
             }
         """)
 

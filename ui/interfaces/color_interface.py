@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QGridLayout, QFileDialog
 from PyQt6.QtCore import Qt
-from qfluentwidgets import SubtitleLabel, BodyLabel, Slider, InfoBar, PushButton
+from qfluentwidgets import SubtitleLabel, BodyLabel, Slider, InfoBar, PushButton, CardWidget
 
 from core.color_extractor import ColorExtractor
 from ui.widgets import DropImageWidget, ColorCard, ColorBar
@@ -47,19 +47,26 @@ class ColorInterface(QWidget):
 
         self.vbox.addLayout(self.settings_layout)
 
-        # 结果显示区域 (滚动)
-        self.scroll = QScrollArea(self)
+        # 结果显示区域 (滚动) - 使用卡片包裹
+        self.result_card = CardWidget(self)
+        self.card_layout = QVBoxLayout(self.result_card)
+        self.card_layout.setContentsMargins(10, 10, 10, 10)
+
+        self.scroll = QScrollArea(self.result_card)
         self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("QScrollArea {border: none; background: transparent;}")
         
         self.result_container = QWidget()
         self.result_container.setStyleSheet("background: transparent;")
         self.grid_layout = QGridLayout(self.result_container)
+        self.grid_layout.setContentsMargins(20, 20, 20, 20)
         self.grid_layout.setSpacing(20)
         self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         
         self.scroll.setWidget(self.result_container)
-        self.vbox.addWidget(self.scroll)
+        self.card_layout.addWidget(self.scroll)
+        
+        self.vbox.addWidget(self.result_card)
 
         # 逻辑
         self.extractor = ColorExtractor()

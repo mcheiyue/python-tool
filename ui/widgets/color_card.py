@@ -7,6 +7,19 @@ class ColorCard(CardWidget):
         super().__init__(parent)
         self.setFixedSize(160, 180)
         
+        # 增强卡片边框
+        self.setStyleSheet("""
+            ColorCard {
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                border-radius: 8px;
+                background-color: rgba(255, 255, 255, 0.8);
+            }
+            ColorCard:hover {
+                border: 1px solid rgba(0, 0, 0, 0.2);
+                background-color: white;
+            }
+        """)
+        
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         
