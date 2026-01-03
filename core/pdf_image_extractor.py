@@ -29,6 +29,11 @@ class PDFImageExtractor(QObject):
             self.progress.emit(i, total_files, f"正在处理: {file_name}")
             self.log.emit(f"\n--- 处理文件 [{i+1}/{total_files}]: {file_name} ---")
 
+            if not file_path.lower().endswith('.pdf'):
+                self.log.emit(f"❌ 跳过: 不是有效的 PDF 文件")
+                fail_count += 1
+                continue
+
             try:
                 reader = PdfReader(file_path)
                 base_name = os.path.splitext(file_name)[0]

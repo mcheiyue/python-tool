@@ -75,7 +75,7 @@ class PDFImageExtractInterface(QWidget):
 
     def on_files_dropped(self, paths):
         for p in paths:
-            if p not in self.files:
+            if p.lower().endswith('.pdf') and p not in self.files:
                 self.files.append(p)
                 self.list_widget.addItem(os.path.basename(p))
         
