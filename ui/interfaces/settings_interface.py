@@ -6,6 +6,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
                             ComboBox, Theme, setTheme, FluentIcon as FIF,
                             PushButton, ToolButton, CaptionLabel)
 from app.container import AppContainer
+from core.external_tools.base import ExternalTool
 
 class SettingsInterface(QWidget):
     def __init__(self, parent=None):
@@ -113,9 +114,24 @@ class SettingsInterface(QWidget):
         info_layout.setSpacing(2)
         info_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         
-        # Tool Name
+        # Tool Name and Source Badge
+        name_layout = QHBoxLayout()
+        name_layout.setSpacing(8)
+        
         name_label = BodyLabel(status["display_name"], self)
-        info_layout.addWidget(name_label)
+        name_layout.addWidget(name_label)
+        
+        if is_installed:
+            source = status.get("source", "system")
+            source_text = "便携版" if source == "portable" else "系统安装"
+            source_color = "#009900" if source == "portable" else "#0066CC"
+            
+            badge = CaptionLabel(f"[{source_text}]", self)
+            badge.setStyleSheet(f"color: {source_color}; font-weight: bold;")
+            name_layout.addWidget(badge)
+            
+        name_layout.addStretch(1)
+        info_layout.addLayout(name_layout)
         
         # Version/Path or "Not Installed"
         if is_installed:
@@ -137,10 +153,17 @@ class SettingsInterface(QWidget):
         layout.addStretch(1)
         
         # Actions
-        if not is_installed and status["download_url"]:
-            download_btn = PushButton(FIF.DOWNLOAD, "下载", self)
-            download_btn.clicked.connect(lambda: self._open_download_url(status["download_url"]))
-            layout.addWidget(download_btn)
+        if not is_installed:
+            # 打开 libs 目录按钮
+            open_libs_btn = PushButton(FIF.FOLDER, "打开组件目录", self)
+            open_libs_btn.setToolTip("打开便携组件存放目录 (libs)")
+            open_libs_btn.clicked.connect(self._open_libs_folder)
+            layout.addWidget(open_libs_btn)
+            
+            if status["download_url"]:
+                download_btn = PushButton(FIF.DOWNLOAD, "下载安装包", self)
+                download_btn.clicked.connect(lambda: self._open_download_url(status["download_url"]))
+                layout.addWidget(download_btn)
             
         refresh_btn = ToolButton(FIF.SYNC, self)
         refresh_btn.setToolTip("重新检测")
@@ -165,6 +188,18 @@ class SettingsInterface(QWidget):
     def _open_download_url(self, url):
         """Open download URL in browser"""
         webbrowser.open(url)
+
+    def _open_libs_folder(self):
+        """Open the libs folder"""
+        libs_path = ExternalTool.get_libs_path()
+        if not os.path.exists(libs_path):
+            try:
+                os.makedirs(libs_path)
+            except:
+                pass
+        
+        if os.path.exists(libs_path):
+            os.startfile(libs_path)
 
     def on_changed(self, index):
         if index == 0:

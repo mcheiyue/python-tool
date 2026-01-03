@@ -1,6 +1,7 @@
 import os
 import shutil
 import platform
+import subprocess
 from typing import Optional
 from .base import ExternalTool
 
@@ -24,6 +25,9 @@ class GhostscriptTool(ExternalTool):
     def get_path(self) -> Optional[str]:
         return self._find()["path"]
 
+    def get_source(self) -> Optional[str]:
+        return self._find()["source"]
+
     def _find(self) -> dict:
         """查找 Ghostscript 安装路径 (带缓存)"""
         if self._cache is not None:
@@ -32,22 +36,51 @@ class GhostscriptTool(ExternalTool):
         result = {
             "found": False,
             "path": None,
-            "version": None
+            "version": None,
+            "source": None
         }
         
         system = platform.system().lower()
         
-        # Windows 搜索逻辑
-        if system == 'windows':
-            # 1. 检查环境变量
-            path = shutil.which("gswin64c") or shutil.which("gswin32c")
-            if path:
+        # 1. 优先检查 libs 目录 (便携模式)
+        libs_path = self.get_libs_path()
+        portable_gs_dir = os.path.join(libs_path, "ghostscript")
+        
+        # 检查 libs/ghostscript 下的 exe
+        portable_exes = ["gswin64c.exe", "gswin32c.exe", "gs"]
+        for exe_name in portable_exes:
+            portable_exe = os.path.join(portable_gs_dir, exe_name)
+            if os.path.exists(portable_exe):
+                # 找到便携版
                 result["found"] = True
-                result["path"] = path
+                result["path"] = portable_exe
+                result["source"] = "portable"
+                result["version"] = self._get_version_from_exe(portable_exe)
                 self._cache = result
-                return result
                 
-            # 2. 搜索常见安装目录
+                # 设置 GS_LIB 环境变量，指向便携版的 lib 目录
+                lib_dir = os.path.join(portable_gs_dir, "lib")
+                if os.path.exists(lib_dir):
+                    os.environ["GS_LIB"] = lib_dir
+                    
+                return result
+
+        # 2. 检查环境变量
+        if system == 'windows':
+            path = shutil.which("gswin64c") or shutil.which("gswin32c")
+        else:
+            path = shutil.which("gs")
+            
+        if path:
+            result["found"] = True
+            result["path"] = path
+            result["source"] = "env"
+            result["version"] = self._get_version_from_exe(path)
+            self._cache = result
+            return result
+            
+        # 3. Windows 搜索常见安装目录
+        if system == 'windows':
             search_roots = [
                 os.environ.get("ProgramFiles", r"C:\Program Files"),
                 os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
@@ -90,22 +123,19 @@ class GhostscriptTool(ExternalTool):
             if best_path:
                 result["found"] = True
                 result["path"] = best_path
+                result["source"] = "system"
                 result["version"] = best_ver_str or ".".join(map(str, latest_version))
-                
-        # Linux/macOS 简单检查
-        else:
-            path = shutil.which("gs")
-            if path:
-                result["found"] = True
-                result["path"] = path
-                # 尝试获取版本
-                try:
-                    import subprocess
-                    res = subprocess.run([path, "--version"], capture_output=True, text=True)
-                    if res.returncode == 0:
-                        result["version"] = res.stdout.strip()
-                except:
-                    pass
         
         self._cache = result
         return result
+
+    def _get_version_from_exe(self, path: str) -> Optional[str]:
+        """从 exe 获取版本号"""
+        try:
+            res = subprocess.run([path, "--version"], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0)
+            if res.returncode == 0:
+                # Ghostscript 输出通常是 "10.03.1"
+                return res.stdout.strip().split('\n')[0]
+        except:
+            pass
+        return None

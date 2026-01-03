@@ -15,4 +15,4 @@
 
 3. **Git 提交**
    - 所有确认完成后，询问用户："是否提交 Git？"
-   - 用户同意后，使用规范的 Commit Message 格式提交
+   - 用户同意后，使用Git Tools MCP工具，规范的 Commit Message 格式提交

@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
+import os
+import sys
 
 class ExternalTool(ABC):
     """外部工具抽象基类"""
@@ -34,6 +36,11 @@ class ExternalTool(ABC):
         """获取可执行文件路径"""
         pass
     
+    def get_source(self) -> Optional[str]:
+        """获取安装来源 (portable/system/env)"""
+        # 默认返回 None，子类可以在 _find 结果中包含此信息
+        return None
+
     # 别名，为了更好的语义兼容性
     def is_available(self) -> bool:
         return self.check_installed()
@@ -51,6 +58,19 @@ class ExternalTool(ABC):
             "installed": installed,
             "version": self.get_version() if installed else None,
             "path": self.get_path() if installed else None,
+            "source": self.get_source() if installed else None,
             "download_url": self.download_url,
             "is_required": self.is_required
         }
+
+    @staticmethod
+    def get_libs_path() -> str:
+        """获取便携 libs 目录路径"""
+        if getattr(sys, 'frozen', False):
+            # PyInstaller 打包后
+            base = os.path.dirname(sys.executable)
+        else:
+            # 开发模式
+            base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            
+        return os.path.join(base, "libs")

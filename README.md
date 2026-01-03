@@ -44,6 +44,33 @@
 pip install -r requirements.txt
 ```
 
+## 便携版组件支持 (New)
+
+为了方便分发和使用，本软件支持**便携版**的外部组件（Ghostscript, Pandoc）。您无需在系统中安装这些软件，只需将其放置在软件根目录下的 `libs/` 文件夹中即可。
+
+### 目录结构示例
+
+```
+python-tool/
+├── libs/
+│   ├── ghostscript/
+│   │   ├── gswin64c.exe
+│   │   ├── gsdll64.dll
+│   │   └── lib/        # Ghostscript 资源文件
+│   └── pandoc/
+│       └── pandoc.exe
+├── main.py
+└── ...
+```
+
+### 自动检测优先顺序
+
+1.  **libs 目录** (便携模式，最高优先级)
+2.  **环境变量** (PATH)
+3.  **系统默认安装路径** (如 `C:\Program Files\gs\`)
+
+您可以在软件的 **设置 -> 外部工具** 界面查看各组件的安装状态和来源，并可直接打开 `libs` 目录进行管理。
+
 ## 运行
 
 ```bash
@@ -52,9 +79,9 @@ python main.py
 
 ## 注意事项
 
-*   **PDF 压缩**: 需要安装 Ghostscript (gswin64c.exe)，并在软件界面中指定其路径。
+*   **外部组件 (Ghostscript/Pandoc)**: 推荐使用 **libs 目录便携模式** 部署，避免复杂的环境变量配置。详情见上方说明。
 *   **Office 转换**: 需要系统安装有 Microsoft Office，因为工具通过 COM 接口调用本地 Office 组件。
-*   **Markdown 转 PDF**: 推荐安装 Pandoc 以获得最佳的渲染效果（包括数学公式支持）和更好的 PDF 输出质量。如果不安装，也可以使用内置的基础转换功能。
+*   **Markdown 转 PDF**: 推荐配置 Pandoc 以获得最佳的渲染效果（包括数学公式支持）和更好的 PDF 输出质量。
 *   **TXT 转 PDF**: 默认使用微软雅黑字体 (`msyh.ttc`) 以支持中文。
 
 ## 目录结构
@@ -144,7 +171,11 @@ python main.py
     *   实现 **UI 层解耦**，`MarkdownInterface` 不再直接依赖 `PandocPlugin`，而是请求具备相应能力的任意插件。
     *   **首选插件策略**: 支持通过配置 (`preferred_plugins`) 指定特定能力的首选实现插件。
 
-### 2026-01-04 进一步依赖优化
+### 2026-01-04 便携化支持与体验优化
+*   **外部组件便携化 (Portable Support)**:
+    *   新增 `libs/` 目录支持，实现 Ghostscript 和 Pandoc 的“绿色版”外挂。
+    *   **优先加载机制**: 优先扫描 `libs/` 目录下的组件，实现与系统环境的隔离，解决版本冲突问题。
+    *   **设置界面升级**: 外部工具管理卡片新增“安装来源”标识（便携版/系统安装）和“打开组件目录”快捷按钮，大幅降低配置门槛。
 *   **深度瘦身**:
     *   移除 `PyMuPDF` (约 40MB)，完全迁移至轻量级 `pypdf`。
     *   移除 `pywin32` (约 15MB)，Office 自动化完全通过纯 Python 的 `comtypes` 实现。
