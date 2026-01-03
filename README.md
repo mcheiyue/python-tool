@@ -2,16 +2,6 @@
 
 这是一个基于 PyQt6 和 Fluent Widgets 的多功能办公工具箱，集成了多种文档处理和图像处理功能。
 
-## 更新日志
-
-### 2026-01-03 UI 优化更新
-*   **侧边栏图标优化**:
-    *   修复了侧边栏图标显示过小的问题，优化了 SVG 图标的 viewBox。
-    *   修复了侧边栏图标在切换主题时颜色不刷新的问题（实现主题感知图标引擎）。
-*   **深色模式适配**:
-    *   修复了侧边栏图标在深色模式下不可见的问题（自动反色）。
-    *   修复了主区域分类标题在深色模式下颜色不正确的问题。
-
 ## 功能特性
 
 1.  **PPT 转 PDF**: 批量将 PowerPoint 演示文稿转换为 PDF。
@@ -30,6 +20,68 @@
 14. **PPT转图片**: 将PPT演示文稿的每一页导出为图片（支持PNG/JPG/BMP）。
 15. **图片转PDF**: 将图片合并转换为PDF文件。
 16. **设置**: 支持切换应用主题（跟随系统、浅色模式、深色模式）。
+
+## 架构设计
+
+本项目采用分层架构设计，以提高可维护性和扩展性。
+
+*   **配置管理 (Config)**: `config/` 模块提供统一的配置管理，支持默认配置 (`default.json`) 和用户配置 (`config.json`) 的递归合并与分层访问。
+*   **依赖注入 (DI)**: `app/container.py` 提供单例应用容器，负责管理全局依赖（如配置加载器、服务实例）的生命周期，实现 UI 与业务逻辑的解耦。
+
+## 环境要求
+
+*   Windows 10/11 (推荐)
+*   Python 3.8+
+*   Microsoft Office (Word, Excel 和 PowerPoint 功能需要)
+*   Ghostscript (PDF 压缩功能需要)
+
+## 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+## 运行
+
+```bash
+python main.py
+```
+
+## 注意事项
+
+*   **PDF 压缩**: 需要安装 Ghostscript (gswin64c.exe)，并在软件界面中指定其路径。
+*   **Office 转换**: 需要系统安装有 Microsoft Office，因为工具通过 COM 接口调用本地 Office 组件。
+*   **TXT 转 PDF**: 默认使用微软雅黑字体 (`msyh.ttc`) 以支持中文。
+
+## 目录结构
+
+*   `main.py`: 主程序入口。
+*   `app/`: 应用容器与依赖注入。
+    *   `container.py`: AppContainer 类。
+*   `config/`: 配置管理模块。
+    *   `default.json`: 默认配置文件。
+    *   `loader.py`: 配置加载器。
+*   `core/`: 核心功能模块。
+    *   `ppt_converter.py`: PPT 转 PDF 逻辑。
+    *   `word_converter.py`: Word 转 PDF 逻辑。
+    *   `excel_converter.py`: Excel 转 PDF 逻辑。
+    *   `pdf_merger.py`: PDF 合并逻辑。
+    *   `pdf_compressor.py`: PDF 压缩逻辑 (调用 Ghostscript)。
+    *   `pdf_splitter.py`: PDF 拆分逻辑。
+    *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
+    *   `color_extractor.py`: 颜色提取逻辑 (KMeans)。
+    *   `image_converter.py`: 图片格式转换逻辑。
+    *   `image_vectorizer.py`: 位图转矢量图逻辑 (vtracer)。
+    *   `txt_converter.py`: 文本转 PDF 逻辑。
+    *   `code_extractor.py`: 代码提取逻辑。
+    *   `environment_checker.py`: 运行环境检测工具。
+    *   `font_finder.py`: 系统字体查找工具。
+*   `ui/`: 用户界面模块。
+    *   `main_window.py`: 主窗口布局与导航。
+    *   `threads.py`: 后台任务线程。
+    *   `interfaces/`: 各功能页面界面。
+    *   `widgets/`: 自定义可复用控件。
+*   `tests/`: 测试文件。
 
 ## 未来计划 (Roadmap)
 
@@ -61,52 +113,16 @@
 *   **图片加水印**: 为图片添加文字或图片水印。
 *   **Twain设备调试**: 用于扫描仪等Twain设备的调试工具。
 
-## 环境要求
+## 更新日志
 
-*   Windows 10/11 (推荐)
-*   Python 3.8+
-*   Microsoft Office (Word, Excel 和 PowerPoint 功能需要)
-*   Ghostscript (PDF 压缩功能需要)
+### 2026-01-03 架构重构更新
+*   **配置管理**: 引入 `ConfigLoader`，支持分层配置和 JSON 配置存储。
+*   **依赖注入**: 引入 `AppContainer`，为后续解耦 UI 和业务逻辑打下基础。
 
-## 安装依赖
-
-```bash
-pip install -r requirements.txt
-```
-
-## 运行
-
-```bash
-python main.py
-```
-
-## 注意事项
-
-*   **PDF 压缩**: 需要安装 Ghostscript (gswin64c.exe)，并在软件界面中指定其路径。
-*   **Office 转换**: 需要系统安装有 Microsoft Office，因为工具通过 COM 接口调用本地 Office 组件。
-*   **TXT 转 PDF**: 默认使用微软雅黑字体 (`msyh.ttc`) 以支持中文。
-
-## 目录结构
-
-*   `main.py`: 主程序入口。
-*   `core/`: 核心功能模块。
-    *   `ppt_converter.py`: PPT 转 PDF 逻辑。
-    *   `word_converter.py`: Word 转 PDF 逻辑。
-    *   `excel_converter.py`: Excel 转 PDF 逻辑。
-    *   `pdf_merger.py`: PDF 合并逻辑。
-    *   `pdf_compressor.py`: PDF 压缩逻辑 (调用 Ghostscript)。
-    *   `pdf_splitter.py`: PDF 拆分逻辑。
-    *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
-    *   `color_extractor.py`: 颜色提取逻辑 (KMeans)。
-    *   `image_converter.py`: 图片格式转换逻辑。
-    *   `image_vectorizer.py`: 位图转矢量图逻辑 (vtracer)。
-    *   `txt_converter.py`: 文本转 PDF 逻辑。
-    *   `code_extractor.py`: 代码提取逻辑。
-    *   `environment_checker.py`: 运行环境检测工具。
-    *   `font_finder.py`: 系统字体查找工具。
-*   `ui/`: 用户界面模块。
-    *   `main_window.py`: 主窗口布局与导航。
-    *   `threads.py`: 后台任务线程。
-    *   `interfaces/`: 各功能页面界面。
-    *   `widgets/`: 自定义可复用控件。
-*   `tests/`: 测试文件。
+### 2026-01-03 UI 优化更新
+*   **侧边栏图标优化**:
+    *   修复了侧边栏图标显示过小的问题，优化了 SVG 图标的 viewBox。
+    *   修复了侧边栏图标在切换主题时颜色不刷新的问题（实现主题感知图标引擎）。
+*   **深色模式适配**:
+    *   修复了侧边栏图标在深色模式下不可见的问题（自动反色）。
+    *   修复了主区域分类标题在深色模式下颜色不正确的问题。

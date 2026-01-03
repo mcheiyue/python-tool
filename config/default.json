@@ -1,0 +1,26 @@
+{
+    "app": {
+        "theme_mode": "Auto",
+        "language": "zh_CN",
+        "version": "1.0.0"
+    },
+    "dependencies": {
+        "ghostscript": {
+            "path": ""
+        }
+    },
+    "pdf": {
+        "compress": {
+            "quality": "/printer",
+            "default_output_dir": "Compressed"
+        },
+        "merge": {
+            "default_output_name": "merged.pdf"
+        }
+    },
+    "ocr": {
+        "engine": "paddle",
+        "language": "ch",
+        "enable_gpu": false
+    }
+}
