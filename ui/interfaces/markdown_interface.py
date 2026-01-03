@@ -8,14 +8,17 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, TextEdi
                             FluentIcon as FIF, isDarkTheme, qconfig, ComboBox, ToolButton)
 
 from core.plugins import PluginManager
+from core.utils.md_normalizer import normalize_markdown
+from ui.threads import WorkerThread
 
 class MarkdownInterface(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, container, parent=None):
         super().__init__(parent=parent)
+        self.container = container
         self.setObjectName("markdown_interface")
         
         # 初始化插件管理器
-        self.plugin_manager = PluginManager()
+        self.plugin_manager = container.plugin_manager
         
         self.vbox = QVBoxLayout(self)
         self.vbox.setContentsMargins(20, 20, 20, 20)
@@ -249,20 +252,36 @@ class MarkdownInterface(QWidget):
             
         engine = self.engine_combo.currentData()
         
-        try:
-            if engine == "pandoc":
-                if not self.pandoc or not self.pandoc.is_available:
-                    raise RuntimeError("Pandoc 插件未安装或不可用")
-                
-                # 使用 Pandoc 导出
+        if engine == "pandoc":
+            if not self.pandoc or not self.pandoc.is_available:
+                InfoBar.error("错误", "Pandoc 插件未安装或不可用", parent=self)
+                return
+
+            # 显示进度条或 Loading 状态
+            InfoBar.info("正在导出", "正在使用 Pandoc 生成 PDF，请稍候...", duration=2000, parent=self)
+            self.export_btn.setEnabled(False) # 防止重复点击
+            
+            # 获取并规范化内容
+            raw_content = self.editor.toPlainText()
+            normalized_content = normalize_markdown(raw_content)
+
+            # 定义耗时任务
+            def pandoc_task(content, output_path):
                 self.pandoc.convert(
-                    content=self.editor.toPlainText(),
-                    output_path=path,
+                    content=content,
+                    output_path=output_path,
                     extra_args=["--pdf-engine=xelatex"]
                 )
-                InfoBar.success("导出成功", f"使用 Pandoc 成功生成 PDF\n路径: {path}", duration=3000, parent=self)
-                
-            else:
+                return output_path
+
+            # 使用线程执行
+            self.worker = WorkerThread(pandoc_task, normalized_content, path)
+            self.worker.finished.connect(lambda p: self.on_export_finished(True, p))
+            self.worker.error.connect(lambda e: self.on_export_finished(False, str(e)))
+            self.worker.start()
+            
+        else:
+            try:
                 # 内置导出 (QPrinter)
                 printer = QPrinter(QPrinter.PrinterMode.HighResolution)
                 printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
@@ -289,6 +308,13 @@ class MarkdownInterface(QWidget):
                     self.webview.print(printer)
                     
                 InfoBar.success("导出成功", f"PDF 已保存到: {path}", duration=3000, parent=self)
-                
-        except Exception as e:
-            InfoBar.error("导出失败", f"错误详情: {e}", parent=self)
+            
+            except Exception as e:
+                InfoBar.error("导出失败", f"错误详情: {e}", parent=self)
+
+    def on_export_finished(self, success, message):
+        self.export_btn.setEnabled(True)
+        if success:
+            InfoBar.success("导出成功", f"文件已保存: {message}", parent=self)
+        else:
+            InfoBar.error("导出失败", message, parent=self)

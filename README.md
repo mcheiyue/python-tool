@@ -12,7 +12,7 @@
 6.  **PDF 拆分/提取页面**: 按页面范围（如 "1-5, 8, 10-end"）将 PDF 拆分为新文件。
 7.  **PDF 图片提取**: 批量提取 PDF 文档中嵌入的所有图片。
 8.  **图片取色**: 提取图片中的主色调并生成配色方案 (Hex/RGB)。
-9.  **Markdown 转 PDF**: 实时预览 Markdown 并导出为 PDF
+9.  **Markdown 转 PDF**: 实时预览 Markdown 并导出为 PDF。**[新功能]** 支持切换内置转换引擎或 **Pandoc** 引擎，支持数学公式、代码高亮，以及深色模式下的白色背景导出优化。
 10. **PNG 转 SVG**: 将位图转换为 SVG 矢量图，适合 Logo 和图标。
 11. **TXT 转 PDF**: 将文本文件批量转换为 PDF，支持自动换行和中文。
 12. **代码提取**: 遍历项目目录，提取指定扩展名的代码文件到一个文本文件中，便于分析。
@@ -26,15 +26,19 @@
 本项目采用分层架构设计，以提高可维护性和扩展性。
 
 *   **配置管理 (Config)**: `config/` 模块提供统一的配置管理，支持默认配置 (`default.json`) 和用户配置 (`config.json`) 的递归合并与分层访问。
-*   **依赖注入 (DI)**: `app/container.py` 提供单例应用容器，负责管理全局依赖（如配置加载器、服务实例）的生命周期，实现 UI 与业务逻辑的解耦。
-*   **引擎抽象 (Engine)**: `core/engines/` 模块定义了业务核心的抽象接口（如 `BasePdfCompressor`），并提供具体的实现（如 `GhostscriptCompressor`），方便未来扩展新的引擎（如 OCR
+*   **依赖注入 (DI)**: `app/container.py` 提供单例应用容器，负责管理全局依赖（如配置加载器、服务实例、插件管理器）的生命周期，实现 UI 与业务逻辑的解耦。
+*   **插件系统 (Plugin)**: `core/plugins/` 模块实现了轻量级插件架构，支持动态加载外部工具（如 Pandoc, MathJax, Pygments），实现功能的解耦与按需启用。
+*   **引擎抽象 (Engine)**: `core/engines/` 模块定义了业务核心的抽象接口（如 `BasePdfCompressor`），并提供具体的实现（如 `GhostscriptCompressor`）。
+
 ## 环境要求
 
 *   Windows 10/11 (推荐)
 *   Python 3.8+
 *   Microsoft Office (Word, Excel 和 PowerPoint 功能需要)
 *   Ghostscript (PDF 压缩功能需要)
+*   Pandoc (Markdown 转 PDF 高级功能需要)
 
+## 安装
 
 ```bash
 pip install -r requirements.txt
@@ -50,8 +54,13 @@ python main.py
 
 *   **PDF 压缩**: 需要安装 Ghostscript (gswin64c.exe)，并在软件界面中指定其路径。
 *   **Office 转换**: 需要系统安装有 Microsoft Office，因为工具通过 COM 接口调用本地 Office 组件。
+*   **Markdown 转 PDF**: 推荐安装 Pandoc 以获得最佳的渲染效果（包括数学公式支持）和更好的 PDF 输出质量。如果不安装，也可以使用内置的基础转换功能。
 *   **TXT 转 PDF**: 默认使用微软雅黑字体 (`msyh.ttc`) 以支持中文。
-`pp/`: 应用容器与依赖注入。
+
+## 目录结构
+
+*   `main.py`: 应用程序入口。
+*   `app/`: 应用容器与依赖注入。
     *   `container.py`: AppContainer 类。
 *   `config/`: 配置管理模块。
     *   `default.json`: 默认配置文件。
@@ -66,14 +75,21 @@ python main.py
             *   `word.py`: Word 转换引擎。
             *   `excel.py`: Excel 转换引擎。
             *   `powerpoint.py`: PPT 转换引擎。
-        *   `ocr/`: OCR 引擎（预留）。
+    *   `plugins/`: 插件系统。
+        *   `base.py`: 插件基类。
+        *   `manager.py`: 插件管理器。
+        *   `pandoc_plugin.py`: Pandoc 插件。
+        *   `mathjax_plugin.py`: MathJax 插件。
+        *   `highlight_plugin.py`: 代码高亮插件。
+    *   `utils/`: 通用工具。
+        *   `md_normalizer.py`: Markdown 格式规范化工具。
     *   `ppt_converter.py`: PPT 转 PDF 逻辑。
     *   `word_converter.py`: Word 转 PDF 逻辑。
     *   `excel_converter.py`: Excel 转 PDF 逻辑。
     *   `pdf_merger.py`: PDF 合并逻辑。
     *   `pdf_splitter.py`: PDF 拆分逻辑。
     *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
-    *   `crneronment_checker.py`: 运行环境检测工具。
+    *   `environment_checker.py`: 运行环境检测工具。
     *   `font_finder.py`: 系统字体查找工具。
 *   `ui/`: 用户界面模块。
     *   `main_window.py`: 主窗口布局与导航。
@@ -113,6 +129,17 @@ python main.py
 *   **Twain设备调试**: 用于扫描仪等Twain设备的调试工具。
 
 ## 更新日志
+
+### 2026-01-03 Markdown 增强与架构优化
+*   **Markdown 转 PDF 升级**:
+    *   引入 **Pandoc** 集成，大幅提升 PDF 导出质量，支持数学公式（MathJax）和复杂排版。
+    *   实现**深色模式下的智能导出**：预览跟随主题，导出 PDF 自动切换为白底黑字。
+    *   添加 **Markdown 格式自动规范化** (`md_normalizer`)，智能修复标题格式，提高解析容错率。
+*   **架构优化**:
+    *   引入 **插件化架构** (`core/plugins/`)，实现 Pandoc、MathJax 等外部工具的解耦管理。
+    *   实现 **WorkerThread 通用线程模型**，解决耗时任务（如 Pandoc 转换）导致的主线程 UI 卡死问题。
+    *   优化 **依赖注入**，将 `PluginManager` 纳入 `AppContainer` 统一管理，消除冗余实例化。
+*   **UI 体验**: 优化 Markdown 编辑器样式，添加导出进度提示和操作反馈。
 
 ### 2026-01-03 架构重构更新
 *   **UI 重构**: 完成 `PDFCompressInterface` 的重构，完全接入 `AppContainer` 和 `GhostscriptCompressor`，移除对旧版逻辑的直接依赖。

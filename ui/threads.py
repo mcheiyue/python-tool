@@ -1,4 +1,22 @@
-from PyQt6.QtCore import QThread
+from PyQt6.QtCore import QThread, pyqtSignal
+
+class WorkerThread(QThread):
+    """通用工作线程，支持任意可调用任务"""
+    finished = pyqtSignal(object)  # 返回结果
+    error = pyqtSignal(str)        # 返回错误信息
+    
+    def __init__(self, task_func, *args, **kwargs):
+        super().__init__()
+        self.task_func = task_func
+        self.args = args
+        self.kwargs = kwargs
+
+    def run(self):
+        try:
+            result = self.task_func(*self.args, **self.kwargs)
+            self.finished.emit(result)
+        except Exception as e:
+            self.error.emit(str(e))
 
 class ImageVectorThread(QThread):
     def __init__(self, vectorizer, input_path, output_path, **kwargs):

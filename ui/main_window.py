@@ -208,7 +208,7 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.text_home, self.get_icon("assets/icons/text.svg"), "文本工具")
 
         # 4.1 Markdown 转 PDF
-        self.markdown_interface = MarkdownInterface(self)
+        self.markdown_interface = MarkdownInterface(self, container=self.container)
         self.icon_mapping[self.markdown_interface.objectName()] = "assets/icons/markdown.svg"
         self.addSubInterface(self.markdown_interface, self.get_icon("assets/icons/markdown.svg"), "Markdown 转 PDF", parent=self.text_home)
         self.interfaces["Markdown 转 PDF"] = self.markdown_interface
