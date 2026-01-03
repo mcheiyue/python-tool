@@ -12,6 +12,7 @@ class MainWindow(FluentWindow):
         super().__init__()
         self.setWindowTitle("AI Office Tool")
         self.resize(900, 700)
+        self.setMinimumSize(800, 600)
         
         # 居中显示
         screen = QApplication.primaryScreen().geometry()

@@ -32,7 +32,8 @@ class PPTImageExporter(QObject):
                 ppt_app = comtypes.client.CreateObject("PowerPoint.Application", dynamic=True)
                 # 尝试设置为不可见，但 PPT 通常需要可见才能工作
                 try:
-                    ppt_app.Visible = 1 
+                    ppt_app.Visible = 1
+                    ppt_app.WindowState = 2  # 最小化窗口，避免干扰用户
                 except:
                     pass
             except Exception as e:
