@@ -104,3 +104,14 @@ class ImageConvertThread(QThread):
 
     def run(self):
         self.converter.convert(self.input_path, self.output_path, self.output_format, self.quality)
+
+class ImageToPdfThread(QThread):
+    def __init__(self, converter, image_paths, output_path, merge):
+        super().__init__()
+        self.converter = converter
+        self.image_paths = image_paths
+        self.output_path = output_path
+        self.merge = merge
+
+    def run(self):
+        self.converter.convert(self.image_paths, self.output_path, self.merge)

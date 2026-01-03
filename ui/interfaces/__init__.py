@@ -11,4 +11,5 @@ from .pdf_split_interface import PDFSplitInterface
 from .pdf_image_extract_interface import PDFImageExtractInterface
 from .code_extract_interface import CodeExtractInterface
 from .image_convert_interface import ImageConvertInterface
+from .image_pdf_interface import ImagePdfInterface
 from .settings_interface import SettingsInterface
