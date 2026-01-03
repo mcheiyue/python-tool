@@ -12,13 +12,13 @@ from core.utils.md_normalizer import normalize_markdown
 from ui.threads import WorkerThread
 
 class MarkdownInterface(QWidget):
-    def __init__(self, container, parent=None):
+    def __init__(self, parent=None, container=None):
         super().__init__(parent=parent)
         self.container = container
         self.setObjectName("markdown_interface")
         
         # 初始化插件管理器
-        self.plugin_manager = container.plugin_manager
+        self.plugin_manager = container.plugin_manager if container else None
         
         self.vbox = QVBoxLayout(self)
         self.vbox.setContentsMargins(20, 20, 20, 20)
