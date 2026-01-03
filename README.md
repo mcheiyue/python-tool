@@ -67,6 +67,11 @@ python main.py
         *   `pdf/`: PDF 处理引擎。
             *   `base.py`: 抽象基类。
             *   `ghostscript.py`: Ghostscript 实现。
+        *   `office/`: Office 处理引擎。
+            *   `base.py`: 抽象基类。
+            *   `word.py`: Word 转换引擎。
+            *   `excel.py`: Excel 转换引擎。
+            *   `powerpoint.py`: PPT 转换引擎。
         *   `ocr/`: OCR 引擎（预留）。
     *   `ppt_converter.py`: PPT 转 PDF 逻辑。
     *   `word_converter.py`: Word 转 PDF 逻辑。
@@ -127,8 +132,8 @@ python main.py
 *   **配置管理**: 引入 `ConfigLoader`，支持分层配置和 JSON 配置存储。
 *   **依赖注入**: 引入 `AppContainer`，实现全局依赖管理。
 *   **性能优化**: 优化 `EnvironmentChecker`，增加缓存机制，避免重复扫描系统路径。
-
 *   **Office 引擎重构**: 将 Word/PPT/Excel 转换逻辑重构为基于模板方法模式的 `BaseOfficeConverter` 及其子类，消除了大量重复代码并统一了接口。
+*   **Bug 修复**: 修复了 `core/engines/pdf/base.py` 中 QObject 和 ABC 的元类冲突，增强了稳定性。
 
 ### 2026-01-03 UI 优化更新
 *   **侧边栏图标优化**:
