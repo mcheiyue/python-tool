@@ -14,6 +14,9 @@ class HighlightPlugin(PluginBase):
     description = "使用 Pygments 提供代码语法高亮 (需安装 Pygments)"
     version = "1.0.0"
     
+    capabilities = ["syntax_highlight"]
+    priority = 10
+
     def check_availability(self) -> Dict[str, Any]:
         return {
             "available": HAS_PYGMENTS,

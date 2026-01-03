@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 class PluginBase(ABC):
     """插件基类"""
@@ -9,6 +9,10 @@ class PluginBase(ABC):
     display_name: str = "基础插件"
     description: str = ""
     version: str = "1.0.0"
+    
+    # 能力与优先级
+    capabilities: List[str] = []  # 插件提供的能力列表，如 ["markdown_to_pdf", "ocr"]
+    priority: int = 100           # 优先级 (数字越小优先级越高，默认 100)
     
     # 依赖信息
     requires_external: bool = False  # 是否需要外部程序
@@ -99,5 +103,7 @@ class PluginBase(ABC):
             "download_url": self.download_url,
             "message": check_result.get("message", ""),
             "tool_version": check_result.get("version", ""),
-            "tool_path": check_result.get("path", "")
+            "tool_path": check_result.get("path", ""),
+            "capabilities": self.capabilities,
+            "priority": self.priority
         }

@@ -15,6 +15,9 @@ class PandocPlugin(PluginBase):
     external_tool = "pandoc"
     download_url = "https://pandoc.org/installing.html"
     
+    capabilities = ["markdown_to_pdf", "markdown_to_docx", "html_to_docx"]
+    priority = 10  # 高优先级
+
     def convert(self, content: str, input_format: str = "markdown", output_format: str = "pdf", output_path: str = None, extra_args: list = None):
         """
         使用 Pandoc 转换文档

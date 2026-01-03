@@ -7,6 +7,9 @@ class MathJaxPlugin(PluginBase):
     description = "在预览中渲染 LaTeX 数学公式 (使用 CDN)"
     version = "3.2.2"
     
+    capabilities = ["math_render"]
+    priority = 10
+
     def check_availability(self) -> Dict[str, Any]:
         # 这是一个 Web 资源插件，假定总是可用（依赖网络）
         return {

@@ -26,6 +26,13 @@
             "highlight": {
                 "style": "default"
             }
+        },
+        "preferred_plugins": {
+            "markdown_to_pdf": null,
+            "markdown_to_docx": "pandoc",
+            "html_to_docx": "pandoc",
+            "math_render": "mathjax",
+            "syntax_highlight": "highlight"
         }
     },
     "pdf": {

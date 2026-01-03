@@ -20,6 +20,7 @@ class MarkdownInterface(QWidget):
         
         # 初始化插件管理器
         self.plugin_manager = container.plugin_manager if container else None
+        self.config = container.config if container else None
         
         self.vbox = QVBoxLayout(self)
         self.vbox.setContentsMargins(20, 20, 20, 20)
@@ -46,12 +47,12 @@ class MarkdownInterface(QWidget):
         self.format_combo.addItem("Word 文档", "docx")
         self.format_combo.setToolTip("选择导出的文件格式")
         
-        # 检查 Pandoc 插件
-        self.pandoc = self.plugin_manager.get("pandoc")
-        self.has_pandoc = self.pandoc and self.pandoc.is_available
+        # 检查能力插件 (使用新的能力注册机制)
+        self.docx_converter = self.plugin_manager.get_preferred_plugin("markdown_to_docx", self.config)
+        self.pdf_converter = self.plugin_manager.get_preferred_plugin("markdown_to_pdf", self.config)
         
-        # 如果有 Pandoc，自动选择 DOCX 作为默认（因为它只能通过 Pandoc 导出）
-        if self.has_pandoc:
+        # 如果有 DOCX 转换器，自动选择 DOCX 作为默认（因为它通常依赖外部工具，优先级较高）
+        if self.docx_converter:
             self.format_combo.setCurrentIndex(1)
 
         self.export_btn = PrimaryPushButton(FIF.SAVE, "导出文件", self)
@@ -121,8 +122,11 @@ class MarkdownInterface(QWidget):
         
         # 默认文本
         default_text = "# Hello World\n\n欢迎使用 **Markdown 转 PDF** 工具！\n\n"
-        if self.pandoc and self.pandoc.is_available:
-             default_text += "### 数学公式示例 (Pandoc)\n\nEinstein's $E=mc^2$\n\n$$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$\n\n"
+        
+        # 如果有数学公式插件，显示示例
+        math_plugin = self.plugin_manager.get_preferred_plugin("math_render", self.config)
+        if math_plugin:
+             default_text += "### 数学公式示例\n\nEinstein's $E=mc^2$\n\n$$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$\n\n"
              
         default_text += "### 代码示例\n\n```python\ndef hello():\n    print('Hello')\n```"
         self.editor.setText(default_text)
@@ -131,10 +135,10 @@ class MarkdownInterface(QWidget):
         """根据主题返回对应的 CSS 样式"""
         is_dark = isDarkTheme() and not force_light
         
-        # 获取高亮插件 CSS
+        # 获取高亮插件 CSS (通过能力获取)
         highlight_css = ""
-        hl_plugin = self.plugin_manager.get("highlight")
-        if hl_plugin and hl_plugin.is_available:
+        hl_plugin = self.plugin_manager.get_preferred_plugin("syntax_highlight", self.config)
+        if hl_plugin:
             # 深色模式使用 monokai，浅色模式使用 default
             style_name = "monokai" if is_dark else "default"
             highlight_css = hl_plugin.get_css(style_name)
@@ -227,18 +231,18 @@ class MarkdownInterface(QWidget):
         text = self.editor.toPlainText()
         extensions = ['markdown.extensions.tables', 'markdown.extensions.fenced_code', 'markdown.extensions.extra']
         
-        # 如果有高亮插件，使用 codehilite 扩展
-        hl_plugin = self.plugin_manager.get("highlight")
-        if hl_plugin and hl_plugin.is_available:
+        # 获取高亮插件 (通过能力获取)
+        hl_plugin = self.plugin_manager.get_preferred_plugin("syntax_highlight", self.config)
+        if hl_plugin:
             extensions.append('markdown.extensions.codehilite')
         
         try:
             html_content = markdown.markdown(text, extensions=extensions)
             
-            # 注入 MathJax 脚本
-            math_plugin = self.plugin_manager.get("mathjax")
+            # 注入数学公式脚本 (通过能力获取)
+            math_plugin = self.plugin_manager.get_preferred_plugin("math_render", self.config)
             math_header = ""
-            if math_plugin and math_plugin.is_available:
+            if math_plugin:
                 math_header = math_plugin.get_header_code()
             
             css = self.get_css_style(force_light=False)
@@ -266,16 +270,17 @@ class MarkdownInterface(QWidget):
         idx = self.format_combo.currentIndex()
         fmt = "docx" if idx == 1 else "pdf" if idx == 0 else None
         
-        # 1. DOCX 导出 (仅 Pandoc)
+        # 1. DOCX 导出
         if fmt == "docx":
-            if not self.has_pandoc:
-                InfoBar.error("组件缺失", "导出 DOCX 需要安装 Pandoc。\n请安装 Pandoc 并重启应用。", parent=self)
+            if not self.docx_converter:
+                InfoBar.error("组件缺失", "没有可用的 DOCX 转换插件。\n请安装 Pandoc 或其他受支持的转换工具。", parent=self)
                 return
                 
             path, _ = QFileDialog.getSaveFileName(self, "保存 Word 文档", "markdown_output.docx", "Word Files (*.docx)")
             if not path: return
 
-            InfoBar.info("正在导出", "正在生成 DOCX，请稍候...", duration=5000, parent=self)
+            plugin_name = self.docx_converter.display_name
+            InfoBar.info("正在导出", f"正在使用 {plugin_name} 生成 DOCX...", duration=5000, parent=self)
             self.export_btn.setEnabled(False)
             self.export_btn.setText("正在导出...")
 
@@ -283,9 +288,16 @@ class MarkdownInterface(QWidget):
             normalized_content = normalize_markdown(raw_content)
 
             def docx_task(content, output_path):
-                # 1. 调用 Pandoc 转换
-                self.pandoc.convert_to_docx(content, output_path)
-                # 2. 后处理样式 (修复首段缩进等)
+                # 统一调用接口
+                # 注意：这里我们假设插件实现了 convert_to_docx 方法，或者我们可以使用通用的 convert 方法
+                # 为了兼容性，最好在能力接口中标准化方法名，但目前我们先检查特定方法
+                
+                if hasattr(self.docx_converter, 'convert_to_docx'):
+                     self.docx_converter.convert_to_docx(content, output_path)
+                else:
+                     self.docx_converter.convert(content, output_format="docx", output_path=output_path)
+                
+                # 后处理样式 (修复首段缩进等)
                 DocxProcessor.process_file(output_path, disable_first_para_indent=True)
                 return output_path
 
@@ -294,34 +306,35 @@ class MarkdownInterface(QWidget):
             self.worker.error.connect(lambda e: self.on_export_finished(False, str(e)))
             self.worker.start()
 
-        # 2. PDF 导出 (Pandoc 或 内置)
+        # 2. PDF 导出
         elif fmt == "pdf":
             path, _ = QFileDialog.getSaveFileName(self, "保存 PDF", "markdown_output.pdf", "PDF Files (*.pdf)")
             if not path: return
             
-            # 如果有 Pandoc，优先用 Pandoc
-            if self.has_pandoc:
-                InfoBar.info("正在导出", "正在使用 Pandoc 生成 PDF...", duration=5000, parent=self)
+            # 优先使用插件
+            if self.pdf_converter:
+                plugin_name = self.pdf_converter.display_name
+                InfoBar.info("正在导出", f"正在使用 {plugin_name} 生成 PDF...", duration=5000, parent=self)
                 self.export_btn.setEnabled(False)
                 self.export_btn.setText("正在导出...")
                 
                 raw_content = self.editor.toPlainText()
                 normalized_content = normalize_markdown(raw_content)
                 
-                def pandoc_pdf_task(content, output_path):
-                    self.pandoc.convert(
+                def pdf_task(content, output_path):
+                    self.pdf_converter.convert(
                         content=content,
                         output_path=output_path,
                         output_format="pdf"
                     )
                     return output_path
                     
-                self.worker = WorkerThread(pandoc_pdf_task, normalized_content, path)
+                self.worker = WorkerThread(pdf_task, normalized_content, path)
                 self.worker.finished.connect(lambda p: self.on_export_finished(True, p))
                 self.worker.error.connect(lambda e: self.on_export_finished(False, str(e)))
                 self.worker.start()
             
-            # 否则用内置转换
+            # 降级到内置转换
             else:
                 if not self.webview:
                     InfoBar.warning("未就绪", "请先加载预览以使用内置 PDF 导出", parent=self)
@@ -338,8 +351,12 @@ class MarkdownInterface(QWidget):
                         css = self.get_css_style(force_light=True)
                         text = self.editor.toPlainText()
                         extensions = ['markdown.extensions.tables', 'markdown.extensions.fenced_code', 'markdown.extensions.extra']
-                        if self.plugin_manager.get("highlight"):
+                        
+                        # 获取高亮插件
+                        hl_plugin = self.plugin_manager.get_preferred_plugin("syntax_highlight", self.config)
+                        if hl_plugin:
                             extensions.append('markdown.extensions.codehilite')
+                            
                         html = markdown.markdown(text, extensions=extensions)
                         temp_browser.setHtml(f"<html><head>{css}</head><body>{html}</body></html>")
                         temp_browser.print(printer)
