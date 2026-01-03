@@ -71,7 +71,7 @@ class MainWindow(FluentWindow):
 
         # 14. 图片转 PDF
         self.image_pdf_interface = ImagePdfInterface(self)
-        self.addSubInterface(self.image_pdf_interface, FIF.PDF, "图片转 PDF")
+        self.addSubInterface(self.image_pdf_interface, FIF.DOCUMENT, "图片转 PDF")
 
         # 15. 设置界面
         self.settings_interface = SettingsInterface(self)
