@@ -7,7 +7,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
                             LineEdit, ComboBox, FluentIcon as FIF)
 
 from core.engines.pdf.ghostscript import GhostscriptCompressor
-from core.environment_checker import EnvironmentChecker
+from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.threads import CompressThread
 
@@ -51,8 +51,11 @@ class PDFCompressInterface(QWidget):
         
         self.env_status = BodyLabel("", self)
         
+        # 获取工具信息以设置下载链接
+        self.gs_tool = AppContainer().external_tool_manager.get_tool("ghostscript")
+        
         self.download_btn = PushButton(FIF.DOWNLOAD, "下载 Ghostscript", self)
-        self.download_btn.clicked.connect(lambda: os.startfile(EnvironmentChecker.get_gs_download_url()) if os.name == 'nt' else None)
+        self.download_btn.clicked.connect(lambda: os.startfile(self.gs_tool.download_url) if os.name == 'nt' else None)
         self.download_btn.hide()
         
         self.env_layout.addWidget(self.check_env_btn)
@@ -133,16 +136,10 @@ class PDFCompressInterface(QWidget):
             last_gs = self.settings.value("gs_path", "")
 
         # 加载 GS 路径
-        if not last_gs:
-            # 尝试一些默认路径
-            candidates = [
-                r"C:\Program Files\gs\gs10.06.0\bin\gswin64c.exe",
-                r"C:\Program Files\gs\gs10.00.0\bin\gswin64c.exe",
-            ]
-            for c in candidates:
-                if os.path.exists(c):
-                    last_gs = c
-                    break
+        if not last_gs and self.gs_tool and self.gs_tool.is_available():
+            # 如果配置中没有，尝试从管理器获取自动检测到的路径
+            last_gs = self.gs_tool.get_executable_path() or ""
+            
         self.gs_edit.setText(last_gs)
 
         self.compressor.log.connect(self.append_log)
