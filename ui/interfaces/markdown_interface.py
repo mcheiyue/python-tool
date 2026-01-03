@@ -12,8 +12,8 @@ class MarkdownInterface(QWidget):
         self.setObjectName("markdown_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(20, 20, 20, 20)
+        self.vbox.setSpacing(15)
 
         self.title = SubtitleLabel("Markdown 转 PDF", self)
         self.desc = BodyLabel("实时预览 Markdown 并导出为 PDF", self)
@@ -51,17 +51,19 @@ class MarkdownInterface(QWidget):
         self.preview_container = QWidget()
         self.preview_layout = QVBoxLayout(self.preview_container)
         self.preview_layout.setContentsMargins(0, 0, 0, 0)
-        self.preview_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # self.preview_layout.setAlignment(Qt.AlignmentFlag.AlignCenter) # 移除居中对齐，让其填满
 
         # 占位符
         self.placeholder_widget = QWidget()
         self.placeholder_layout = QVBoxLayout(self.placeholder_widget)
+        self.placeholder_layout.addStretch(1)
         self.placeholder_label = BodyLabel("点击加载预览 (使用轻量级 QTextBrowser)", self)
         self.placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.load_btn = PrimaryPushButton("加载预览 / 启用导出", self)
         self.load_btn.clicked.connect(self.init_webview)
-        self.placeholder_layout.addWidget(self.placeholder_label)
+        self.placeholder_layout.addWidget(self.placeholder_label, 0, Qt.AlignmentFlag.AlignCenter) # 确保 Label 居中
         self.placeholder_layout.addWidget(self.load_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        self.placeholder_layout.addStretch(1)
         
         self.preview_layout.addWidget(self.placeholder_widget)
         
@@ -74,7 +76,8 @@ class MarkdownInterface(QWidget):
         self.splitter.addWidget(self.preview_container)
         self.splitter.setSizes([450, 450])
         
-        self.vbox.addWidget(self.splitter)
+        # 使用 stretch=1 让 splitter 占满剩余垂直空间
+        self.vbox.addWidget(self.splitter, 1)
         
         # 初始化样式
         self.update_style()
