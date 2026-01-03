@@ -21,7 +21,7 @@ class ImageConvertInterface(QWidget):
         self.vbox.setSpacing(20)
 
         self.title = SubtitleLabel("图片格式转换", self)
-        self.desc = BodyLabel("支持 JPG, PNG, WEBP, BMP, ICO 格式互转", self)
+        self.desc = BodyLabel("支持 JPG, PNG, WEBP, BMP, ICO 格式互转及旋转/翻转", self)
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)
@@ -51,6 +51,23 @@ class ImageConvertInterface(QWidget):
         self.settings_layout.addWidget(self.quality_label, 0, 2)
         self.settings_layout.addWidget(self.quality_slider, 0, 3)
         self.settings_layout.addWidget(self.quality_val, 0, 4)
+
+        # 旋转选择
+        self.rotate_label = BodyLabel("旋转:", self)
+        self.rotate_combo = ComboBox(self)
+        self.rotate_combo.addItems(['无', '90° (顺时针)', '180°', '90° (逆时针)'])
+        self.rotate_combo.setCurrentIndex(0)
+        
+        # 翻转选择
+        self.flip_label = BodyLabel("翻转:", self)
+        self.flip_combo = ComboBox(self)
+        self.flip_combo.addItems(['无', '水平翻转', '垂直翻转'])
+        self.flip_combo.setCurrentIndex(0)
+
+        self.settings_layout.addWidget(self.rotate_label, 1, 0)
+        self.settings_layout.addWidget(self.rotate_combo, 1, 1)
+        self.settings_layout.addWidget(self.flip_label, 1, 2)
+        self.settings_layout.addWidget(self.flip_combo, 1, 3)
 
         self.vbox.addWidget(self.settings_card)
 
@@ -115,6 +132,19 @@ class ImageConvertInterface(QWidget):
         target_format = self.format_combo.currentText()
         quality = self.quality_slider.value()
 
+        # 获取旋转参数
+        rotate_idx = self.rotate_combo.currentIndex()
+        rotate_angle = 0
+        if rotate_idx == 1: rotate_angle = 90
+        elif rotate_idx == 2: rotate_angle = 180
+        elif rotate_idx == 3: rotate_angle = 270
+        
+        # 获取翻转参数
+        flip_idx = self.flip_combo.currentIndex()
+        flip_mode = None
+        if flip_idx == 1: flip_mode = 'H'
+        elif flip_idx == 2: flip_mode = 'V'
+
         self.total = len(self.files)
         self.finished_count = 0
         
@@ -126,7 +156,7 @@ class ImageConvertInterface(QWidget):
             if ext == 'jpeg': ext = 'jpg'
             output_path = os.path.join(dir_name, f"{base_name}.{ext}")
             
-            thread = ImageConvertThread(self.converter, input_path, output_path, target_format, quality)
+            thread = ImageConvertThread(self.converter, input_path, output_path, target_format, quality, rotate_angle, flip_mode)
             thread.finished.connect(lambda: self.on_one_finished())
             thread.start()
             self.threads.append(thread) # 防止被垃圾回收

@@ -6,11 +6,25 @@ class ImageConverter(QObject):
     finished = pyqtSignal(bool, str)  # success, msg
     log = pyqtSignal(str)
 
-    def convert(self, input_path, output_path, output_format, quality=90):
+    def convert(self, input_path, output_path, output_format, quality=90, rotate_angle=0, flip_mode=None):
+        """
+        :param rotate_angle: 旋转角度 (90, 180, 270)
+        :param flip_mode: 翻转模式 ('H' for Horizontal, 'V' for Vertical)
+        """
         try:
             self.log.emit(f"正在处理: {os.path.basename(input_path)}")
             
             with Image.open(input_path) as img:
+                # 旋转处理
+                if rotate_angle in [90, 180, 270]:
+                    img = img.rotate(-rotate_angle, expand=True) # rotate 是逆时针，用户习惯顺时针，所以取反
+                
+                # 翻转处理
+                if flip_mode == 'H':
+                    img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+                elif flip_mode == 'V':
+                    img = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+
                 # 预处理：根据目标格式处理颜色模式
                 save_kwargs = {}
                 target_format = output_format.upper()

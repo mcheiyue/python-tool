@@ -94,16 +94,18 @@ class PDFImageExtractThread(QThread):
         self.extractor.extract(self.files, self.output_dir)
 
 class ImageConvertThread(QThread):
-    def __init__(self, converter, input_path, output_path, output_format, quality):
+    def __init__(self, converter, input_path, output_path, output_format, quality, rotate_angle=0, flip_mode=None):
         super().__init__()
         self.converter = converter
         self.input_path = input_path
         self.output_path = output_path
         self.output_format = output_format
         self.quality = quality
+        self.rotate_angle = rotate_angle
+        self.flip_mode = flip_mode
 
     def run(self):
-        self.converter.convert(self.input_path, self.output_path, self.output_format, self.quality)
+        self.converter.convert(self.input_path, self.output_path, self.output_format, self.quality, self.rotate_angle, self.flip_mode)
 
 class ImageToPdfThread(QThread):
     def __init__(self, converter, image_paths, output_path, merge):
