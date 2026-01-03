@@ -15,23 +15,6 @@ class PandocPlugin(PluginBase):
     external_tool = "pandoc"
     download_url = "https://pandoc.org/installing.html"
     
-    def check_availability(self) -> Dict[str, Any]:
-        manager = AppContainer().external_tool_manager
-        tool = manager.get_tool("pandoc")
-        is_available = tool.is_available()
-        return {
-            "available": is_available,
-            "path": tool.get_executable_path() if is_available else "",
-            "version": tool.get_version() if is_available else "",
-            "message": f"已安装 Pandoc {tool.get_version()}" if is_available else "未找到 Pandoc，请下载安装"
-        }
-    
-    def _get_executable(self):
-        manager = AppContainer().external_tool_manager
-        tool = manager.get_tool("pandoc")
-        path = tool.get_executable_path()
-        return path if path else "pandoc"
-
     def convert(self, content: str, input_format: str = "markdown", output_format: str = "pdf", output_path: str = None, extra_args: list = None):
         """
         使用 Pandoc 转换文档
@@ -44,7 +27,7 @@ class PandocPlugin(PluginBase):
         if not self.is_available:
             raise RuntimeError("Pandoc 不可用")
             
-        pandoc_exe = self._get_executable()
+        pandoc_exe = self.get_executable_path() or "pandoc"
         cmd = [pandoc_exe, "-f", input_format, "-t", output_format]
         
         if output_format == "pdf":
@@ -99,7 +82,7 @@ class PandocPlugin(PluginBase):
         if not self.is_available:
             raise RuntimeError("Pandoc 不可用")
             
-        pandoc_exe = self._get_executable()
+        pandoc_exe = self.get_executable_path() or "pandoc"
         cmd = [pandoc_exe, "-f", input_format, "-t", "docx"]
         
         if reference_docx:
