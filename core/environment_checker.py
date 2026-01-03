@@ -4,12 +4,17 @@ import shutil
 import platform
 
 class EnvironmentChecker:
+    _gs_cache = None
+
     @staticmethod
     def find_ghostscript() -> dict:
         """
-        查找 Ghostscript 安装路径
+        查找 Ghostscript 安装路径 (带缓存)
         返回: {"found": bool, "path": str, "version": str, "download_url": str}
         """
+        if EnvironmentChecker._gs_cache is not None:
+            return EnvironmentChecker._gs_cache
+
         result = {
             "found": False,
             "path": "",
@@ -26,6 +31,7 @@ class EnvironmentChecker:
             if path:
                 result["found"] = True
                 result["path"] = path
+                EnvironmentChecker._gs_cache = result
                 return result
                 
             # 2. 搜索常见安装目录
@@ -82,7 +88,8 @@ class EnvironmentChecker:
                 result["download_url"] = "brew install ghostscript"
             elif system == 'linux':
                 result["download_url"] = "sudo apt install ghostscript"
-                
+        
+        EnvironmentChecker._gs_cache = result
         return result
 
     @staticmethod

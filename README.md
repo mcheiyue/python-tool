@@ -126,6 +126,7 @@ python main.py
 *   **引擎抽象**: 引入 `core/engines` 模块，实现 PDF 压缩功能的抽象化（Strategy Pattern），方便未来扩展 OCR 和其他 PDF 引擎。
 *   **配置管理**: 引入 `ConfigLoader`，支持分层配置和 JSON 配置存储。
 *   **依赖注入**: 引入 `AppContainer`，实现全局依赖管理。
+*   **性能优化**: 优化 `EnvironmentChecker`，增加缓存机制，避免重复扫描系统路径。
 
 ### 2026-01-03 UI 优化更新
 *   **侧边栏图标优化**:
