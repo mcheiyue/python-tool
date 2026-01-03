@@ -1,19 +1,20 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QApplication
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import QSettings
+from PyQt6.QtCore import QSettings # Keep QSettings for backward compatibility if needed, but we prefer ConfigLoader
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton, 
                             PrimaryPushButton, ProgressBar, TextEdit, InfoBar, 
                             LineEdit, ComboBox, FluentIcon as FIF)
 
-from core.pdf_compressor import PDFCompressor
+from core.engines.pdf.ghostscript import GhostscriptCompressor
 from core.environment_checker import EnvironmentChecker
 from ui.widgets import DragDropListWidget
 from ui.threads import CompressThread
 
 class PDFCompressInterface(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, container=None):
         super().__init__(parent=parent)
+        self.container = container
         self.setObjectName("pdf_compress_interface")
         
         self.vbox = QVBoxLayout(self)
@@ -118,12 +119,20 @@ class PDFCompressInterface(QWidget):
 
         # 初始化
         self.files = []
-        self.compressor = PDFCompressor()
+        # 使用新的引擎
+        self.compressor = GhostscriptCompressor()
         self.thread = None
-        self.settings = QSettings("AI_Office_Tool", "Config")
+        
+        # 兼容旧代码，但首选 ConfigLoader
+        if self.container:
+            self.config = self.container.config
+            last_gs = self.config.get("dependencies.ghostscript.path", "")
+        else:
+            # Fallback for testing without container
+            self.settings = QSettings("AI_Office_Tool", "Config")
+            last_gs = self.settings.value("gs_path", "")
 
         # 加载 GS 路径
-        last_gs = self.settings.value("gs_path", "")
         if not last_gs:
             # 尝试一些默认路径
             candidates = [
@@ -145,12 +154,14 @@ class PDFCompressInterface(QWidget):
         self.download_btn.hide()
         QApplication.processEvents()
         
-        result = EnvironmentChecker.find_ghostscript()
-        if result['found']:
-            self.env_status.setText(f"✅ 已检测到: {result.get('version', '未知版本')}")
+        # 使用引擎自带的检测方法
+        result = self.compressor.check_dependency()
+        
+        if result['available']:
+            self.env_status.setText(f"✅ {result['message']}")
             self.env_status.setTextColor("#009900", "#00cc00") # Green
             self.gs_edit.setText(result['path'])
-            self.settings.setValue("gs_path", result['path'])
+            self._save_gs_path(result['path'])
             self.check_state()
         else:
             self.env_status.setText("❌ 未检测到 Ghostscript")
@@ -161,8 +172,15 @@ class PDFCompressInterface(QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "选择 gswin64c.exe", "", "Executable (*.exe)")
         if path:
             self.gs_edit.setText(path)
-            self.settings.setValue("gs_path", path)
+            self._save_gs_path(path)
             self.check_state()
+
+    def _save_gs_path(self, path):
+        """统一保存 GS 路径到配置"""
+        if hasattr(self, 'config'):
+            self.config.set("dependencies.ghostscript.path", path)
+        else:
+            self.settings.setValue("gs_path", path)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")

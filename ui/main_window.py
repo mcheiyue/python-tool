@@ -60,8 +60,9 @@ from ui.interfaces import (
 )
 
 class MainWindow(FluentWindow):
-    def __init__(self):
+    def __init__(self, container=None):
         super().__init__()
+        self.container = container
         self.initWindow()
         
         # 存储所有功能界面，用于搜索 {name: interface}
@@ -154,7 +155,8 @@ class MainWindow(FluentWindow):
         self.interfaces["PDF 合并"] = self.pdf_merge_interface
 
         # 2.2 PDF 压缩
-        self.compress_interface = PDFCompressInterface(self)
+        # 传递 container 给支持的界面
+        self.compress_interface = PDFCompressInterface(self, container=self.container)
         self.icon_mapping[self.compress_interface.objectName()] = "assets/icons/compress.svg"
         self.addSubInterface(self.compress_interface, self.get_icon("assets/icons/compress.svg"), "PDF 压缩", parent=self.pdf_home)
         self.interfaces["PDF 压缩"] = self.compress_interface

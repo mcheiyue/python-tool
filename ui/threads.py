@@ -70,7 +70,8 @@ class CompressThread(QThread):
         self.gs_path = gs_path
 
     def run(self):
-        self.compressor.compress(self.files, self.quality, self.gs_path)
+        # 使用关键字参数传递 gs_path，适配新的引擎接口
+        self.compressor.compress(self.files, self.quality, gs_path=self.gs_path)
 
 class PDFSplitThread(QThread):
     def __init__(self, splitter, file_path, ranges, output_dir):

@@ -72,7 +72,6 @@ python main.py
     *   `word_converter.py`: Word 转 PDF 逻辑。
     *   `excel_converter.py`: Excel 转 PDF 逻辑。
     *   `pdf_merger.py`: PDF 合并逻辑。
-    *   `pdf_compressor.py`: PDF 压缩逻辑 (调用 Ghostscript)。
     *   `pdf_splitter.py`: PDF 拆分逻辑。
     *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
     *   `color_extractor.py`: 颜色提取逻辑 (KMeans)。
@@ -122,9 +121,11 @@ python main.py
 ## 更新日志
 
 ### 2026-01-03 架构重构更新
+*   **UI 重构**: 完成 `PDFCompressInterface` 的重构，完全接入 `AppContainer` 和 `GhostscriptCompressor`，移除对旧版逻辑的直接依赖。
+*   **代码清理**: 移除不再使用的 `core/pdf_compressor.py`，业务逻辑已完整迁移至 `core/engines/pdf/ghostscript.py`。
 *   **引擎抽象**: 引入 `core/engines` 模块，实现 PDF 压缩功能的抽象化（Strategy Pattern），方便未来扩展 OCR 和其他 PDF 引擎。
 *   **配置管理**: 引入 `ConfigLoader`，支持分层配置和 JSON 配置存储。
-*   **依赖注入**: 引入 `AppContainer`，为后续解耦 UI 和业务逻辑打下基础。
+*   **依赖注入**: 引入 `AppContainer`，实现全局依赖管理。
 
 ### 2026-01-03 UI 优化更新
 *   **侧边栏图标优化**:
