@@ -27,6 +27,7 @@
 
 *   **配置管理 (Config)**: `config/` 模块提供统一的配置管理，支持默认配置 (`default.json`) 和用户配置 (`config.json`) 的递归合并与分层访问。
 *   **依赖注入 (DI)**: `app/container.py` 提供单例应用容器，负责管理全局依赖（如配置加载器、服务实例）的生命周期，实现 UI 与业务逻辑的解耦。
+*   **引擎抽象 (Engine)**: `core/engines/` 模块定义了业务核心的抽象接口（如 `BasePdfCompressor`），并提供具体的实现（如 `GhostscriptCompressor`），方便未来扩展新的引擎（如 OCR）。
 
 ## 环境要求
 
@@ -62,6 +63,11 @@ python main.py
     *   `default.json`: 默认配置文件。
     *   `loader.py`: 配置加载器。
 *   `core/`: 核心功能模块。
+    *   `engines/`: 引擎抽象层。
+        *   `pdf/`: PDF 处理引擎。
+            *   `base.py`: 抽象基类。
+            *   `ghostscript.py`: Ghostscript 实现。
+        *   `ocr/`: OCR 引擎（预留）。
     *   `ppt_converter.py`: PPT 转 PDF 逻辑。
     *   `word_converter.py`: Word 转 PDF 逻辑。
     *   `excel_converter.py`: Excel 转 PDF 逻辑。
@@ -116,6 +122,7 @@ python main.py
 ## 更新日志
 
 ### 2026-01-03 架构重构更新
+*   **引擎抽象**: 引入 `core/engines` 模块，实现 PDF 压缩功能的抽象化（Strategy Pattern），方便未来扩展 OCR 和其他 PDF 引擎。
 *   **配置管理**: 引入 `ConfigLoader`，支持分层配置和 JSON 配置存储。
 *   **依赖注入**: 引入 `AppContainer`，为后续解耦 UI 和业务逻辑打下基础。
 
