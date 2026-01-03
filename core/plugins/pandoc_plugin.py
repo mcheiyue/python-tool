@@ -1,9 +1,9 @@
-import shutil
 import subprocess
 import os
 import tempfile
 from typing import Dict, Any, Optional
 from .base import PluginBase
+from app.container import AppContainer
 
 class PandocPlugin(PluginBase):
     name = "pandoc"
@@ -16,45 +16,22 @@ class PandocPlugin(PluginBase):
     download_url = "https://pandoc.org/installing.html"
     
     def check_availability(self) -> Dict[str, Any]:
-        path = shutil.which("pandoc")
-        if path:
-            try:
-                # 检查版本，防止调用错误的程序
-                # Windows 上为了避免弹出窗口，需要 STARTUPINFO (如果不是在控制台运行)
-                startupinfo = None
-                if os.name == 'nt':
-                    startupinfo = subprocess.STARTUPINFO()
-                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                    
-                result = subprocess.run(
-                    [path, "--version"], 
-                    capture_output=True, 
-                    text=True,
-                    startupinfo=startupinfo,
-                    encoding='utf-8' # 强制 utf-8 避免中文乱码
-                )
-                version = result.stdout.split('\n')[0].split(' ')[1]
-                return {
-                    "available": True,
-                    "path": path,
-                    "version": version,
-                    "message": f"已安装 Pandoc {version}"
-                }
-            except Exception as e:
-                return {
-                    "available": False,
-                    "path": path,
-                    "version": "Unknown",
-                    "message": f"Pandoc 运行异常: {e}"
-                }
-        
+        manager = AppContainer().external_tool_manager
+        tool = manager.get_tool("pandoc")
+        is_available = tool.is_available()
         return {
-            "available": False,
-            "path": "",
-            "version": "",
-            "message": "未找到 Pandoc，请下载安装"
+            "available": is_available,
+            "path": tool.get_executable_path() if is_available else "",
+            "version": tool.get_version() if is_available else "",
+            "message": f"已安装 Pandoc {tool.get_version()}" if is_available else "未找到 Pandoc，请下载安装"
         }
     
+    def _get_executable(self):
+        manager = AppContainer().external_tool_manager
+        tool = manager.get_tool("pandoc")
+        path = tool.get_executable_path()
+        return path if path else "pandoc"
+
     def convert(self, content: str, input_format: str = "markdown", output_format: str = "pdf", output_path: str = None, extra_args: list = None):
         """
         使用 Pandoc 转换文档
@@ -67,7 +44,8 @@ class PandocPlugin(PluginBase):
         if not self.is_available:
             raise RuntimeError("Pandoc 不可用")
             
-        cmd = ["pandoc", "-f", input_format, "-t", output_format]
+        pandoc_exe = self._get_executable()
+        cmd = [pandoc_exe, "-f", input_format, "-t", output_format]
         
         if output_format == "pdf":
             # 默认使用 xelatex 引擎以支持中文
@@ -121,7 +99,8 @@ class PandocPlugin(PluginBase):
         if not self.is_available:
             raise RuntimeError("Pandoc 不可用")
             
-        cmd = ["pandoc", "-f", input_format, "-t", "docx"]
+        pandoc_exe = self._get_executable()
+        cmd = [pandoc_exe, "-f", input_format, "-t", "docx"]
         
         if reference_docx:
             cmd.extend(["--reference-doc", reference_docx])

@@ -1,25 +1,38 @@
 import os
-import sys
 import shutil
 import platform
+from typing import Optional
+from .base import ExternalTool
 
-class EnvironmentChecker:
-    _gs_cache = None
+class GhostscriptTool(ExternalTool):
+    """Ghostscript PDF 处理引擎"""
+    
+    name = "ghostscript"
+    display_name = "Ghostscript"
+    description = "用于 PDF 压缩和处理的解释器"
+    download_url = "https://ghostscript.com/releases/gsdnld.html"
+    is_required = True  # PDF 压缩功能的核心依赖
+    
+    _cache = None
 
-    @staticmethod
-    def find_ghostscript() -> dict:
-        """
-        查找 Ghostscript 安装路径 (带缓存)
-        返回: {"found": bool, "path": str, "version": str, "download_url": str}
-        """
-        if EnvironmentChecker._gs_cache is not None:
-            return EnvironmentChecker._gs_cache
+    def check_installed(self) -> bool:
+        return self._find()["found"]
+    
+    def get_version(self) -> Optional[str]:
+        return self._find()["version"]
+    
+    def get_path(self) -> Optional[str]:
+        return self._find()["path"]
+
+    def _find(self) -> dict:
+        """查找 Ghostscript 安装路径 (带缓存)"""
+        if self._cache is not None:
+            return self._cache
 
         result = {
             "found": False,
-            "path": "",
-            "version": "",
-            "download_url": "https://ghostscript.com/releases/gsdnld.html"
+            "path": None,
+            "version": None
         }
         
         system = platform.system().lower()
@@ -31,7 +44,7 @@ class EnvironmentChecker:
             if path:
                 result["found"] = True
                 result["path"] = path
-                EnvironmentChecker._gs_cache = result
+                self._cache = result
                 return result
                 
             # 2. 搜索常见安装目录
@@ -41,7 +54,8 @@ class EnvironmentChecker:
             ]
             
             latest_version = (0, 0)
-            best_path = ""
+            best_path = None
+            best_ver_str = None
             
             for root in search_roots:
                 gs_root = os.path.join(root, "gs")
@@ -67,6 +81,7 @@ class EnvironmentChecker:
                                     if version_tuple > latest_version:
                                         latest_version = version_tuple
                                         best_path = exe_path
+                                        best_ver_str = ver_str
                             except:
                                 continue
                 except:
@@ -75,7 +90,7 @@ class EnvironmentChecker:
             if best_path:
                 result["found"] = True
                 result["path"] = best_path
-                result["version"] = ".".join(map(str, latest_version))
+                result["version"] = best_ver_str or ".".join(map(str, latest_version))
                 
         # Linux/macOS 简单检查
         else:
@@ -83,15 +98,14 @@ class EnvironmentChecker:
             if path:
                 result["found"] = True
                 result["path"] = path
-            
-            if system == 'darwin':
-                result["download_url"] = "brew install ghostscript"
-            elif system == 'linux':
-                result["download_url"] = "sudo apt install ghostscript"
+                # 尝试获取版本
+                try:
+                    import subprocess
+                    res = subprocess.run([path, "--version"], capture_output=True, text=True)
+                    if res.returncode == 0:
+                        result["version"] = res.stdout.strip()
+                except:
+                    pass
         
-        EnvironmentChecker._gs_cache = result
+        self._cache = result
         return result
-
-    @staticmethod
-    def get_gs_download_url():
-        return "https://ghostscript.com/releases/gsdnld.html"

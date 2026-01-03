@@ -1,6 +1,7 @@
 from config import ConfigLoader
 from core.engines.office import WordEngine, PowerPointEngine, ExcelEngine
 from core.plugins import PluginManager
+from core.external_tools import ExternalToolManager
 
 class AppContainer:
     """应用容器，负责管理全局依赖和服务的生命周期"""
@@ -25,6 +26,7 @@ class AppContainer:
         self._ppt_engine = None
         self._excel_engine = None
         self._plugin_manager = None
+        self._external_tool_manager = None
         
         self._initialized = True
 
@@ -51,3 +53,9 @@ class AppContainer:
         if self._plugin_manager is None:
             self._plugin_manager = PluginManager()
         return self._plugin_manager
+
+    @property
+    def external_tool_manager(self) -> ExternalToolManager:
+        if self._external_tool_manager is None:
+            self._external_tool_manager = ExternalToolManager()
+        return self._external_tool_manager
