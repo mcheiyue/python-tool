@@ -1,14 +1,15 @@
 import os
 from PyQt6.QtWidgets import QListWidget, QAbstractItemView
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QPainter, QColor
+from PyQt6.QtCore import pyqtSignal, Qt
 from qfluentwidgets import isDarkTheme, qconfig
 
 class DragDropListWidget(QListWidget):
     files_dropped = pyqtSignal(list)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, placeholder_text="拖拽文件到此处，或点击添加按钮"):
         super().__init__(parent)
+        self.placeholder_text = placeholder_text
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -19,6 +20,34 @@ class DragDropListWidget(QListWidget):
         
         # 监听主题变化
         qconfig.themeChanged.connect(self.updateStyleSheet)
+
+    def setPlaceholderText(self, text):
+        """设置占位文本"""
+        self.placeholder_text = text
+        self.update()
+
+    def paintEvent(self, e):
+        """重写绘制事件以显示占位文本"""
+        super().paintEvent(e)
+        
+        if self.count() == 0:
+            painter = QPainter(self.viewport())
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            
+            # 设置文字颜色
+            if isDarkTheme():
+                color = QColor(255, 255, 255, 100)
+            else:
+                color = QColor(0, 0, 0, 100)
+                
+            painter.setPen(color)
+            font = self.font()
+            font.setPointSize(12)
+            painter.setFont(font)
+            
+            # 居中绘制文字
+            rect = self.viewport().rect()
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.placeholder_text)
 
     def updateStyleSheet(self):
         """根据当前主题更新样式"""

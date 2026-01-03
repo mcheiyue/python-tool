@@ -1,7 +1,7 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog
-from PyQt6.QtGui import QFont
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QAction, QKeySequence, QDesktopServices
+from PyQt6.QtCore import Qt, QUrl
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slider, 
                             PushButton, PrimaryPushButton, TextEdit, InfoBar, 
                             FluentIcon as FIF)
@@ -40,6 +40,7 @@ class ImageConvertInterface(QWidget):
         
         # 质量选择
         self.quality_label = BodyLabel("质量 (JPG/WEBP):", self)
+        self.quality_label.setToolTip("设置 JPG/WEBP 格式的压缩质量\n100 = 最佳质量但文件最大\n90 = 推荐值，肉眼几乎无法区分\n75 = 适合网页使用的平衡点")
         self.quality_slider = Slider(Qt.Orientation.Horizontal)
         self.quality_slider.setRange(1, 100)
         self.quality_slider.setValue(90)
@@ -73,7 +74,7 @@ class ImageConvertInterface(QWidget):
 
         # 文件列表
         self.content_layout = QHBoxLayout()
-        self.list_widget = DragDropListWidget(self)
+        self.list_widget = DragDropListWidget(self, "拖拽图片文件到此处，\n支持批量格式转换")
         self.list_widget.files_dropped.connect(self.on_files_dropped)
         
         self.log_text = TextEdit(self)
@@ -87,11 +88,15 @@ class ImageConvertInterface(QWidget):
         # 底部按钮
         self.bottom_layout = QHBoxLayout()
         self.add_btn = PushButton(FIF.ADD, "添加图片", self)
+        self.add_btn.setToolTip("添加图片文件 (Ctrl+O)")
         self.add_btn.clicked.connect(self.add_files)
+        
         self.clear_btn = PushButton(FIF.DELETE, "清空", self)
+        self.clear_btn.setToolTip("清空列表 (Delete)")
         self.clear_btn.clicked.connect(self.clear_files)
         
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始转换", self)
+        self.start_btn.setToolTip("开始转换 (Ctrl+Enter)")
         self.start_btn.clicked.connect(self.start_conversion)
         self.start_btn.setEnabled(False)
 
@@ -100,12 +105,38 @@ class ImageConvertInterface(QWidget):
         self.bottom_layout.addStretch(1)
         self.bottom_layout.addWidget(self.start_btn)
         self.vbox.addLayout(self.bottom_layout)
+        
+        # 快捷键
+        self.add_action = QAction(self)
+        self.add_action.setShortcut(QKeySequence("Ctrl+O"))
+        self.add_action.triggered.connect(self.add_files)
+        self.addAction(self.add_action)
+        
+        self.run_action = QAction(self)
+        self.run_action.setShortcut(QKeySequence("Ctrl+Return"))
+        self.run_action.triggered.connect(self.start_conversion)
+        self.addAction(self.run_action)
+        
+        self.del_action = QAction(self)
+        self.del_action.setShortcut(QKeySequence("Delete"))
+        self.del_action.triggered.connect(self.remove_selection)
+        self.addAction(self.del_action)
 
         self.files = []
         self.threads = [] # Keep references
         
         # 连接日志信号
         self.converter.log.connect(self.log_text.append)
+
+    def remove_selection(self):
+        # 从后往前删
+        rows = sorted([item.row() for item in self.list_widget.selectedIndexes()], reverse=True)
+        for row in rows:
+            if row < len(self.files):
+                self.files.pop(row)
+                self.list_widget.takeItem(row)
+        if not self.files:
+            self.start_btn.setEnabled(False)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "选择图片", "", "Images (*.png *.jpg *.jpeg *.bmp *.webp *.ico)")
@@ -166,5 +197,21 @@ class ImageConvertInterface(QWidget):
         if self.finished_count >= self.total:
             self.start_btn.setEnabled(True)
             self.log_text.append("所有任务已完成！")
-            InfoBar.success("完成", f"成功转换 {self.total} 个文件", parent=self)
+            
+            # 创建带有操作按钮的 InfoBar
+            bar = InfoBar.success(
+                title="转换完成",
+                content=f"成功处理 {self.total} 个文件",
+                duration=5000,
+                parent=self
+            )
+            
+            # 由于可能包含多个输出目录，这里打开第一个文件的目录
+            if self.files:
+                first_dir = os.path.dirname(self.files[0])
+                open_folder_btn = PushButton("打开所在文件夹")
+                open_folder_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(first_dir)))
+                bar.addWidget(open_folder_btn)
+            
+            bar.show()
             self.threads.clear()

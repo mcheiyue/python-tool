@@ -1,6 +1,7 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QAction, QKeySequence, QDesktopServices
+from PyQt6.QtCore import QUrl
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton, 
                             ToolButton, TextEdit, LineEdit, ProgressBar, InfoBar, 
                             CardWidget, FluentIcon as FIF)
@@ -29,9 +30,11 @@ class PDFMergeInterface(QWidget):
         self.toolbar_layout = QHBoxLayout()
         
         self.add_btn = PrimaryPushButton(FIF.ADD, "添加 PDF", self)
+        self.add_btn.setToolTip("添加 PDF 文件 (Ctrl+O)")
         self.add_btn.clicked.connect(self.add_files)
         
         self.clear_btn = PushButton(FIF.DELETE, "清空列表", self)
+        self.clear_btn.setToolTip("清空所有文件")
         self.clear_btn.clicked.connect(self.clear_files)
 
         self.toolbar_layout.addWidget(self.add_btn)
@@ -39,15 +42,15 @@ class PDFMergeInterface(QWidget):
         self.toolbar_layout.addStretch(1)
 
         self.up_btn = ToolButton(FIF.UP, self)
-        self.up_btn.setToolTip("上移")
+        self.up_btn.setToolTip("上移选中项 (Ctrl+Up)")
         self.up_btn.clicked.connect(self.move_up)
         
         self.down_btn = ToolButton(FIF.DOWN, self)
-        self.down_btn.setToolTip("下移")
+        self.down_btn.setToolTip("下移选中项 (Ctrl+Down)")
         self.down_btn.clicked.connect(self.move_down)
         
         self.remove_btn = ToolButton(FIF.REMOVE, self)
-        self.remove_btn.setToolTip("移除选中")
+        self.remove_btn.setToolTip("移除选中项 (Delete)")
         self.remove_btn.clicked.connect(self.remove_selected)
 
         self.toolbar_layout.addWidget(self.up_btn)
@@ -64,7 +67,7 @@ class PDFMergeInterface(QWidget):
         self.content_layout.setContentsMargins(20, 20, 20, 20)
         self.content_layout.setSpacing(15)
         
-        self.list_widget = DragDropListWidget(self)
+        self.list_widget = DragDropListWidget(self, "拖拽 PDF 文件到此处，\n支持拖拽调整顺序")
         self.list_widget.files_dropped.connect(self.on_files_dropped)
         
         self.log_text = TextEdit(self)
@@ -93,6 +96,7 @@ class PDFMergeInterface(QWidget):
         self.browse_btn.clicked.connect(self.browse_output)
         
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始合并", self)
+        self.start_btn.setToolTip("开始合并 (Ctrl+Enter)")
         self.start_btn.clicked.connect(self.start_merge)
         self.start_btn.setEnabled(False)
 
@@ -109,6 +113,32 @@ class PDFMergeInterface(QWidget):
         self.progress.setRange(0, 100)
         self.progress.hide()
         self.vbox.addWidget(self.progress)
+        
+        # 快捷键
+        self.add_action = QAction(self)
+        self.add_action.setShortcut(QKeySequence("Ctrl+O"))
+        self.add_action.triggered.connect(self.add_files)
+        self.addAction(self.add_action)
+        
+        self.run_action = QAction(self)
+        self.run_action.setShortcut(QKeySequence("Ctrl+Return"))
+        self.run_action.triggered.connect(self.start_merge)
+        self.addAction(self.run_action)
+        
+        self.del_action = QAction(self)
+        self.del_action.setShortcut(QKeySequence("Delete"))
+        self.del_action.triggered.connect(self.remove_selected)
+        self.addAction(self.del_action)
+        
+        self.up_action = QAction(self)
+        self.up_action.setShortcut(QKeySequence("Ctrl+Up"))
+        self.up_action.triggered.connect(self.move_up)
+        self.addAction(self.up_action)
+        
+        self.down_action = QAction(self)
+        self.down_action.setShortcut(QKeySequence("Ctrl+Down"))
+        self.down_action.triggered.connect(self.move_down)
+        self.addAction(self.down_action)
 
         # 逻辑初始化
         self.files = [] # 存储完整路径
@@ -214,6 +244,25 @@ class PDFMergeInterface(QWidget):
         self.progress.hide()
         
         if success:
-            InfoBar.success("成功", msg, duration=3000, parent=self)
+            bar = InfoBar.success(
+                title="合并成功",
+                content=msg,
+                duration=5000,
+                parent=self
+            )
+            
+            output_path = self.out_edit.text().strip()
+            if output_path and os.path.exists(output_path):
+                # 打开文件
+                open_btn = PushButton("打开文件")
+                open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(output_path)))
+                bar.addWidget(open_btn)
+                
+                # 打开文件夹
+                folder_btn = PushButton("打开文件夹")
+                folder_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(output_path))))
+                bar.addWidget(folder_btn)
+            
+            bar.show()
         else:
             InfoBar.error("错误", msg, duration=5000, parent=self)

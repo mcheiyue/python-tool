@@ -2,10 +2,10 @@ import markdown
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextBrowser, QSplitter, QFileDialog, QMenu
 from PyQt6.QtPrintSupport import QPrinter
-from PyQt6.QtGui import QFont, QAction
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QAction, QKeySequence, QDesktopServices
+from PyQt6.QtCore import Qt, QUrl
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, TextEdit, InfoBar, 
-                            FluentIcon as FIF, isDarkTheme, qconfig, ComboBox, ToolButton)
+                            FluentIcon as FIF, isDarkTheme, qconfig, ComboBox, ToolButton, PushButton)
 
 from core.plugins import PluginManager
 from core.utils.md_normalizer import normalize_markdown
@@ -44,6 +44,7 @@ class MarkdownInterface(QWidget):
         self.format_combo.setFixedWidth(120)
         self.format_combo.addItem("PDF 文档", "pdf")
         self.format_combo.addItem("Word 文档", "docx")
+        self.format_combo.setToolTip("选择导出的文件格式")
         
         # 检查 Pandoc 插件
         self.pandoc = self.plugin_manager.get("pandoc")
@@ -54,12 +55,19 @@ class MarkdownInterface(QWidget):
             self.format_combo.setCurrentIndex(1)
 
         self.export_btn = PrimaryPushButton(FIF.SAVE, "导出文件", self)
+        self.export_btn.setToolTip("导出为选中格式 (Ctrl+S)")
         self.export_btn.clicked.connect(self.export_file)
         
         self.toolbar.addWidget(self.bg_combo)
         self.toolbar.addWidget(self.format_combo)
         self.toolbar.addWidget(self.export_btn)
         self.toolbar.addStretch(1)
+        
+        # 快捷键
+        self.save_action = QAction(self)
+        self.save_action.setShortcut(QKeySequence("Ctrl+S"))
+        self.save_action.triggered.connect(self.export_file)
+        self.addAction(self.save_action)
         self.vbox.addLayout(self.toolbar)
 
         # 分割器
@@ -83,10 +91,17 @@ class MarkdownInterface(QWidget):
         self.placeholder_label = BodyLabel("点击加载预览 (使用轻量级 QTextBrowser)", self)
         self.placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.load_btn = PrimaryPushButton("加载预览 / 启用导出", self)
+        self.load_btn.setToolTip("初始化预览引擎 (Ctrl+R)")
         self.load_btn.clicked.connect(self.init_webview)
         self.placeholder_layout.addWidget(self.placeholder_label, 0, Qt.AlignmentFlag.AlignCenter)
         self.placeholder_layout.addWidget(self.load_btn, 0, Qt.AlignmentFlag.AlignCenter)
         self.placeholder_layout.addStretch(1)
+        
+        # 刷新/加载快捷键
+        self.refresh_action = QAction(self)
+        self.refresh_action.setShortcut(QKeySequence("Ctrl+R"))
+        self.refresh_action.triggered.connect(self.init_webview)
+        self.addAction(self.refresh_action)
         
         self.preview_layout.addWidget(self.placeholder_widget)
         
@@ -332,7 +347,7 @@ class MarkdownInterface(QWidget):
                     else:
                         self.webview.print(printer)
                         
-                    InfoBar.success("导出成功", f"PDF 已保存到: {path}", duration=3000, parent=self)
+                    self.on_export_finished(True, path)
                 except Exception as e:
                     InfoBar.error("导出失败", str(e), parent=self)
 
@@ -344,6 +359,26 @@ class MarkdownInterface(QWidget):
         self.export_btn.setText("导出文件")
         
         if success:
-            InfoBar.success("导出成功", f"文件已保存: {message}", parent=self)
+            bar = InfoBar.success(
+                title="导出成功",
+                content=f"文件已保存",
+                duration=5000,
+                parent=self
+            )
+            
+            # 这里的 message 实际上是 output_path
+            path = message
+            if path and os.path.exists(path):
+                # 打开文件
+                open_btn = PushButton("打开文件")
+                open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(path)))
+                bar.addWidget(open_btn)
+                
+                # 打开文件夹
+                folder_btn = PushButton("打开文件夹")
+                folder_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(path))))
+                bar.addWidget(folder_btn)
+            
+            bar.show()
         else:
             InfoBar.error("导出失败", message, parent=self)
