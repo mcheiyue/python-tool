@@ -9,6 +9,25 @@
             "path": ""
         }
     },
+    "plugins": {
+        "enabled": {
+            "pandoc": true,
+            "mathjax": true,
+            "highlight": true
+        },
+        "settings": {
+            "pandoc": {
+                "custom_path": "",
+                "latex_engine": "xelatex"
+            },
+            "mathjax": {
+                "use_cdn": true
+            },
+            "highlight": {
+                "style": "default"
+            }
+        }
+    },
     "pdf": {
         "compress": {
             "quality": "/printer",

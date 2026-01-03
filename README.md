@@ -12,7 +12,7 @@
 6.  **PDF 拆分/提取页面**: 按页面范围（如 "1-5, 8, 10-end"）将 PDF 拆分为新文件。
 7.  **PDF 图片提取**: 批量提取 PDF 文档中嵌入的所有图片。
 8.  **图片取色**: 提取图片中的主色调并生成配色方案 (Hex/RGB)。
-9.  **Markdown 转 PDF**: 实时预览 Markdown 并导出为 PDF。
+9.  **Markdown 转 PDF**: 实时预览 Markdown 并导出为 PDF
 10. **PNG 转 SVG**: 将位图转换为 SVG 矢量图，适合 Logo 和图标。
 11. **TXT 转 PDF**: 将文本文件批量转换为 PDF，支持自动换行和中文。
 12. **代码提取**: 遍历项目目录，提取指定扩展名的代码文件到一个文本文件中，便于分析。
@@ -27,8 +27,7 @@
 
 *   **配置管理 (Config)**: `config/` 模块提供统一的配置管理，支持默认配置 (`default.json`) 和用户配置 (`config.json`) 的递归合并与分层访问。
 *   **依赖注入 (DI)**: `app/container.py` 提供单例应用容器，负责管理全局依赖（如配置加载器、服务实例）的生命周期，实现 UI 与业务逻辑的解耦。
-*   **引擎抽象 (Engine)**: `core/engines/` 模块定义了业务核心的抽象接口（如 `BasePdfCompressor`），并提供具体的实现（如 `GhostscriptCompressor`），方便未来扩展新的引擎（如 OCR）。
-
+*   **引擎抽象 (Engine)**: `core/engines/` 模块定义了业务核心的抽象接口（如 `BasePdfCompressor`），并提供具体的实现（如 `GhostscriptCompressor`），方便未来扩展新的引擎（如 OCR
 ## 环境要求
 
 *   Windows 10/11 (推荐)
@@ -36,7 +35,6 @@
 *   Microsoft Office (Word, Excel 和 PowerPoint 功能需要)
 *   Ghostscript (PDF 压缩功能需要)
 
-## 安装依赖
 
 ```bash
 pip install -r requirements.txt
@@ -53,11 +51,7 @@ python main.py
 *   **PDF 压缩**: 需要安装 Ghostscript (gswin64c.exe)，并在软件界面中指定其路径。
 *   **Office 转换**: 需要系统安装有 Microsoft Office，因为工具通过 COM 接口调用本地 Office 组件。
 *   **TXT 转 PDF**: 默认使用微软雅黑字体 (`msyh.ttc`) 以支持中文。
-
-## 目录结构
-
-*   `main.py`: 主程序入口。
-*   `app/`: 应用容器与依赖注入。
+`pp/`: 应用容器与依赖注入。
     *   `container.py`: AppContainer 类。
 *   `config/`: 配置管理模块。
     *   `default.json`: 默认配置文件。
@@ -79,12 +73,7 @@ python main.py
     *   `pdf_merger.py`: PDF 合并逻辑。
     *   `pdf_splitter.py`: PDF 拆分逻辑。
     *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
-    *   `color_extractor.py`: 颜色提取逻辑 (KMeans)。
-    *   `image_converter.py`: 图片格式转换逻辑。
-    *   `image_vectorizer.py`: 位图转矢量图逻辑 (vtracer)。
-    *   `txt_converter.py`: 文本转 PDF 逻辑。
-    *   `code_extractor.py`: 代码提取逻辑。
-    *   `environment_checker.py`: 运行环境检测工具。
+    *   `crneronment_checker.py`: 运行环境检测工具。
     *   `font_finder.py`: 系统字体查找工具。
 *   `ui/`: 用户界面模块。
     *   `main_window.py`: 主窗口布局与导航。
@@ -134,11 +123,3 @@ python main.py
 *   **性能优化**: 优化 `EnvironmentChecker`，增加缓存机制，避免重复扫描系统路径。
 *   **Office 引擎重构**: 将 Word/PPT/Excel 转换逻辑重构为基于模板方法模式的 `BaseOfficeConverter` 及其子类，消除了大量重复代码并统一了接口。
 *   **Bug 修复**: 修复了 `core/engines/pdf/base.py` 中 QObject 和 ABC 的元类冲突，增强了稳定性。
-
-### 2026-01-03 UI 优化更新
-*   **侧边栏图标优化**:
-    *   修复了侧边栏图标显示过小的问题，优化了 SVG 图标的 viewBox。
-    *   修复了侧边栏图标在切换主题时颜色不刷新的问题（实现主题感知图标引擎）。
-*   **深色模式适配**:
-    *   修复了侧边栏图标在深色模式下不可见的问题（自动反色）。
-    *   修复了主区域分类标题在深色模式下颜色不正确的问题。
