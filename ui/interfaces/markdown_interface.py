@@ -9,6 +9,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, TextEdi
 
 from core.plugins import PluginManager
 from core.utils.md_normalizer import normalize_markdown
+from core.utils.docx_processor import DocxProcessor
 from ui.threads import WorkerThread
 
 class MarkdownInterface(QWidget):
@@ -24,8 +25,8 @@ class MarkdownInterface(QWidget):
         self.vbox.setContentsMargins(20, 20, 20, 20)
         self.vbox.setSpacing(15)
 
-        self.title = SubtitleLabel("Markdown 转 PDF", self)
-        self.desc = BodyLabel("实时预览 Markdown 并导出为 PDF", self)
+        self.title = SubtitleLabel("Markdown 工具箱", self)
+        self.desc = BodyLabel("实时预览 Markdown 并导出为 PDF/DOCX", self)
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)
@@ -38,23 +39,25 @@ class MarkdownInterface(QWidget):
         self.bg_combo.addItems(["跟随主题", "白色背景"])
         self.bg_combo.setFixedWidth(120)
         
-        # 导出引擎选择
-        self.engine_combo = ComboBox(self)
-        self.engine_combo.setFixedWidth(140)
-        self.engine_combo.addItem("内置转换 (基础)", "builtin")
+        # 导出格式选择
+        self.format_combo = ComboBox(self)
+        self.format_combo.setFixedWidth(120)
+        self.format_combo.addItem("PDF 文档", "pdf")
+        self.format_combo.addItem("Word 文档", "docx")
         
         # 检查 Pandoc 插件
         self.pandoc = self.plugin_manager.get("pandoc")
-        if self.pandoc and self.pandoc.is_available:
-            self.engine_combo.addItem("Pandoc (专业)", "pandoc")
-            # 默认选用 Pandoc
-            self.engine_combo.setCurrentIndex(1)
+        self.has_pandoc = self.pandoc and self.pandoc.is_available
         
-        self.export_btn = PrimaryPushButton(FIF.SAVE, "导出 PDF", self)
-        self.export_btn.clicked.connect(self.export_pdf)
+        # 如果有 Pandoc，自动选择 DOCX 作为默认（因为它只能通过 Pandoc 导出）
+        if self.has_pandoc:
+            self.format_combo.setCurrentIndex(1)
+
+        self.export_btn = PrimaryPushButton(FIF.SAVE, "导出文件", self)
+        self.export_btn.clicked.connect(self.export_file)
         
         self.toolbar.addWidget(self.bg_combo)
-        self.toolbar.addWidget(self.engine_combo)
+        self.toolbar.addWidget(self.format_combo)
         self.toolbar.addWidget(self.export_btn)
         self.toolbar.addStretch(1)
         self.vbox.addLayout(self.toolbar)
@@ -241,79 +244,105 @@ class MarkdownInterface(QWidget):
         except Exception as e:
             print(f"Markdown Parsing Error: {e}")
 
-    def export_pdf(self):
-        if not self.webview and self.engine_combo.currentData() == "builtin":
-            InfoBar.warning("未就绪", "请先点击'加载预览'以初始化组件", parent=self)
-            return
-            
-        path, _ = QFileDialog.getSaveFileName(self, "保存 PDF", "markdown_output.pdf", "PDF Files (*.pdf)")
-        if not path:
-            return
-            
-        engine = self.engine_combo.currentData()
+    def export_file(self):
+        # 修复：QFluentWidgets ComboBox currentData() 可能返回 None，改用 currentIndex 判断
+        # Index 0: PDF ("pdf")
+        # Index 1: Word ("docx")
+        idx = self.format_combo.currentIndex()
+        fmt = "docx" if idx == 1 else "pdf" if idx == 0 else None
         
-        if engine == "pandoc":
-            if not self.pandoc or not self.pandoc.is_available:
-                InfoBar.error("错误", "Pandoc 插件未安装或不可用", parent=self)
+        # 1. DOCX 导出 (仅 Pandoc)
+        if fmt == "docx":
+            if not self.has_pandoc:
+                InfoBar.error("组件缺失", "导出 DOCX 需要安装 Pandoc。\n请安装 Pandoc 并重启应用。", parent=self)
                 return
+                
+            path, _ = QFileDialog.getSaveFileName(self, "保存 Word 文档", "markdown_output.docx", "Word Files (*.docx)")
+            if not path: return
 
-            # 显示进度条或 Loading 状态
-            InfoBar.info("正在导出", "正在使用 Pandoc 生成 PDF，请稍候...", duration=2000, parent=self)
-            self.export_btn.setEnabled(False) # 防止重复点击
-            
-            # 获取并规范化内容
+            InfoBar.info("正在导出", "正在生成 DOCX，请稍候...", duration=5000, parent=self)
+            self.export_btn.setEnabled(False)
+            self.export_btn.setText("正在导出...")
+
             raw_content = self.editor.toPlainText()
             normalized_content = normalize_markdown(raw_content)
 
-            # 定义耗时任务
-            def pandoc_task(content, output_path):
-                self.pandoc.convert(
-                    content=content,
-                    output_path=output_path,
-                    extra_args=["--pdf-engine=xelatex"]
-                )
+            def docx_task(content, output_path):
+                # 1. 调用 Pandoc 转换
+                self.pandoc.convert_to_docx(content, output_path)
+                # 2. 后处理样式 (修复首段缩进等)
+                DocxProcessor.process_file(output_path, disable_first_para_indent=True)
                 return output_path
 
-            # 使用线程执行
-            self.worker = WorkerThread(pandoc_task, normalized_content, path)
+            self.worker = WorkerThread(docx_task, normalized_content, path)
             self.worker.finished.connect(lambda p: self.on_export_finished(True, p))
             self.worker.error.connect(lambda e: self.on_export_finished(False, str(e)))
             self.worker.start()
+
+        # 2. PDF 导出 (Pandoc 或 内置)
+        elif fmt == "pdf":
+            path, _ = QFileDialog.getSaveFileName(self, "保存 PDF", "markdown_output.pdf", "PDF Files (*.pdf)")
+            if not path: return
             
-        else:
-            try:
-                # 内置导出 (QPrinter)
-                printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-                printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-                printer.setOutputFileName(path)
+            # 如果有 Pandoc，优先用 Pandoc
+            if self.has_pandoc:
+                InfoBar.info("正在导出", "正在使用 Pandoc 生成 PDF...", duration=5000, parent=self)
+                self.export_btn.setEnabled(False)
+                self.export_btn.setText("正在导出...")
                 
-                force_light = self.bg_combo.currentText() == "白色背景"
+                raw_content = self.editor.toPlainText()
+                normalized_content = normalize_markdown(raw_content)
                 
-                if force_light:
-                    temp_browser = QTextBrowser()
-                    css = self.get_css_style(force_light=True)
-                    text = self.editor.toPlainText()
-                    # 这里重复逻辑有点多，但为了隔离打印样式，暂时这样
-                    extensions = ['markdown.extensions.tables', 'markdown.extensions.fenced_code', 'markdown.extensions.extra']
-                    hl_plugin = self.plugin_manager.get("highlight")
-                    if hl_plugin and hl_plugin.is_available:
-                        extensions.append('markdown.extensions.codehilite')
-                        
-                    html_content = markdown.markdown(text, extensions=extensions)
-                    final_html = f"<!DOCTYPE html><html><head>{css}</head><body>{html_content}</body></html>"
-                    temp_browser.setHtml(final_html)
-                    temp_browser.print(printer)
-                    temp_browser.deleteLater()
-                else:
-                    self.webview.print(printer)
+                def pandoc_pdf_task(content, output_path):
+                    self.pandoc.convert(
+                        content=content,
+                        output_path=output_path,
+                        output_format="pdf"
+                    )
+                    return output_path
                     
-                InfoBar.success("导出成功", f"PDF 已保存到: {path}", duration=3000, parent=self)
+                self.worker = WorkerThread(pandoc_pdf_task, normalized_content, path)
+                self.worker.finished.connect(lambda p: self.on_export_finished(True, p))
+                self.worker.error.connect(lambda e: self.on_export_finished(False, str(e)))
+                self.worker.start()
             
-            except Exception as e:
-                InfoBar.error("导出失败", f"错误详情: {e}", parent=self)
+            # 否则用内置转换
+            else:
+                if not self.webview:
+                    InfoBar.warning("未就绪", "请先加载预览以使用内置 PDF 导出", parent=self)
+                    return
+                try:
+                    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+                    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                    printer.setOutputFileName(path)
+                    
+                    # 临时渲染一份白色背景的 HTML 用于打印 (如果需要)
+                    force_light = self.bg_combo.currentText() == "白色背景"
+                    if force_light:
+                        temp_browser = QTextBrowser()
+                        css = self.get_css_style(force_light=True)
+                        text = self.editor.toPlainText()
+                        extensions = ['markdown.extensions.tables', 'markdown.extensions.fenced_code', 'markdown.extensions.extra']
+                        if self.plugin_manager.get("highlight"):
+                            extensions.append('markdown.extensions.codehilite')
+                        html = markdown.markdown(text, extensions=extensions)
+                        temp_browser.setHtml(f"<html><head>{css}</head><body>{html}</body></html>")
+                        temp_browser.print(printer)
+                        temp_browser.deleteLater()
+                    else:
+                        self.webview.print(printer)
+                        
+                    InfoBar.success("导出成功", f"PDF 已保存到: {path}", duration=3000, parent=self)
+                except Exception as e:
+                    InfoBar.error("导出失败", str(e), parent=self)
+
+        else:
+            InfoBar.error("导出失败", f"未知的导出格式: {fmt}\n请重新选择格式。", parent=self)
 
     def on_export_finished(self, success, message):
         self.export_btn.setEnabled(True)
+        self.export_btn.setText("导出文件")
+        
         if success:
             InfoBar.success("导出成功", f"文件已保存: {message}", parent=self)
         else:
