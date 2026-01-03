@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import QApplication
 from qfluentwidgets import FluentWindow, FluentIcon as FIF, NavigationItemPosition
 
 from ui.interfaces import (
-    PPTInterface, WordInterface, ExcelInterface, PDFMergeInterface, PDFCompressInterface,
+    PPTInterface, PPTImageInterface, WordInterface, ExcelInterface, PDFMergeInterface, PDFCompressInterface,
     PDFSplitInterface, PDFImageExtractInterface, ColorInterface, MarkdownInterface,
     ImageVectorInterface, ImageConvertInterface, ImagePdfInterface, TxtPdfInterface, CodeExtractInterface, SettingsInterface
 )
@@ -20,6 +20,10 @@ class MainWindow(FluentWindow):
         # 1. PPT 转换界面
         self.ppt_interface = PPTInterface(self)
         self.addSubInterface(self.ppt_interface, FIF.TILES, "PPT 转 PDF")
+
+        # 1.1 PPT 转图片
+        self.ppt_img_interface = PPTImageInterface(self)
+        self.addSubInterface(self.ppt_img_interface, FIF.PHOTO, "PPT 转图片")
 
         # 2. Word 转换界面
         self.word_interface = WordInterface(self)

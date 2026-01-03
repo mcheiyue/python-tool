@@ -1,6 +1,7 @@
 from .word_interface import WordInterface
 from .excel_interface import ExcelInterface
 from .ppt_interface import PPTInterface
+from .ppt_image_interface import PPTImageInterface
 from .pdf_compress_interface import PDFCompressInterface
 from .pdf_merge_interface import PDFMergeInterface
 from .color_interface import ColorInterface

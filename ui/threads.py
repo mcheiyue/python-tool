@@ -115,3 +115,14 @@ class ImageToPdfThread(QThread):
 
     def run(self):
         self.converter.convert(self.image_paths, self.output_path, self.merge)
+
+class PPTImageExportThread(QThread):
+    def __init__(self, exporter, files, output_dir, format):
+        super().__init__()
+        self.exporter = exporter
+        self.files = files
+        self.output_dir = output_dir
+        self.format = format
+
+    def run(self):
+        self.exporter.export(self.files, self.output_dir, self.format)
