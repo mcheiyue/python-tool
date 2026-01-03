@@ -1,4 +1,5 @@
 from config import ConfigLoader
+from core.engines.office import WordEngine, PowerPointEngine, ExcelEngine
 
 class AppContainer:
     """应用容器，负责管理全局依赖和服务的生命周期"""
@@ -18,8 +19,27 @@ class AppContainer:
         # 初始化核心服务
         self.config = ConfigLoader()
         
-        # 将来这里会初始化 DependencyManager, ServiceManager 等
-        # self.dependency_manager = DependencyManager(self.config)
-        # self.ocr_service = OcrService(self.config)
+        # 服务实例缓存 (懒加载)
+        self._word_engine = None
+        self._ppt_engine = None
+        self._excel_engine = None
         
         self._initialized = True
+
+    @property
+    def word_engine(self) -> WordEngine:
+        if self._word_engine is None:
+            self._word_engine = WordEngine()
+        return self._word_engine
+
+    @property
+    def ppt_engine(self) -> PowerPointEngine:
+        if self._ppt_engine is None:
+            self._ppt_engine = PowerPointEngine()
+        return self._ppt_engine
+
+    @property
+    def excel_engine(self) -> ExcelEngine:
+        if self._excel_engine is None:
+            self._excel_engine = ExcelEngine()
+        return self._excel_engine

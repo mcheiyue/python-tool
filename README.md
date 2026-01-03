@@ -128,6 +128,8 @@ python main.py
 *   **依赖注入**: 引入 `AppContainer`，实现全局依赖管理。
 *   **性能优化**: 优化 `EnvironmentChecker`，增加缓存机制，避免重复扫描系统路径。
 
+*   **Office 引擎重构**: 将 Word/PPT/Excel 转换逻辑重构为基于模板方法模式的 `BaseOfficeConverter` 及其子类，消除了大量重复代码并统一了接口。
+
 ### 2026-01-03 UI 优化更新
 *   **侧边栏图标优化**:
     *   修复了侧边栏图标显示过小的问题，优化了 SVG 图标的 viewBox。

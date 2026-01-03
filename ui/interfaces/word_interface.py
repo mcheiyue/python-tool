@@ -5,7 +5,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
                             PrimaryPushButton, PushButton, ProgressBar, TextEdit, 
                             InfoBar, FluentIcon as FIF)
 
-from core.word_converter import WordConverter
+from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.threads import ConversionThread
 
@@ -91,7 +91,7 @@ class WordInterface(QWidget):
         self.vbox.addLayout(self.bottom_layout)
 
         self.files = []
-        self.converter = WordConverter()
+        self.converter = AppContainer().word_engine
         self.thread = None
 
         self.converter.log.connect(self.append_log)

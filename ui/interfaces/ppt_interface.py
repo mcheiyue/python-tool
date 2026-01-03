@@ -5,7 +5,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
                             PrimaryPushButton, PushButton, ProgressBar, TextEdit, 
                             InfoBar, FluentIcon as FIF)
 
-from core.ppt_converter import PPTConverter
+from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.threads import ConversionThread
 
@@ -81,7 +81,7 @@ class PPTInterface(QWidget):
         self.vbox.addLayout(self.bottom_layout)
 
         self.files = []
-        self.converter = PPTConverter()
+        self.converter = AppContainer().ppt_engine
         self.thread = None
 
         self.converter.log.connect(self.append_log)

@@ -1,7 +1,7 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from PyQt6.QtCore import QObject, pyqtSignal
 
-class BasePdfCompressor(QObject, ABC):
+class BasePdfCompressor(QObject):
     """PDF 压缩引擎抽象基类"""
     
     # 定义标准信号

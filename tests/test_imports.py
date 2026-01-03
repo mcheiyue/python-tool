@@ -37,8 +37,7 @@ def test_imports():
         print(f"❌ vtracer failed: {e}")
         
     try:
-        from core.ppt_converter import PPTConverter
-        from core.word_converter import WordConverter
+        from core.engines.office import WordEngine, PowerPointEngine
         from core.image_vectorizer import ImageVectorizer
         print("✅ Core modules imported")
     except ImportError as e:
