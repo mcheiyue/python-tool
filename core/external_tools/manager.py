@@ -1,5 +1,6 @@
 import importlib
 from typing import Dict, List, Optional
+from config.loader import ConfigLoader
 from .base import ExternalTool
 
 # 工具注册表：名称 -> (模块路径, 类名)
@@ -34,6 +35,10 @@ class ExternalToolManager:
             module = importlib.import_module(module_path)
             tool_cls = getattr(module, class_name)
             tool_instance = tool_cls()
+            
+            # 注入管理器引用，以便工具可以查询配置
+            tool_instance._manager = self
+            
             self.register(tool_instance)
             return tool_instance
         except Exception as e:
@@ -46,6 +51,44 @@ class ExternalToolManager:
             if name not in self._tools:
                 self._load_tool(name)
     
+    def is_tool_disabled(self, name: str) -> bool:
+        """检查工具是否被禁用"""
+        return name in ConfigLoader().get("dependencies.disabled_tools", [])
+
+    def disable_tool(self, name: str):
+        """禁用工具"""
+        config_loader = ConfigLoader()
+        disabled_tools = config_loader.get("dependencies.disabled_tools", [])
+        
+        if name not in disabled_tools:
+            disabled_tools.append(name)
+            config_loader.set("dependencies.disabled_tools", disabled_tools)
+            
+            # 如果工具已加载，更新其状态
+            if name in self._tools:
+                # 强制重新检查状态
+                pass
+
+    def enable_tool(self, name: str):
+        """启用工具"""
+        config_loader = ConfigLoader()
+        disabled_tools = config_loader.get("dependencies.disabled_tools", [])
+        
+        if name in disabled_tools:
+            disabled_tools.remove(name)
+            config_loader.set("dependencies.disabled_tools", disabled_tools)
+
+    def uninstall_tool(self, name: str) -> bool:
+        """卸载工具（删除物理文件）"""
+        tool = self.get_tool(name)
+        if tool and hasattr(tool, 'uninstall'):
+            success = tool.uninstall()
+            # 卸载后自动启用（从禁用列表移除），以便下次重新检测状态
+            if success:
+                self.enable_tool(name)
+            return success
+        return False
+
     def register(self, tool: ExternalTool):
         self._tools[tool.name] = tool
     

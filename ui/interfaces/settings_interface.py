@@ -129,17 +129,28 @@ class SettingsInterface(QWidget):
         layout = QHBoxLayout(card)
         layout.setContentsMargins(20, 10, 20, 10)
         
-        # Status Icon
         is_installed = status["installed"]
-        icon = FIF.ACCEPT if is_installed else FIF.CANCEL
+        is_disabled = status.get("disabled", False)
+        
+        # Status Icon
+        if is_disabled:
+            icon = FIF.CANCEL
+            color = "#737373" # Grey
+            status_text = "已禁用"
+        elif is_installed:
+            icon = FIF.ACCEPT
+            color = "#107C10" # Green
+            source = status.get("source", "system")
+            status_text = "已就绪 (便携版)" if source == "portable" else "已就绪 (系统安装)"
+        else:
+            icon = FIF.INFO
+            color = "#C42B1C" # Red
+            status_text = "未安装 (功能受限)"
+
         icon_widget = IconWidget(icon)
         icon_widget.setFixedSize(18, 18)
-        # Set icon color: green for installed, red for missing
-        if is_installed:
-            icon_widget.setStyleSheet("IconWidget { color: #107C10; }")
-        else:
-            icon_widget.setStyleSheet("IconWidget { color: #C42B1C; }")
-            
+        icon_widget.setStyleSheet(f"IconWidget {{ color: {color}; }}")
+        
         layout.addWidget(icon_widget)
         layout.addSpacing(10)
         
@@ -148,63 +159,80 @@ class SettingsInterface(QWidget):
         info_layout.setSpacing(2)
         info_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         
-        # Tool Name and Source Badge
-        name_layout = QHBoxLayout()
-        name_layout.setSpacing(8)
-        
+        # Tool Name
         name_label = BodyLabel(status["display_name"], self)
-        name_layout.addWidget(name_label)
+        info_layout.addWidget(name_label)
         
-        if is_installed:
-            source = status.get("source", "system")
-            source_text = "便携版" if source == "portable" else "系统安装"
-            source_color = "#009900" if source == "portable" else "#0066CC"
-            
-            badge = CaptionLabel(f"[{source_text}]", self)
-            badge.setStyleSheet(f"color: {source_color}; font-weight: bold;")
-            name_layout.addWidget(badge)
-            
-        name_layout.addStretch(1)
-        info_layout.addLayout(name_layout)
+        # Status Label
+        status_label = CaptionLabel(status_text, self)
+        status_label.setStyleSheet(f"color: {color};")
+        info_layout.addWidget(status_label)
         
-        # Version/Path or "Not Installed"
-        if is_installed:
-            detail_text = f"版本: {status['version'] or '未知'}"
-            if status['path']:
-                # Truncate path if too long
-                path = status['path']
-                if len(path) > 40:
-                    path = path[:20] + "..." + path[-17:]
-                detail_text += f" | 路径: {path}"
-            detail_label = CaptionLabel(detail_text, self)
-            detail_label.setTextColor("#666666", "#999999") # Light/Dark mode colors
-        else:
-            detail_label = CaptionLabel("未检测到安装", self)
-            detail_label.setTextColor("#C42B1C", "#FF99A4")
-            
-        info_layout.addWidget(detail_label)
         layout.addLayout(info_layout)
         layout.addStretch(1)
         
         # Actions
-        if not is_installed:
-            # 打开 libs 目录按钮
-            open_libs_btn = PushButton(FIF.FOLDER, "打开组件目录", self)
-            open_libs_btn.setToolTip("打开便携组件存放目录 (libs)")
+        manager = AppContainer().external_tool_manager
+
+        if is_disabled:
+            # Enable Button
+            enable_btn = PushButton(FIF.RINGER, "启用", self)
+            enable_btn.clicked.connect(lambda: self._enable_tool(status["name"]))
+            layout.addWidget(enable_btn)
+        
+        elif is_installed:
+            # Uninstall Button (Only for portable)
+            if status.get("source") == "portable":
+                uninstall_btn = PushButton(FIF.DELETE, "卸载", self)
+                uninstall_btn.setToolTip("删除便携版文件")
+                # Red style for delete
+                # uninstall_btn.setStyleSheet("PushButton { color: white; background-color: #C42B1C; border: 1px solid #C42B1C; }")
+                uninstall_btn.clicked.connect(lambda: self._uninstall_tool(status["name"]))
+                layout.addWidget(uninstall_btn)
+
+            # Disable Button
+            disable_btn = PushButton(FIF.CANCEL, "禁用", self)
+            disable_btn.clicked.connect(lambda: self._disable_tool(status["name"]))
+            layout.addWidget(disable_btn)
+            
+        else:
+            # Not Installed Actions
+            open_libs_btn = PushButton(FIF.FOLDER, "打开目录", self)
+            open_libs_btn.setToolTip("打开组件存放目录 (libs)")
             open_libs_btn.clicked.connect(self._open_libs_folder)
             layout.addWidget(open_libs_btn)
             
             if status["download_url"]:
-                download_btn = PushButton(FIF.DOWNLOAD, "下载安装包", self)
+                download_btn = PushButton(FIF.DOWNLOAD, "下载", self)
                 download_btn.clicked.connect(lambda: self._open_download_url(status["download_url"]))
                 layout.addWidget(download_btn)
             
-        refresh_btn = ToolButton(FIF.SYNC, self)
-        refresh_btn.setToolTip("重新检测")
-        refresh_btn.clicked.connect(lambda: self._refresh_single_tool(status["name"]))
-        layout.addWidget(refresh_btn)
+            # Refresh Button (only useful when checking for installation)
+            refresh_btn = ToolButton(FIF.SYNC, self)
+            refresh_btn.setToolTip("重新检测")
+            refresh_btn.clicked.connect(lambda: self._refresh_single_tool(status["name"]))
+            layout.addWidget(refresh_btn)
         
         return card
+
+    def _disable_tool(self, name):
+        manager = AppContainer().external_tool_manager
+        manager.disable_tool(name)
+        self.refresh_tools_ui()
+
+    def _enable_tool(self, name):
+        manager = AppContainer().external_tool_manager
+        manager.enable_tool(name)
+        self.refresh_tools_ui()
+
+    def _uninstall_tool(self, name):
+        # TODO: Add confirmation dialog?
+        manager = AppContainer().external_tool_manager
+        if manager.uninstall_tool(name):
+            self.refresh_tools_ui()
+        else:
+            # Show error?
+            pass
 
     def _refresh_single_tool(self, tool_name):
         """Refresh status for a single tool (reloads entire list for simplicity)"""

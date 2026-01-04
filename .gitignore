@@ -58,3 +58,9 @@ cover/
 # OS
 .DS_Store
 Thumbs.db
+
+# App Specific
+config.json
+libs/
+plugins/
+temp_output/

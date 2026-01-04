@@ -8,7 +8,8 @@
     "dependencies": {
         "ghostscript": {
             "path": ""
-        }
+        },
+        "disabled_tools": []
     },
     "plugins": {
         "enabled": {

@@ -21,11 +21,25 @@ class ExternalTool(ABC):
     # 是否是应用程序的核心依赖
     is_required: bool = False
     
+    # 引用管理器实例
+    _manager = None
+
+    @property
+    def is_disabled(self) -> bool:
+        """检查工具是否被禁用"""
+        if self._manager:
+            return self._manager.is_tool_disabled(self.name)
+        return False
+
     @abstractmethod
     def check_installed(self) -> bool:
         """检查工具是否已安装"""
         pass
     
+    def uninstall(self) -> bool:
+        """卸载工具（删除相关文件）"""
+        return False
+
     @abstractmethod
     def get_version(self) -> Optional[str]:
         """获取已安装版本"""
@@ -43,9 +57,11 @@ class ExternalTool(ABC):
 
     # 别名，为了更好的语义兼容性
     def is_available(self) -> bool:
-        return self.check_installed()
+        return self.check_installed() and not self.is_disabled
         
     def get_executable_path(self) -> Optional[str]:
+        if self.is_disabled:
+            return None
         return self.get_path()
         
     def get_status_info(self) -> Dict[str, Any]:
@@ -56,6 +72,7 @@ class ExternalTool(ABC):
             "display_name": self.display_name,
             "description": self.description,
             "installed": installed,
+            "disabled": self.is_disabled,
             "version": self.get_version() if installed else None,
             "path": self.get_path() if installed else None,
             "source": self.get_source() if installed else None,

@@ -83,6 +83,38 @@ class PandocTool(ExternalTool):
         self._cache = result
         return result
 
+    def uninstall(self) -> bool:
+        """卸载便携版 Pandoc (删除目录)"""
+        self._cache = None
+        if not self.check_installed():
+            return False
+            
+        info = self.get_status_info()
+        if info.get("source") != "portable":
+            return False
+            
+        exe_path = info.get("path")
+        if not exe_path:
+            return False
+            
+        install_dir = os.path.dirname(exe_path)
+        
+        # 安全检查
+        libs_path = os.path.abspath(self.get_libs_path())
+        abs_install_dir = os.path.abspath(install_dir)
+        
+        if not abs_install_dir.startswith(libs_path):
+            print(f"Refusing to uninstall external directory: {abs_install_dir}")
+            return False
+            
+        try:
+            shutil.rmtree(install_dir)
+            self._cache = None
+            return True
+        except Exception as e:
+            print(f"Pandoc uninstall failed: {e}")
+            return False
+
     def _get_version_from_exe(self, path: str) -> Optional[str]:
         """从 exe 获取版本号"""
         try:

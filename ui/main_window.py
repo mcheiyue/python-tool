@@ -287,3 +287,8 @@ class MainWindow(FluentWindow):
                 self.switchTo(interface)
                 self.searchBar.clear()
                 return
+
+    def switch_to_settings(self):
+        """跳转到设置界面"""
+        if hasattr(self, 'settings_interface'):
+            self.switchTo(self.settings_interface)
