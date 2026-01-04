@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
+nuitka/
 develop-eggs/
 dist/
 downloads/
