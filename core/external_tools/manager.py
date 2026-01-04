@@ -83,9 +83,9 @@ class ExternalToolManager:
         tool = self.get_tool(name)
         if tool and hasattr(tool, 'uninstall'):
             success = tool.uninstall()
-            # 卸载后自动启用（从禁用列表移除），以便下次重新检测状态
+            # 卸载后自动禁用，防止自动重新解压（特别是临时模式下）
             if success:
-                self.enable_tool(name)
+                self.disable_tool(name)
             return success
         return False
 

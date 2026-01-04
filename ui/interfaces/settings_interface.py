@@ -82,7 +82,15 @@ class SettingsInterface(QWidget):
         self.plugin_layout.addWidget(self.plugin_icon)
         self.plugin_layout.addSpacing(10)
         self.plugin_layout.addWidget(self.plugin_label)
+        
+        # Add restart hint
+        self.restart_hint = CaptionLabel("(需重启生效)", self)
+        self.restart_hint.setStyleSheet("color: #737373;")
+        self.restart_hint.hide() # Initially hidden
+        
         self.plugin_layout.addStretch(1)
+        self.plugin_layout.addWidget(self.restart_hint)
+        self.plugin_layout.addSpacing(5)
         self.plugin_layout.addWidget(self.plugin_combo)
 
         self.vbox.addWidget(self.plugin_card)
@@ -278,3 +286,4 @@ class SettingsInterface(QWidget):
         mode = "persistent" if index == 1 else "temporary"
         config_loader = ConfigLoader()
         config_loader.set("app.plugin_mode", mode)
+        self.restart_hint.show()

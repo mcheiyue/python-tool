@@ -19,6 +19,7 @@ MAGIC_HEADER = b"MCY\x00"
 class PluginLoader:
     _instance = None
     _temp_dirs = []
+    _extracted_cache = {}  # 缓存已解压的插件路径 {mcy_path: extracted_path}
 
     def __new__(cls):
         if cls._instance is None:
@@ -81,6 +82,14 @@ class PluginLoader:
         if not os.path.exists(mcy_path):
             raise FileNotFoundError(f"Plugin file not found: {mcy_path}")
 
+        # 检查缓存
+        if mcy_path in self._extracted_cache:
+            path = self._extracted_cache[mcy_path]
+            if os.path.exists(path):
+                return path
+            else:
+                del self._extracted_cache[mcy_path]
+
         try:
             with open(mcy_path, "rb") as f:
                 # 校验 Header
@@ -131,10 +140,14 @@ class PluginLoader:
                 
                 # 获取解压出的顶层目录名（通常是 ghostscript 或 pandoc）
                 members = tar.getnames()
+                final_path = target_base
                 if members:
                     root_dir = members[0].split('/')[0].split('\\')[0]
-                    return os.path.join(target_base, root_dir)
-                return target_base
+                    final_path = os.path.join(target_base, root_dir)
+                
+                # 存入缓存
+                self._extracted_cache[mcy_path] = final_path
+                return final_path
 
         except Exception as e:
             print(f"Failed to load plugin: {e}")

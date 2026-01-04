@@ -43,6 +43,10 @@ class GhostscriptTool(ExternalTool):
             "source": None
         }
         
+        # 0. 如果已禁用，直接返回未找到 (防止自动解压)
+        if self.is_disabled:
+            return result
+        
         system = platform.system().lower()
         
         # 1. 优先检查 libs 目录 (便携模式)
