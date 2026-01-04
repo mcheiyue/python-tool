@@ -1,5 +1,6 @@
 from config import ConfigLoader
 from core.engines.office import WordEngine, PowerPointEngine, ExcelEngine
+from core.doc_to_docx_converter import DocToDocxConverter
 from core.plugins import PluginManager
 from core.external_tools import ExternalToolManager
 
@@ -25,10 +26,17 @@ class AppContainer:
         self._word_engine = None
         self._ppt_engine = None
         self._excel_engine = None
+        self._doc_to_docx_converter = None
         self._plugin_manager = None
         self._external_tool_manager = None
         
         self._initialized = True
+
+    @property
+    def doc_to_docx_converter(self) -> DocToDocxConverter:
+        if self._doc_to_docx_converter is None:
+            self._doc_to_docx_converter = DocToDocxConverter()
+        return self._doc_to_docx_converter
 
     @property
     def word_engine(self) -> WordEngine:

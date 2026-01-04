@@ -1,4 +1,5 @@
 from .word_interface import WordInterface
+from .doc_to_docx_interface import DocToDocxInterface
 from .excel_interface import ExcelInterface
 from .ppt_interface import PPTInterface
 from .ppt_image_interface import PPTImageInterface

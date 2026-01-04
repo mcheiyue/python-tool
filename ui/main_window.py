@@ -54,7 +54,7 @@ class ThemedSvgIconEngine(QIconEngine):
         return ThemedSvgIconEngine(self.svg_path)
 
 from ui.interfaces import (
-    PPTInterface, PPTImageInterface, WordInterface, ExcelInterface, PDFMergeInterface, PDFCompressInterface,
+    PPTInterface, PPTImageInterface, WordInterface, DocToDocxInterface, ExcelInterface, PDFMergeInterface, PDFCompressInterface,
     PDFSplitInterface, PDFImageExtractInterface, ColorInterface, MarkdownInterface,
     ImageVectorInterface, ImageConvertInterface, ImagePdfInterface, TxtPdfInterface, CodeExtractInterface, SettingsInterface
 )
@@ -137,7 +137,13 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.word_interface, self.get_icon("assets/icons/word.svg"), "Word 转 PDF", parent=self.office_home)
         self.interfaces["Word 转 PDF"] = self.word_interface
 
-        # 1.4 Excel 转 PDF
+        # 1.4 Doc 转 Docx
+        self.doc_to_docx_interface = DocToDocxInterface(self)
+        self.icon_mapping[self.doc_to_docx_interface.objectName()] = "assets/icons/word.svg"
+        self.addSubInterface(self.doc_to_docx_interface, self.get_icon("assets/icons/word.svg"), "Doc 转 Docx", parent=self.office_home)
+        self.interfaces["Doc 转 Docx"] = self.doc_to_docx_interface
+
+        # 1.5 Excel 转 PDF
         self.excel_interface = ExcelInterface(self)
         self.icon_mapping[self.excel_interface.objectName()] = "assets/icons/excel.svg"
         self.addSubInterface(self.excel_interface, self.get_icon("assets/icons/excel.svg"), "Excel 转 PDF", parent=self.office_home)

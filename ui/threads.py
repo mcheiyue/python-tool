@@ -147,3 +147,13 @@ class PPTImageExportThread(QThread):
 
     def run(self):
         self.exporter.export(self.files, self.output_dir, self.format)
+
+class DocToDocxThread(QThread):
+    def __init__(self, converter, files, output_dir):
+        super().__init__()
+        self.converter = converter
+        self.files = files
+        self.output_dir = output_dir
+
+    def run(self):
+        self.converter.convert(self.files, self.output_dir)
