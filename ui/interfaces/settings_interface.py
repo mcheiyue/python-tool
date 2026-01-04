@@ -7,6 +7,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
                             PushButton, ToolButton, CaptionLabel)
 from app.container import AppContainer
 from core.external_tools.base import ExternalTool
+from config.loader import ConfigLoader
 
 class SettingsInterface(QWidget):
     def __init__(self, parent=None):
@@ -52,6 +53,39 @@ class SettingsInterface(QWidget):
         self.card_layout.addWidget(self.combo)
         
         self.vbox.addWidget(self.card)
+
+        # Plugin Mode Card
+        self.plugin_card = CardWidget(self)
+        self.plugin_layout = QHBoxLayout(self.plugin_card)
+        self.plugin_layout.setContentsMargins(20, 10, 20, 10)
+
+        self.plugin_icon = IconWidget(FIF.ZIP_FOLDER)
+        self.plugin_icon.setFixedSize(18, 18)
+        
+        self.plugin_label = BodyLabel("插件加载模式", self)
+        
+        self.plugin_combo = ComboBox(self)
+        self.plugin_combo.addItems(["临时模式 (推荐)", "持久模式"])
+        self.plugin_combo.setFixedWidth(150)
+        self.plugin_combo.setToolTip("临时模式：退出后清理插件文件（更干净）\n持久模式：保留插件文件（启动更快）")
+
+        # Load plugin mode
+        config = ConfigLoader()
+        plugin_mode = config.get("app.plugin_mode", "temporary")
+        if plugin_mode == "persistent":
+            self.plugin_combo.setCurrentIndex(1)
+        else:
+            self.plugin_combo.setCurrentIndex(0)
+            
+        self.plugin_combo.currentIndexChanged.connect(self.on_plugin_mode_changed)
+
+        self.plugin_layout.addWidget(self.plugin_icon)
+        self.plugin_layout.addSpacing(10)
+        self.plugin_layout.addWidget(self.plugin_label)
+        self.plugin_layout.addStretch(1)
+        self.plugin_layout.addWidget(self.plugin_combo)
+
+        self.vbox.addWidget(self.plugin_card)
 
         # External Tools Section
         self._init_external_tools_section()
@@ -211,3 +245,8 @@ class SettingsInterface(QWidget):
         elif index == 2:
             setTheme(Theme.DARK)
             self.settings.setValue("themeMode", "Dark")
+
+    def on_plugin_mode_changed(self, index):
+        mode = "persistent" if index == 1 else "temporary"
+        config_loader = ConfigLoader()
+        config_loader.set("app.plugin_mode", mode)

@@ -1,9 +1,12 @@
 import os
+import sys
 import shutil
 import platform
 import subprocess
 from typing import Optional
 from .base import ExternalTool
+from core.plugin_loader import loader as plugin_loader
+from config.loader import ConfigLoader
 
 class GhostscriptTool(ExternalTool):
     """Ghostscript PDF 处理引擎"""
@@ -46,7 +49,25 @@ class GhostscriptTool(ExternalTool):
         libs_path = self.get_libs_path()
         portable_gs_dir = os.path.join(libs_path, "ghostscript")
         
-        # 检查 libs/ghostscript 下的 exe
+        # 如果便携目录不存在，尝试从插件包加载 (惰性加载)
+        if not os.path.exists(portable_gs_dir):
+            if getattr(sys, 'frozen', False):
+                base = os.path.dirname(sys.executable)
+            else:
+                base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            
+            plugin_path = os.path.join(base, "plugins", "ghostscript.mcy")
+            if os.path.exists(plugin_path):
+                # 获取配置的插件模式
+                config = ConfigLoader()
+                mode = config.get("app.plugin_mode", "temporary")
+                persistent = (mode == "persistent")
+                
+                extracted_path = plugin_loader.extract_plugin(plugin_path, persistent=persistent)
+                if extracted_path:
+                    portable_gs_dir = extracted_path
+
+        # 检查 libs/ghostscript (或临时目录) 下的 exe
         portable_exes = ["gswin64c.exe", "gswin32c.exe", "gs"]
         for exe_name in portable_exes:
             portable_exe = os.path.join(portable_gs_dir, exe_name)

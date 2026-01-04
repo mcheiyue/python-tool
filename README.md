@@ -44,32 +44,54 @@
 pip install -r requirements.txt
 ```
 
-## 便携版组件支持 (New)
+## 便携版组件支持 (Portable)
 
 为了方便分发和使用，本软件支持**便携版**的外部组件（Ghostscript, Pandoc）。您无需在系统中安装这些软件，只需将其放置在软件根目录下的 `libs/` 文件夹中即可。
+
+### 支持的格式
+
+1.  **文件夹模式**: 直接解压后的组件文件夹（如 `libs/ghostscript/`）。
+2.  **加密插件模式 (.mcy)**: **[New]** 专有的加密压缩包格式，体积更小，安全性更高（如 `libs/ghostscript.mcy`）。
 
 ### 目录结构示例
 
 ```
 python-tool/
 ├── libs/
-│   ├── ghostscript/
-│   │   ├── gswin64c.exe
-│   │   ├── gsdll64.dll
-│   │   └── lib/        # Ghostscript 资源文件
-│   └── pandoc/
-│       └── pandoc.exe
+│   ├── ghostscript.mcy # 加密插件包
+│   ├── pandoc/         # 普通文件夹
+│   │   └── pandoc.exe
+│   └── ...
 ├── main.py
 └── ...
 ```
 
 ### 自动检测优先顺序
 
-1.  **libs 目录** (便携模式，最高优先级)
-2.  **环境变量** (PATH)
-3.  **系统默认安装路径** (如 `C:\Program Files\gs\`)
+1.  **libs 目录 (.mcy 加密插件)** (最高优先级，自动解压加载)
+2.  **libs 目录 (普通文件夹)**
+3.  **环境变量** (PATH)
+4.  **系统默认安装路径** (如 `C:\Program Files\gs\`)
 
-您可以在软件的 **设置 -> 外部工具** 界面查看各组件的安装状态和来源，并可直接打开 `libs` 目录进行管理。
+您可以在软件的 **设置 -> 外部工具** 界面查看各组件的安装状态和来源，配置插件的解压模式（临时/持久），并可直接打开 `libs` 目录进行管理。
+
+## 私有加密插件系统 (.mcy) (New)
+
+本软件引入了私有的 **.mcy** 加密插件格式，旨在提供更安全、轻量的组件分发方案。
+
+### 特性
+*   **高压缩比**: 采用 LZMA 算法 (Preset 9)，大幅减小组件体积（Ghostscript 可压缩至原大小的 40%）。
+*   **安全加密**: 使用 AES-256-CBC 加密标准，保护插件内容的完整性。
+*   **智能加载**: 支持 **惰性加载 (Lazy Loading)**，仅在功能被调用时才解压，降低内存占用。
+*   **灵活模式**:
+    *   **临时模式 (Temporary)**: 用完即焚，软件关闭后自动清理解压文件（默认，节省空间）。
+    *   **持久模式 (Persistent)**: 解压后保留在 `libs/` 目录，下次启动直接使用（高性能）。
+
+### 开发者工具
+使用 `tools/pack_plugin.py` 可制作 `.mcy` 插件包：
+```bash
+python tools/pack_plugin.py libs/ghostscript output/ghostscript.mcy --tool-id ghostscript
+```
 
 ## 运行
 
@@ -87,6 +109,8 @@ python main.py
 ## 目录结构
 
 *   `main.py`: 应用程序入口。
+*   `tools/`: 开发者工具。
+    *   `pack_plugin.py`: .mcy 插件打包工具。
 *   `app/`: 应用容器与依赖注入。
     *   `container.py`: AppContainer 类。
 *   `config/`: 配置管理模块。
@@ -118,6 +142,7 @@ python main.py
     *   `pdf_image_extractor.py`: PDF 图片提取逻辑。
     *   `environment_checker.py`: 运行环境检测工具。
     *   `font_finder.py`: 系统字体查找工具。
+    *   `plugin_loader.py`: **[New]** .mcy 插件加载器（解密/解压/管理）。
 *   `ui/`: 用户界面模块。
     *   `main_window.py`: 主窗口布局与导航。
     *   `threads.py`: 后台任务线程。
@@ -156,6 +181,18 @@ python main.py
 *   **Twain设备调试**: 用于扫描仪等Twain设备的调试工具。
 
 ## 更新日志
+
+### 2026-01-04 私有加密插件系统 (.mcy)
+*   **架构升级**:
+    *   **私有格式 (.mcy)**: 设计并实现基于 AES-256-CBC 加密和 LZMA 压缩的私有插件格式，支持完整性校验和版本控制。
+    *   **插件加载器 (PluginLoader)**: 实现智能加载器，支持"惰性解压"和"自动清理"，并集成单例模式确保资源高效管理。
+    *   **配置化模式**: 支持在设置中切换"临时模式"（退出即焚）和"持久模式"（解压后保留），满足不同用户对空间和性能的需求。
+*   **开发者工具**:
+    *   新增 `tools/pack_plugin.py`: 提供命令行工具，用于将普通目录打包为加密的 `.mcy` 插件文件。
+*   **Bug 修复**:
+    *   修复了打包工具在输出目录不存在时的崩溃问题。
+    *   修复了 `Ghostscript` 和 `Pandoc` 工具类中配置加载接口调用的兼容性错误。
+    *   修复了部分环境下的 `sys` 模块引用错误。
 
 ### 2026-01-03 用户体验 (UX) 升级
 *   **交互引导优化**:

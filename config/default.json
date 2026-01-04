@@ -2,7 +2,8 @@
     "app": {
         "theme_mode": "Auto",
         "language": "zh_CN",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "plugin_mode": "temporary"
     },
     "dependencies": {
         "ghostscript": {

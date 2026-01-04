@@ -1,8 +1,11 @@
 import shutil
 import subprocess
 import os
+import sys
 from typing import Optional
 from .base import ExternalTool
+from core.plugin_loader import loader as plugin_loader
+from config.loader import ConfigLoader
 
 class PandocTool(ExternalTool):
     """Pandoc 文档转换工具"""
@@ -43,6 +46,24 @@ class PandocTool(ExternalTool):
         libs_path = self.get_libs_path()
         portable_pandoc = os.path.join(libs_path, "pandoc", "pandoc.exe")
         
+        # 如果便携版不存在，尝试从插件加载 (惰性加载)
+        if not os.path.exists(portable_pandoc):
+            if getattr(sys, 'frozen', False):
+                base = os.path.dirname(sys.executable)
+            else:
+                base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            
+            plugin_path = os.path.join(base, "plugins", "pandoc.mcy")
+            if os.path.exists(plugin_path):
+                # 获取配置的插件模式
+                config = ConfigLoader()
+                mode = config.get("app.plugin_mode", "temporary")
+                persistent = (mode == "persistent")
+                
+                extracted_path = plugin_loader.extract_plugin(plugin_path, persistent=persistent)
+                if extracted_path:
+                    portable_pandoc = os.path.join(extracted_path, "pandoc.exe")
+
         if os.path.exists(portable_pandoc):
             result["found"] = True
             result["path"] = portable_pandoc
