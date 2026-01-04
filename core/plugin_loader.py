@@ -34,15 +34,18 @@ class PluginLoader:
     def _clean_stale_temps(self):
         """清理上次未正常退出留下的临时目录"""
         try:
-            temp_base = tempfile.gettempdir()
-            for item in os.listdir(temp_base):
-                if item.startswith("pytool_libs_"):
-                    path = os.path.join(temp_base, item)
-                    if os.path.isdir(path):
-                        try:
-                            shutil.rmtree(path, ignore_errors=True)
-                        except Exception:
-                            pass
+            # 获取 libs/.temp 目录
+            if getattr(sys, 'frozen', False):
+                base = os.path.dirname(sys.executable)
+            else:
+                base = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            
+            temp_root = os.path.join(base, "libs", ".temp")
+            
+            if os.path.exists(temp_root):
+                # 尝试清理旧的临时目录
+                # 注意：如果其他实例正在运行，且锁定了文件，删除会失败（Windows下），这是预期的安全行为
+                shutil.rmtree(temp_root, ignore_errors=True)
         except Exception:
             pass
 
@@ -99,20 +102,26 @@ class PluginLoader:
             tar_data = lzma.decompress(compressed_data)
             
             # 3. 确定目标目录
+            # 获取项目根目录
+            if getattr(sys, 'frozen', False):
+                base = os.path.dirname(sys.executable)
+            else:
+                base = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
             if persistent:
-                # 获取项目根目录下的 libs
-                if getattr(sys, 'frozen', False):
-                    base = os.path.dirname(sys.executable)
-                else:
-                    base = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
                 target_base = os.path.join(base, "libs")
             else:
-                # 临时目录
-                target_base = tempfile.mkdtemp(prefix="pytool_libs_")
+                # 临时目录：libs/.temp/session_xxxx
+                libs_temp = os.path.join(base, "libs", ".temp")
+                if not os.path.exists(libs_temp):
+                    os.makedirs(libs_temp, exist_ok=True)
+                
+                # 在 .temp 下创建唯一的临时目录
+                target_base = tempfile.mkdtemp(dir=libs_temp, prefix="session_")
                 self._temp_dirs.append(target_base)
             
             if not os.path.exists(target_base):
-                os.makedirs(target_base)
+                os.makedirs(target_base, exist_ok=True)
 
             # 4. 解包 TAR
             import io
