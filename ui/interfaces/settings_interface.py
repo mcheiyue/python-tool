@@ -248,10 +248,8 @@ class SettingsInterface(QWidget):
         # First clear cache for the tool to force re-check
         manager = AppContainer().external_tool_manager
         tool = manager.get_tool(tool_name)
-        if tool and hasattr(tool, '_cached_path'):
-             # If we implemented caching in tools, we'd clear it here. 
-             # Currently tools check on every call, so just refreshing UI is enough.
-             pass
+        if tool:
+             tool.clear_cache()
              
         self.refresh_tools_ui()
 

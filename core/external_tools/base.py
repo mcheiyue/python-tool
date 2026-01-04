@@ -24,6 +24,11 @@ class ExternalTool(ABC):
     # 引用管理器实例
     _manager = None
 
+    def clear_cache(self):
+        """清除缓存，强制重新检测"""
+        if hasattr(self, '_cache'):
+            self._cache = None
+
     @property
     def is_disabled(self) -> bool:
         """检查工具是否被禁用"""

@@ -66,8 +66,7 @@ class ExternalToolManager:
             
             # 如果工具已加载，更新其状态
             if name in self._tools:
-                # 强制重新检查状态
-                pass
+                self._tools[name].clear_cache()
 
     def enable_tool(self, name: str):
         """启用工具"""
@@ -77,6 +76,10 @@ class ExternalToolManager:
         if name in disabled_tools:
             disabled_tools.remove(name)
             config_loader.set("dependencies.disabled_tools", disabled_tools)
+
+        # 如果工具已加载，更新其状态
+        if name in self._tools:
+            self._tools[name].clear_cache()
 
     def uninstall_tool(self, name: str) -> bool:
         """卸载工具（删除物理文件）"""
