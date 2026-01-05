@@ -100,6 +100,48 @@ python tools/pack_plugin.py libs/ghostscript output/ghostscript.mcy --tool-id gh
 python main.py
 ```
 
+## 构建与发布 (Building and Distribution)
+
+本项目提供了完整的构建脚本，支持生成高性能的单文件可执行程序和标准的 Windows 安装包。
+
+### 1. 构建环境准备
+*   **Python**: 3.8+
+*   **Nuitka**: 用于将 Python 代码编译为机器码 (EXE)。
+*   **GCC (MinGW64)**: C 编译器，用于 Nuitka 的编译后端。
+*   **Inno Setup 6**: 用于制作 Windows 安装程序。
+
+### 2. 执行构建
+项目根目录下提供了自动化构建脚本，位于 `build/` 目录：
+
+1.  **编译核心程序**:
+    运行 `build/build_nuitka.bat`
+    *   使用 Nuitka 进行编译。
+    *   自动处理 PyQt6 和 FluentWidgets 的依赖。
+    *   生成单文件可执行程序 `dist/OfficeToolkit.exe`。
+
+2.  **开发版快速编译 (Development Build)**:
+    运行 `build/build_dev.bat`
+    *   使用 `--standalone` 目录模式编译，跳过 Onefile 压缩。
+    *   **速度极快**：编译时间缩短 70% 以上，适合开发调试。
+    *   **控制台调试**：保留控制台窗口，方便查看实时日志。
+    *   输出位置：`dist/dev/main.dist/OfficeToolkit.exe`。
+
+3.  **生成发布包**:
+    运行 `build/build_release.bat`
+    *   自动调用 Inno Setup 生成安装包 (`.exe`)。
+    *   自动打包生成绿化版 (`.zip`)。
+    *   输出目录：`release/`。
+
+### 3. 发布版本说明
+构建完成后，`release/` 目录下将生成两种格式的分发包：
+*   **安装版 (Setup)**: `OfficeToolkit_Setup_v1.0.0.exe`
+    *   提供标准的安装向导。
+    *   支持创建桌面快捷方式。
+    *   包含完整的卸载程序。
+*   **绿化版 (Portable)**: `OfficeToolkit_Portable_v1.0.0.zip`
+    *   解压即用，无注册表残留。
+    *   方便携带到 U 盘或其他电脑使用。
+
 ## 注意事项
 
 *   **外部组件 (Ghostscript/Pandoc)**: 推荐使用 **libs 目录便携模式** 部署，避免复杂的环境变量配置。详情见上方说明。
@@ -189,6 +231,26 @@ python main.py
     *   **内存优化**: 程序启动时仅加载最小核心框架，不再预加载 `python-docx`、`python-pptx` 等重型依赖，显著降低了内存占用和启动耗时。
     *   **UI 代理机制**: 引入 `UILazyLoader` 组件，所有功能界面均为“点击即加载”，彻底解决了界面初始化卡顿的问题。
     *   **分发优化**: 优化了代码结构，消除了模块间的隐式强耦合，更适合打包为独立可执行文件 (EXE)。
+
+### 2026-01-05 构建系统完善与路径优化
+*   **核心路径工具 (`resource_path.py`)**:
+    *   新增智能路径解析模块，自动区分开发环境、Onefile 和 Standalone 模式。
+    *   `get_app_root()`: 返回 EXE 真实目录（用于配置、外部插件）。
+    *   `get_resource_path()`: 返回内部资源路径（用于图标、模板）。
+    *   彻底解决了打包后配置无法保存、插件无法加载的问题。
+*   **双模式构建系统**:
+    *   **发布版 (`build_nuitka.bat`)**: Onefile 模式，生成单文件 EXE（64MB），适合最终分发。
+    *   **开发版 (`build_dev.bat`)**: Standalone 目录模式，编译速度快（相比 Onefile 提速 70%+），附带控制台便于调试。
+*   **Inno Setup 集成优化**:
+    *   `installer.iss` 新增对 `plugins/` 和 `libs/` 的智能打包。
+    *   支持安装版、绿化版和便携版三种分发形式的自动生成。
+*   **依赖深度清理**:
+    *   移除了 `numpy`, `scipy`, `pandas` 等非核心的超大体积数据科学库，显著减小了打包体积。
+    *   移除了 `fastapi`, `uvicorn` 等未使用的 Web 框架依赖。
+*   **高性能构建系统**:
+    *   **Nuitka 编译**: 引入 Nuitka 将 Python 代码编译为本机机器码，大幅提升启动速度和运行效率。
+    *   **Inno Setup 集成**: 实现了标准的 Windows 安装包制作流程。
+    *   **多格式分发**: 自动化脚本一键生成**安装版 (Installer)** 和 **绿化版 (Portable)**。
 
 ### 2026-01-04 Doc 转 Docx
 *   **新功能**:
