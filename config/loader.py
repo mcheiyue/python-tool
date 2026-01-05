@@ -3,19 +3,22 @@ import json
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Union
+from core.utils.resource_path import get_app_root, get_resource_path
 
 class ConfigLoader:
     """配置加载器，支持分层配置和递归更新"""
     
     def __init__(self, config_dir: str = None):
+        # 1. 确定默认配置文件路径 (只读，可能在EXE内部或源码目录)
         if config_dir is None:
-            # 默认为当前文件所在目录
-            self.config_dir = Path(__file__).parent
+            # 使用 get_resource_path 获取内部资源路径
+            self.default_config_path = Path(get_resource_path("config/default.json"))
         else:
-            self.config_dir = Path(config_dir)
+            self.default_config_path = Path(config_dir) / "default.json"
             
-        self.default_config_path = self.config_dir / "default.json"
-        self.user_config_path = self.config_dir.parent / "config.json" # 项目根目录
+        # 2. 确定用户配置文件路径 (读写，必须在EXE外部)
+        # 使用 get_app_root 获取应用程序根目录 (真实EXE所在目录)
+        self.user_config_path = Path(get_app_root()) / "config.json"
         
         self._config = {}
         self.load()

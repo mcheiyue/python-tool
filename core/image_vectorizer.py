@@ -1,4 +1,10 @@
-import vtracer
+try:
+    import vtracer
+    VTRACER_AVAILABLE = True
+except ImportError:
+    VTRACER_AVAILABLE = False
+    vtracer = None
+
 from PyQt6.QtCore import QObject, pyqtSignal
 
 class ImageVectorizer(QObject):
@@ -6,6 +12,10 @@ class ImageVectorizer(QObject):
     log = pyqtSignal(str)
 
     def convert(self, input_path, output_path, colormode='color', hierarchical='stacked', mode='spline', filter_speckle=4, corner_threshold=60, length_threshold=2, max_iterations=10, splice_threshold=45, path_precision=3):
+        if not VTRACER_AVAILABLE:
+            self.finished.emit(False, "错误: vtracer 模块未安装，无法进行转换")
+            return
+
         try:
             self.log.emit(f"开始转换: {input_path}")
             # vtracer 核心转换

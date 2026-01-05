@@ -7,6 +7,7 @@ from typing import Optional
 from .base import ExternalTool
 from core.plugin_loader import loader as plugin_loader
 from config.loader import ConfigLoader
+from core.utils.resource_path import get_app_root
 
 class GhostscriptTool(ExternalTool):
     """Ghostscript PDF 处理引擎"""
@@ -55,11 +56,7 @@ class GhostscriptTool(ExternalTool):
         
         # 如果便携目录不存在，尝试从插件包加载 (惰性加载)
         if not os.path.exists(portable_gs_dir):
-            if getattr(sys, 'frozen', False):
-                base = os.path.dirname(sys.executable)
-            else:
-                base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-            
+            base = get_app_root()
             plugin_path = os.path.join(base, "plugins", "ghostscript.mcy")
             if os.path.exists(plugin_path):
                 # 获取配置的插件模式

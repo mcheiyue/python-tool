@@ -36,10 +36,8 @@ class PluginLoader:
         """清理上次未正常退出留下的临时目录"""
         try:
             # 获取 libs/.temp 目录
-            if getattr(sys, 'frozen', False):
-                base = os.path.dirname(sys.executable)
-            else:
-                base = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            from core.utils.resource_path import get_app_root
+            base = get_app_root()
             
             temp_root = os.path.join(base, "libs", ".temp")
             
@@ -112,10 +110,8 @@ class PluginLoader:
             
             # 3. 确定目标目录
             # 获取项目根目录
-            if getattr(sys, 'frozen', False):
-                base = os.path.dirname(sys.executable)
-            else:
-                base = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            from core.utils.resource_path import get_app_root
+            base = get_app_root()
 
             if persistent:
                 target_base = os.path.join(base, "libs")

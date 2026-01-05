@@ -1,5 +1,6 @@
 import sys
 import os
+import ctypes
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 from qfluentwidgets import setTheme, Theme
@@ -10,6 +11,12 @@ from app.container import AppContainer
 from ui.main_window import MainWindow
 
 if __name__ == "__main__":
+    # 设置 AppUserModelID，确保任务栏图标显示正确
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("OfficeToolkit.App.v1.0.0")
+    except Exception:
+        pass
+
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
     os.environ["QT_SCALE_FACTOR"] = "1.25"
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)

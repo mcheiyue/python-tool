@@ -54,6 +54,7 @@ class ThemedSvgIconEngine(QIconEngine):
         return ThemedSvgIconEngine(self.svg_path)
 
 from core.utils.lazy_loader import UILazyLoader
+from core.utils.resource_path import get_resource_path
 
 class MainWindow(FluentWindow):
     def __init__(self, container=None):
@@ -97,6 +98,7 @@ class MainWindow(FluentWindow):
 
     def initWindow(self):
         self.setWindowTitle("AI Office Tool")
+        self.setWindowIcon(QIcon(get_resource_path("assets/processed_icons/icon_transparent.ico")))
         self.resize(900, 700)
         self.setMinimumSize(800, 600)
         
@@ -112,125 +114,125 @@ class MainWindow(FluentWindow):
     def initNavigation(self):
         # 1. Office 转换组
         self.office_home = self.createCategoryInterface("Office 工具", "office_home")
-        self.icon_mapping["office_home"] = "assets/icons/presentation.svg"
-        self.addSubInterface(self.office_home, self.get_icon("assets/icons/presentation.svg"), "Office 转换")
+        self.icon_mapping["office_home"] = get_resource_path("assets/icons/presentation.svg")
+        self.addSubInterface(self.office_home, self.get_icon(get_resource_path("assets/icons/presentation.svg")), "Office 转换")
 
         # 1.1 PPT 转 PDF
         self.ppt_interface = UILazyLoader("ui.interfaces.ppt_interface", "PPTInterface", self)
-        self.icon_mapping[self.ppt_interface.objectName()] = "assets/icons/presentation.svg"
-        self.addSubInterface(self.ppt_interface, self.get_icon("assets/icons/presentation.svg"), "PPT 转 PDF", parent=self.office_home)
+        self.icon_mapping[self.ppt_interface.objectName()] = get_resource_path("assets/icons/presentation.svg")
+        self.addSubInterface(self.ppt_interface, self.get_icon(get_resource_path("assets/icons/presentation.svg")), "PPT 转 PDF", parent=self.office_home)
         self.interfaces["PPT 转 PDF"] = self.ppt_interface
 
         # 1.2 PPT 转图片
         self.ppt_img_interface = UILazyLoader("ui.interfaces.ppt_image_interface", "PPTImageInterface", self)
-        self.icon_mapping[self.ppt_img_interface.objectName()] = "assets/icons/image.svg"
-        self.addSubInterface(self.ppt_img_interface, self.get_icon("assets/icons/image.svg"), "PPT 转图片", parent=self.office_home)
+        self.icon_mapping[self.ppt_img_interface.objectName()] = get_resource_path("assets/icons/image.svg")
+        self.addSubInterface(self.ppt_img_interface, self.get_icon(get_resource_path("assets/icons/image.svg")), "PPT 转图片", parent=self.office_home)
         self.interfaces["PPT 转图片"] = self.ppt_img_interface
 
         # 1.3 Word 转 PDF
         self.word_interface = UILazyLoader("ui.interfaces.word_interface", "WordInterface", self)
-        self.icon_mapping[self.word_interface.objectName()] = "assets/icons/word.svg"
-        self.addSubInterface(self.word_interface, self.get_icon("assets/icons/word.svg"), "Word 转 PDF", parent=self.office_home)
+        self.icon_mapping[self.word_interface.objectName()] = get_resource_path("assets/icons/word.svg")
+        self.addSubInterface(self.word_interface, self.get_icon(get_resource_path("assets/icons/word.svg")), "Word 转 PDF", parent=self.office_home)
         self.interfaces["Word 转 PDF"] = self.word_interface
 
         # 1.4 Doc 转 Docx
         self.doc_to_docx_interface = UILazyLoader("ui.interfaces.doc_to_docx_interface", "DocToDocxInterface", self)
-        self.icon_mapping[self.doc_to_docx_interface.objectName()] = "assets/icons/word.svg"
-        self.addSubInterface(self.doc_to_docx_interface, self.get_icon("assets/icons/word.svg"), "Doc 转 Docx", parent=self.office_home)
+        self.icon_mapping[self.doc_to_docx_interface.objectName()] = get_resource_path("assets/icons/word.svg")
+        self.addSubInterface(self.doc_to_docx_interface, self.get_icon(get_resource_path("assets/icons/word.svg")), "Doc 转 Docx", parent=self.office_home)
         self.interfaces["Doc 转 Docx"] = self.doc_to_docx_interface
 
         # 1.5 Excel 转 PDF
         self.excel_interface = UILazyLoader("ui.interfaces.excel_interface", "ExcelInterface", self)
-        self.icon_mapping[self.excel_interface.objectName()] = "assets/icons/excel.svg"
-        self.addSubInterface(self.excel_interface, self.get_icon("assets/icons/excel.svg"), "Excel 转 PDF", parent=self.office_home)
+        self.icon_mapping[self.excel_interface.objectName()] = get_resource_path("assets/icons/excel.svg")
+        self.addSubInterface(self.excel_interface, self.get_icon(get_resource_path("assets/icons/excel.svg")), "Excel 转 PDF", parent=self.office_home)
         self.interfaces["Excel 转 PDF"] = self.excel_interface
 
         # 2. PDF 处理组
         self.pdf_home = self.createCategoryInterface("PDF 工具箱", "pdf_home")
-        self.icon_mapping["pdf_home"] = "assets/icons/pdf.svg"
-        self.addSubInterface(self.pdf_home, self.get_icon("assets/icons/pdf.svg"), "PDF 处理")
+        self.icon_mapping["pdf_home"] = get_resource_path("assets/icons/pdf.svg")
+        self.addSubInterface(self.pdf_home, self.get_icon(get_resource_path("assets/icons/pdf.svg")), "PDF 处理")
 
         # 2.1 PDF 合并
         self.pdf_merge_interface = UILazyLoader("ui.interfaces.pdf_merge_interface", "PDFMergeInterface", self)
-        self.icon_mapping[self.pdf_merge_interface.objectName()] = "assets/icons/merge.svg"
-        self.addSubInterface(self.pdf_merge_interface, self.get_icon("assets/icons/merge.svg"), "PDF 合并", parent=self.pdf_home)
+        self.icon_mapping[self.pdf_merge_interface.objectName()] = get_resource_path("assets/icons/merge.svg")
+        self.addSubInterface(self.pdf_merge_interface, self.get_icon(get_resource_path("assets/icons/merge.svg")), "PDF 合并", parent=self.pdf_home)
         self.interfaces["PDF 合并"] = self.pdf_merge_interface
 
         # 2.2 PDF 压缩
         # 传递 container 给支持的界面
         self.compress_interface = UILazyLoader("ui.interfaces.pdf_compress_interface", "PDFCompressInterface", self, container=self.container)
-        self.icon_mapping[self.compress_interface.objectName()] = "assets/icons/compress.svg"
-        self.addSubInterface(self.compress_interface, self.get_icon("assets/icons/compress.svg"), "PDF 压缩", parent=self.pdf_home)
+        self.icon_mapping[self.compress_interface.objectName()] = get_resource_path("assets/icons/compress.svg")
+        self.addSubInterface(self.compress_interface, self.get_icon(get_resource_path("assets/icons/compress.svg")), "PDF 压缩", parent=self.pdf_home)
         self.interfaces["PDF 压缩"] = self.compress_interface
 
         # 2.3 PDF 拆分/提取
         self.pdf_split_interface = UILazyLoader("ui.interfaces.pdf_split_interface", "PDFSplitInterface", self)
-        self.icon_mapping[self.pdf_split_interface.objectName()] = "assets/icons/split.svg"
-        self.addSubInterface(self.pdf_split_interface, self.get_icon("assets/icons/split.svg"), "PDF 拆分/提取", parent=self.pdf_home)
+        self.icon_mapping[self.pdf_split_interface.objectName()] = get_resource_path("assets/icons/split.svg")
+        self.addSubInterface(self.pdf_split_interface, self.get_icon(get_resource_path("assets/icons/split.svg")), "PDF 拆分/提取", parent=self.pdf_home)
         self.interfaces["PDF 拆分/提取"] = self.pdf_split_interface
 
         # 2.4 PDF 图片提取
         self.pdf_img_extract_interface = UILazyLoader("ui.interfaces.pdf_image_extract_interface", "PDFImageExtractInterface", self)
-        self.icon_mapping[self.pdf_img_extract_interface.objectName()] = "assets/icons/image.svg"
-        self.addSubInterface(self.pdf_img_extract_interface, self.get_icon("assets/icons/image.svg"), "PDF 图片提取", parent=self.pdf_home)
+        self.icon_mapping[self.pdf_img_extract_interface.objectName()] = get_resource_path("assets/icons/image.svg")
+        self.addSubInterface(self.pdf_img_extract_interface, self.get_icon(get_resource_path("assets/icons/image.svg")), "PDF 图片提取", parent=self.pdf_home)
         self.interfaces["PDF 图片提取"] = self.pdf_img_extract_interface
         
         # 3. 图片工具组
         self.image_home = self.createCategoryInterface("图片工具箱", "image_home")
-        self.icon_mapping["image_home"] = "assets/icons/image.svg"
-        self.addSubInterface(self.image_home, self.get_icon("assets/icons/image.svg"), "图片工具")
+        self.icon_mapping["image_home"] = get_resource_path("assets/icons/image.svg")
+        self.addSubInterface(self.image_home, self.get_icon(get_resource_path("assets/icons/image.svg")), "图片工具")
 
         # 3.1 图片取色
         self.color_interface = UILazyLoader("ui.interfaces.color_interface", "ColorInterface", self)
-        self.icon_mapping[self.color_interface.objectName()] = "assets/icons/color_picker.svg"
-        self.addSubInterface(self.color_interface, self.get_icon("assets/icons/color_picker.svg"), "图片取色", parent=self.image_home)
+        self.icon_mapping[self.color_interface.objectName()] = get_resource_path("assets/icons/color_picker.svg")
+        self.addSubInterface(self.color_interface, self.get_icon(get_resource_path("assets/icons/color_picker.svg")), "图片取色", parent=self.image_home)
         self.interfaces["图片取色"] = self.color_interface
 
         # 3.2 PNG 转 SVG
         self.image_vector_interface = UILazyLoader("ui.interfaces.image_vector_interface", "ImageVectorInterface", self)
-        self.icon_mapping[self.image_vector_interface.objectName()] = "assets/icons/vector.svg"
-        self.addSubInterface(self.image_vector_interface, self.get_icon("assets/icons/vector.svg"), "PNG 转 SVG", parent=self.image_home)
+        self.icon_mapping[self.image_vector_interface.objectName()] = get_resource_path("assets/icons/vector.svg")
+        self.addSubInterface(self.image_vector_interface, self.get_icon(get_resource_path("assets/icons/vector.svg")), "PNG 转 SVG", parent=self.image_home)
         self.interfaces["PNG 转 SVG"] = self.image_vector_interface
 
         # 3.3 图片格式转换
         self.image_convert_interface = UILazyLoader("ui.interfaces.image_convert_interface", "ImageConvertInterface", self)
-        self.icon_mapping[self.image_convert_interface.objectName()] = "assets/icons/convert.svg"
-        self.addSubInterface(self.image_convert_interface, self.get_icon("assets/icons/convert.svg"), "图片格式转换", parent=self.image_home)
+        self.icon_mapping[self.image_convert_interface.objectName()] = get_resource_path("assets/icons/convert.svg")
+        self.addSubInterface(self.image_convert_interface, self.get_icon(get_resource_path("assets/icons/convert.svg")), "图片格式转换", parent=self.image_home)
         self.interfaces["图片格式转换"] = self.image_convert_interface
 
         # 3.4 图片转 PDF
         self.image_pdf_interface = UILazyLoader("ui.interfaces.image_pdf_interface", "ImagePdfInterface", self)
-        self.icon_mapping[self.image_pdf_interface.objectName()] = "assets/icons/pdf.svg"
-        self.addSubInterface(self.image_pdf_interface, self.get_icon("assets/icons/pdf.svg"), "图片转 PDF", parent=self.image_home)
+        self.icon_mapping[self.image_pdf_interface.objectName()] = get_resource_path("assets/icons/pdf.svg")
+        self.addSubInterface(self.image_pdf_interface, self.get_icon(get_resource_path("assets/icons/pdf.svg")), "图片转 PDF", parent=self.image_home)
         self.interfaces["图片转 PDF"] = self.image_pdf_interface
 
         # 4. 文本工具组
         self.text_home = self.createCategoryInterface("文本工具箱", "text_home")
-        self.icon_mapping["text_home"] = "assets/icons/text.svg"
-        self.addSubInterface(self.text_home, self.get_icon("assets/icons/text.svg"), "文本工具")
+        self.icon_mapping["text_home"] = get_resource_path("assets/icons/text.svg")
+        self.addSubInterface(self.text_home, self.get_icon(get_resource_path("assets/icons/text.svg")), "文本工具")
 
         # 4.1 Markdown 转 PDF
         self.markdown_interface = UILazyLoader("ui.interfaces.markdown_interface", "MarkdownInterface", self, container=self.container)
-        self.icon_mapping[self.markdown_interface.objectName()] = "assets/icons/markdown.svg"
-        self.addSubInterface(self.markdown_interface, self.get_icon("assets/icons/markdown.svg"), "Markdown 转 PDF", parent=self.text_home)
+        self.icon_mapping[self.markdown_interface.objectName()] = get_resource_path("assets/icons/markdown.svg")
+        self.addSubInterface(self.markdown_interface, self.get_icon(get_resource_path("assets/icons/markdown.svg")), "Markdown 转 PDF", parent=self.text_home)
         self.interfaces["Markdown 转 PDF"] = self.markdown_interface
 
         # 4.2 TXT 转 PDF
         self.txt_pdf_interface = UILazyLoader("ui.interfaces.txt_pdf_interface", "TxtPdfInterface", self)
-        self.icon_mapping[self.txt_pdf_interface.objectName()] = "assets/icons/text.svg"
-        self.addSubInterface(self.txt_pdf_interface, self.get_icon("assets/icons/text.svg"), "TXT 转 PDF", parent=self.text_home)
+        self.icon_mapping[self.txt_pdf_interface.objectName()] = get_resource_path("assets/icons/text.svg")
+        self.addSubInterface(self.txt_pdf_interface, self.get_icon(get_resource_path("assets/icons/text.svg")), "TXT 转 PDF", parent=self.text_home)
         self.interfaces["TXT 转 PDF"] = self.txt_pdf_interface
 
         # 4.3 代码提取
         self.code_extract_interface = UILazyLoader("ui.interfaces.code_extract_interface", "CodeExtractInterface", self)
-        self.icon_mapping[self.code_extract_interface.objectName()] = "assets/icons/code.svg"
-        self.addSubInterface(self.code_extract_interface, self.get_icon("assets/icons/code.svg"), "代码提取", parent=self.text_home)
+        self.icon_mapping[self.code_extract_interface.objectName()] = get_resource_path("assets/icons/code.svg")
+        self.addSubInterface(self.code_extract_interface, self.get_icon(get_resource_path("assets/icons/code.svg")), "代码提取", parent=self.text_home)
         self.interfaces["代码提取"] = self.code_extract_interface
 
         # 5. 设置界面 (底部)
         self.settings_interface = UILazyLoader("ui.interfaces.settings_interface", "SettingsInterface", self)
-        self.icon_mapping[self.settings_interface.objectName()] = "assets/icons/settings.svg"
-        self.addSubInterface(self.settings_interface, self.get_icon("assets/icons/settings.svg"), "设置", position=NavigationItemPosition.BOTTOM)
+        self.icon_mapping[self.settings_interface.objectName()] = get_resource_path("assets/icons/settings.svg")
+        self.addSubInterface(self.settings_interface, self.get_icon(get_resource_path("assets/icons/settings.svg")), "设置", position=NavigationItemPosition.BOTTOM)
         self.interfaces["设置"] = self.settings_interface
 
         # 默认选中第一个功能的子项

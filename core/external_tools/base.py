@@ -88,11 +88,5 @@ class ExternalTool(ABC):
     @staticmethod
     def get_libs_path() -> str:
         """获取便携 libs 目录路径"""
-        if getattr(sys, 'frozen', False):
-            # PyInstaller 打包后
-            base = os.path.dirname(sys.executable)
-        else:
-            # 开发模式
-            base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-            
-        return os.path.join(base, "libs")
+        from core.utils.resource_path import get_app_root
+        return os.path.join(get_app_root(), "libs")
