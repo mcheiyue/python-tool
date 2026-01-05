@@ -101,9 +101,12 @@ def process_image(input_path, output_dir):
     version_a.alpha_composite(clean_subject, (subject_x, subject_y))
 
     # 5. Generate Version B: Transparent Background
-    # Use same canvas size for consistency
-    version_b = Image.new("RGBA", (icon_size, icon_size), (0, 0, 0, 0))
-    version_b.alpha_composite(clean_subject, (subject_x, subject_y))
+    # Use smaller padding for transparent version to make icon appear larger in taskbar
+    icon_size_transparent = int(max_dim * 1.1)  # Subject occupies ~91% of canvas
+    version_b = Image.new("RGBA", (icon_size_transparent, icon_size_transparent), (0, 0, 0, 0))
+    subject_x_transparent = (icon_size_transparent - w) // 2
+    subject_y_transparent = (icon_size_transparent - h) // 2
+    version_b.alpha_composite(clean_subject, (subject_x_transparent, subject_y_transparent))
 
     # 6. Save Outputs
     save_icons(version_a, output_dir, "icon_with_bg")
