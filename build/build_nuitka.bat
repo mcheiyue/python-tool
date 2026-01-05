@@ -1,20 +1,12 @@
 @echo off
 chcp 65001 >nul
 echo ==========================================
-echo Nuitka 编译脚本 - 生成 Standalone 发布版
+echo Nuitka 双重构建脚本
 echo ==========================================
 
-echo.
-echo [Step 1] 清理旧的输出目录...
-if exist dist\release rmdir /s /q dist\release
-
-echo.
-echo [Step 2] 开始 Nuitka 编译 (增量模式)...
-echo 注意：首次编译可能需要较长时间 (下载依赖/编译缓存)，请耐心等待。
-
-nuitka ^
+REM 定义公共参数 (避免重复)
+set COMMON_FLAGS=^
     --mingw64 ^
-    --standalone ^
     --windows-console-mode=disable ^
     --windows-icon-from-ico=assets/processed_icons/icon_transparent.ico ^
     --company-name="OfficeToolkit Team" ^
@@ -37,33 +29,60 @@ nuitka ^
     --include-package=vtracer ^
     --include-data-dir=assets=assets ^
     --include-data-dir=config=config ^
-    --output-dir=dist/release ^
-    --output-filename=OfficeToolkit.exe ^
     --show-progress ^
     --show-memory ^
-    --jobs=10 ^
+    --jobs=10
+
+echo.
+echo [Task 1/2] 构建目录版 (Standalone) - 用于安装包和绿化版...
+if exist dist\standalone rmdir /s /q dist\standalone
+
+nuitka %COMMON_FLAGS% ^
+    --standalone ^
+    --output-dir=dist\standalone ^
+    --output-filename=OfficeToolkit.exe ^
     main.py
 
-if %errorlevel% neq 0 (
-    echo.
-    echo [ERROR] 编译失败！请检查上方错误信息。
-    pause
-    exit /b %errorlevel%
-)
+if %errorlevel% neq 0 goto ERROR
+
+REM 添加插件目录说明文件
+if not exist dist\standalone\main.dist\plugins mkdir dist\standalone\main.dist\plugins
+if exist plugins\README.txt copy /Y plugins\README.txt dist\standalone\main.dist\plugins\ >nul
 
 echo.
-echo [Step 3] 复制插件目录说明文件...
-if not exist dist\release\main.dist\plugins mkdir dist\release\main.dist\plugins
-if exist plugins\README.txt copy /Y plugins\README.txt dist\release\main.dist\plugins\ >nul
+echo [Task 2/2] 构建单文件版 (Onefile) - 用于单文件发布...
+if exist dist\onefile rmdir /s /q dist\onefile
+
+nuitka %COMMON_FLAGS% ^
+    --standalone ^
+    --onefile ^
+    --include-data-dir=plugins=plugins ^
+    --output-dir=dist\onefile ^
+    --output-filename=OfficeToolkit_Single.exe ^
+    main.py
+
+if %errorlevel% neq 0 goto ERROR
 
 echo.
-echo [Step 4] 编译完成！
 echo ==========================================
-echo 输出位置: dist\release\main.dist\
-echo 可执行文件: dist\release\main.dist\OfficeToolkit.exe
+echo [SUCCESS] 所有构建完成！
 echo ==========================================
-echo 说明: 
-echo - 用户可以将 .mcy 插件文件放到 plugins\ 目录下
-echo - 请运行 build_release.bat 制作安装包和绿化版
+echo 1. 目录版 (Standalone): dist\standalone\main.dist\OfficeToolkit.exe
+echo    - 用于制作安装包和绿化版
+echo    - 结构清晰，启动速度快
+echo.
+echo 2. 单文件版 (Onefile): dist\onefile\OfficeToolkit_Single.exe
+echo    - 内置所有插件，真正的单文件分发
+echo    - 适合快速分享和便携使用
+echo ==========================================
+echo.
+echo 下一步：运行 build_release.bat 制作完整发布包
 echo.
 pause
+exit /b 0
+
+:ERROR
+echo.
+echo [ERROR] 编译失败！请检查上方错误信息。
+pause
+exit /b 1

@@ -1,22 +1,26 @@
 @echo off
 chcp 65001 >nul
 echo ==========================================
-echo Office Toolkit 发布打包脚本
+echo Office Toolkit 全渠道发布打包脚本
 echo ==========================================
 
-REM 检查 dist 目录
-if not exist "dist\release\main.dist\OfficeToolkit.exe" (
-    echo [ERROR] 未找到 dist\release\main.dist\OfficeToolkit.exe
-    echo 请先运行 build_nuitka.bat 进行编译！
-    pause
-    exit /b 1
+REM 检查编译产物
+if not exist "dist\standalone\main.dist\OfficeToolkit.exe" (
+    echo [ERROR] 未找到目录版构建产物 (dist\standalone\main.dist)
+    goto ERROR
+)
+if not exist "dist\onefile\OfficeToolkit_Single.exe" (
+    echo [ERROR] 未找到单文件版构建产物 (dist\onefile)
+    goto ERROR
 )
 
-REM 创建 release 目录
-if not exist release mkdir release
+REM 清理重建 release 目录
+if exist release rmdir /s /q release
+mkdir release
 
 echo.
 echo [Step 1] 制作安装包 (Installer)...
+echo 输入源: dist\standalone (目录版)
 set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if exist %ISCC% (
     %ISCC% build\installer.iss
@@ -25,39 +29,53 @@ if exist %ISCC% (
         pause
         exit /b 1
     )
-    echo 安装包已生成: release\OfficeToolkit_Setup_v1.0.0.exe
+    echo [OK] 安装包已生成
 ) else (
-    echo [WARNING] 未找到 Inno Setup编译器，跳过安装包制作。
+    echo [WARNING] 未找到 Inno Setup，跳过安装包制作。
     echo 请确保安装在默认路径: %ISCC%
 )
 
 echo.
 echo [Step 2] 制作绿化版 (Portable ZIP)...
+echo 输入源: dist\standalone (目录版)
 
-REM 清理临时目录
-if exist release\temp_portable rmdir /s /q release\temp_portable
 mkdir release\temp_portable
+REM 复制 standalone 构建的所有内容 (包含 EXE, _internal, 和已经打包进去的 config/assets)
+xcopy dist\standalone\main.dist release\temp_portable\OfficeToolkit\ /E /I /Y >nul
 
-REM 复制整个 standalone 目录
-echo 正在复制 standalone 目录...
-xcopy dist\release\main.dist release\temp_portable\OfficeToolkit /E /I /Y >nul
-
-REM 确保 plugins 目录存在并包含说明文件
+REM 确保空的插件目录供用户使用
 if not exist release\temp_portable\OfficeToolkit\plugins mkdir release\temp_portable\OfficeToolkit\plugins
 if exist plugins\README.txt copy /Y plugins\README.txt release\temp_portable\OfficeToolkit\plugins\ >nul
 
-REM 压缩打包
+REM 如果需要外部 libs，这里复制
+if exist libs xcopy libs release\temp_portable\OfficeToolkit\libs\ /E /I /Y >nul
+
 echo 正在压缩 ZIP...
 powershell Compress-Archive -Path release\temp_portable\OfficeToolkit -DestinationPath release\OfficeToolkit_Portable_v1.0.0.zip -Force
-
-REM 清理临时目录
 rmdir /s /q release\temp_portable
+echo [OK] 绿化版已生成
 
-echo 绿化版已生成: release\OfficeToolkit_Portable_v1.0.0.zip
+echo.
+echo [Step 3] 复制单文件版...
+copy dist\onefile\OfficeToolkit_Single.exe release\OfficeToolkit_Single_v1.0.0.exe >nul
+echo [OK] 单文件版已就绪
 
 echo.
 echo ==========================================
 echo 全部打包完成！
 echo ==========================================
 echo 输出目录: %CD%\release
+echo.
+echo 文件清单:
+if exist release\OfficeToolkit_Setup_v1.0.0.exe echo   [✓] OfficeToolkit_Setup_v1.0.0.exe (安装包)
+echo   [✓] OfficeToolkit_Portable_v1.0.0.zip (绿化版)
+echo   [✓] OfficeToolkit_Single_v1.0.0.exe (单文件版)
+echo ==========================================
 pause
+exit /b 0
+
+:ERROR
+echo.
+echo 请先运行 build_nuitka.bat 完成双重编译！
+pause
+exit /b 1

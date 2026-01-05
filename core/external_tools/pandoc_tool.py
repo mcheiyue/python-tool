@@ -6,7 +6,7 @@ from typing import Optional
 from .base import ExternalTool
 from core.plugin_loader import loader as plugin_loader
 from config.loader import ConfigLoader
-from core.utils.resource_path import get_app_root
+from core.utils.resource_path import get_app_root, get_resource_path
 
 class PandocTool(ExternalTool):
     """Pandoc 文档转换工具"""
@@ -53,8 +53,15 @@ class PandocTool(ExternalTool):
         
         # 如果便携版不存在，尝试从插件加载 (惰性加载)
         if not os.path.exists(portable_pandoc):
-            base = get_app_root()
-            plugin_path = os.path.join(base, "plugins", "pandoc.mcy")
+            # 优先查找内部资源(单文件版打包进去的)
+            internal_plugin = get_resource_path("plugins/pandoc.mcy")
+            
+            # 兜底查找外部目录(用户手动放置的)
+            external_plugin = os.path.join(get_app_root(), "plugins", "pandoc.mcy")
+            
+            # 选择存在的插件路径
+            plugin_path = internal_plugin if os.path.exists(internal_plugin) else external_plugin
+            
             if os.path.exists(plugin_path):
                 # 获取配置的插件模式
                 config = ConfigLoader()
