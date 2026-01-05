@@ -36,14 +36,10 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; 主程序
-Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-; 插件包 (Ghostscript.mcy, Pandoc.mcy)
-Source: "..\plugins\*"; DestDir: "{app}\plugins"; Flags: ignoreversion recursesubdirs createallsubdirs
-; 预解压的依赖库 (可选)
-Source: "..\libs\*"; DestDir: "{app}\libs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-; 配置文件 (默认配置)
-Source: "..\config\default.json"; DestDir: "{app}\config"; Flags: ignoreversion
+; 打包整个 standalone 目录（包含所有依赖）
+Source: "..\dist\release\main.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 确保 plugins 目录存在并包含说明文件
+Source: "..\plugins\README.txt"; DestDir: "{app}\plugins"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

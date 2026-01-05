@@ -5,8 +5,8 @@ echo Office Toolkit 发布打包脚本
 echo ==========================================
 
 REM 检查 dist 目录
-if not exist "dist\OfficeToolkit.exe" (
-    echo [ERROR] 未找到 dist\OfficeToolkit.exe
+if not exist "dist\release\main.dist\OfficeToolkit.exe" (
+    echo [ERROR] 未找到 dist\release\main.dist\OfficeToolkit.exe
     echo 请先运行 build_nuitka.bat 进行编译！
     pause
     exit /b 1
@@ -36,14 +36,15 @@ echo [Step 2] 制作绿化版 (Portable ZIP)...
 
 REM 清理临时目录
 if exist release\temp_portable rmdir /s /q release\temp_portable
-mkdir release\temp_portable\OfficeToolkit
+mkdir release\temp_portable
 
-REM 复制文件
-echo 正在复制文件...
-copy dist\OfficeToolkit.exe release\temp_portable\OfficeToolkit\ >nul
-xcopy config\default.json release\temp_portable\OfficeToolkit\config\ /I /Y >nul
-if exist libs xcopy libs release\temp_portable\OfficeToolkit\libs\ /E /I /Y >nul
-if exist plugins xcopy plugins release\temp_portable\OfficeToolkit\plugins\ /E /I /Y >nul
+REM 复制整个 standalone 目录
+echo 正在复制 standalone 目录...
+xcopy dist\release\main.dist release\temp_portable\OfficeToolkit /E /I /Y >nul
+
+REM 确保 plugins 目录存在并包含说明文件
+if not exist release\temp_portable\OfficeToolkit\plugins mkdir release\temp_portable\OfficeToolkit\plugins
+if exist plugins\README.txt copy /Y plugins\README.txt release\temp_portable\OfficeToolkit\plugins\ >nul
 
 REM 压缩打包
 echo 正在压缩 ZIP...

@@ -3,15 +3,17 @@ import sys
 
 def get_app_root():
     """
-    获取应用程序根目录
+    获取应用程序根目录（用户可访问的外部数据目录）
     - 开发环境：项目根目录
-    - Nuitka Onefile：真实 EXE 所在目录
-    - Nuitka Standalone：dist 目录
+    - Nuitka Onefile：真实 EXE 所在目录（非临时解压目录）
+    - Nuitka Standalone：EXE 所在目录
     """
     if getattr(sys, 'frozen', False):
         # Nuitka 打包环境
-        # sys.argv[0] 在 Nuitka Onefile 模式下指向真实的 EXE 路径
-        return os.path.dirname(os.path.abspath(sys.argv[0]))
+        # 使用 sys.executable 获取真实的 EXE 路径（Onefile 和 Standalone 都适用）
+        # sys.argv[0] 在某些情况下可能不可靠
+        exe_path = sys.executable
+        return os.path.dirname(os.path.abspath(exe_path))
     else:
         # 开发环境
         try:

@@ -8,8 +8,11 @@ echo 优势: 编译速度快，启动速度快，适合开发调试。
 echo ==========================================
 
 echo.
-echo [Step 1] 清理旧的开发构建...
-if exist dist\dev rmdir /s /q dist\dev
+echo [Step 1] 准备编译环境...
+REM 为了启用增量编译，不再清理整个目录
+REM if exist dist\dev rmdir /s /q dist\dev
+if exist dist\dev\OfficeToolkit.dist rmdir /s /q dist\dev\OfficeToolkit.dist
+if exist dist\dev\main.dist rmdir /s /q dist\dev\main.dist
 
 echo.
 echo [Step 2] 开始 Nuitka 编译 (开发模式)...
@@ -17,9 +20,11 @@ echo [Step 2] 开始 Nuitka 编译 (开发模式)...
 nuitka ^
     --mingw64 ^
     --standalone ^
-    --windows-console ^
+    --windows-console-mode=force ^
     --windows-icon-from-ico=assets/processed_icons/icon_transparent.ico ^
     --product-name="Office Toolkit (Dev)" ^
+    --file-version=1.0.0 ^
+    --product-version=1.0.0 ^
     --file-description="多功能办公工具箱 (开发版)" ^
     --enable-plugin=pyqt6 ^
     --include-qt-plugins=sensible,styles ^
