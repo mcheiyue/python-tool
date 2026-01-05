@@ -68,3 +68,11 @@ temp_output/
 # Build outputs
 release/
 dabao.md
+
+# Nuitka 编译缓存（保留以加速增量编译）
+dist/standalone/main.build/
+dist/onefile/main.build/
+
+# Nuitka 构建产物（这些会在 release/ 中重新打包）
+dist/standalone/main.dist/
+dist/onefile/*.exe
