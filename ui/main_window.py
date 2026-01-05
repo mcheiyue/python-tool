@@ -55,6 +55,7 @@ class ThemedSvgIconEngine(QIconEngine):
 
 from core.utils.lazy_loader import UILazyLoader
 from core.utils.resource_path import get_resource_path
+from ui.widgets import CategoryHomePage
 
 class MainWindow(FluentWindow):
     def __init__(self, container=None):
@@ -66,6 +67,11 @@ class MainWindow(FluentWindow):
         self.interfaces = {}
         # 存储图标路径映射，用于主题切换时更新图标 {objectName: iconPath}
         self.icon_mapping = {}
+        # 存储分类首页 {category_name: CategoryHomePage}
+        self.category_homes = {}
+        
+        # 初始化功能描述数据
+        self._init_feature_descriptions()
         
         # 监听主题变化
         qconfig.themeChanged.connect(self.updateNavigationIcons)
@@ -110,6 +116,34 @@ class MainWindow(FluentWindow):
         """获取主题感知的 SVG 图标"""
         # 使用 ThemedSvgIconEngine，图标会在每次绘制时根据当前主题动态着色
         return QIcon(ThemedSvgIconEngine(path))
+    
+    def _init_feature_descriptions(self):
+        """初始化功能描述数据"""
+        self.feature_descriptions = {
+            # Office 工具
+            "PPT 转 PDF": "将 PowerPoint 文件转换为 PDF 格式",
+            "PPT 转图片": "导出 PPT 为图片格式",
+            "Word 转 PDF": "将 Word 文档转换为 PDF",
+            "Doc 转 Docx": "升级旧版 .doc 为 .docx 格式",
+            "Excel 转 PDF": "将 Excel 表格转换为 PDF",
+            
+            # PDF 工具
+            "PDF 合并": "将多个 PDF 文件合并为一个",
+            "PDF 压缩": "压缩 PDF 文件大小",
+            "PDF 拆分/提取": "拆分或提取 PDF 页面",
+            "PDF 图片提取": "从 PDF 中提取所有图片",
+            
+            # 图片工具
+            "图片取色": "提取图片中的主要颜色",
+            "PNG 转 SVG": "将 PNG 图片转为矢量 SVG",
+            "图片格式转换": "在多种图片格式间转换",
+            "图片转 PDF": "将图片转换为 PDF 文档",
+            
+            # 文本工具
+            "Markdown 转 PDF": "将 Markdown 文档转为 PDF",
+            "TXT 转 PDF": "将文本文件转换为 PDF",
+            "代码提取": "从文件中提取代码块"
+        }
 
     def initNavigation(self):
         # 1. Office 转换组
@@ -117,34 +151,29 @@ class MainWindow(FluentWindow):
         self.icon_mapping["office_home"] = get_resource_path("assets/icons/presentation.svg")
         self.addSubInterface(self.office_home, self.get_icon(get_resource_path("assets/icons/presentation.svg")), "Office 转换")
 
-        # 1.1 PPT 转 PDF
+        # 1.1 PPT 转 PDF（添加到stackedWidget但不在导航栏显示）
         self.ppt_interface = UILazyLoader("ui.interfaces.ppt_interface", "PPTInterface", self)
-        self.icon_mapping[self.ppt_interface.objectName()] = get_resource_path("assets/icons/presentation.svg")
-        self.addSubInterface(self.ppt_interface, self.get_icon(get_resource_path("assets/icons/presentation.svg")), "PPT 转 PDF", parent=self.office_home)
+        self.stackedWidget.addWidget(self.ppt_interface)
         self.interfaces["PPT 转 PDF"] = self.ppt_interface
 
         # 1.2 PPT 转图片
         self.ppt_img_interface = UILazyLoader("ui.interfaces.ppt_image_interface", "PPTImageInterface", self)
-        self.icon_mapping[self.ppt_img_interface.objectName()] = get_resource_path("assets/icons/image.svg")
-        self.addSubInterface(self.ppt_img_interface, self.get_icon(get_resource_path("assets/icons/image.svg")), "PPT 转图片", parent=self.office_home)
+        self.stackedWidget.addWidget(self.ppt_img_interface)
         self.interfaces["PPT 转图片"] = self.ppt_img_interface
 
         # 1.3 Word 转 PDF
         self.word_interface = UILazyLoader("ui.interfaces.word_interface", "WordInterface", self)
-        self.icon_mapping[self.word_interface.objectName()] = get_resource_path("assets/icons/word.svg")
-        self.addSubInterface(self.word_interface, self.get_icon(get_resource_path("assets/icons/word.svg")), "Word 转 PDF", parent=self.office_home)
+        self.stackedWidget.addWidget(self.word_interface)
         self.interfaces["Word 转 PDF"] = self.word_interface
 
         # 1.4 Doc 转 Docx
         self.doc_to_docx_interface = UILazyLoader("ui.interfaces.doc_to_docx_interface", "DocToDocxInterface", self)
-        self.icon_mapping[self.doc_to_docx_interface.objectName()] = get_resource_path("assets/icons/word.svg")
-        self.addSubInterface(self.doc_to_docx_interface, self.get_icon(get_resource_path("assets/icons/word.svg")), "Doc 转 Docx", parent=self.office_home)
+        self.stackedWidget.addWidget(self.doc_to_docx_interface)
         self.interfaces["Doc 转 Docx"] = self.doc_to_docx_interface
 
         # 1.5 Excel 转 PDF
         self.excel_interface = UILazyLoader("ui.interfaces.excel_interface", "ExcelInterface", self)
-        self.icon_mapping[self.excel_interface.objectName()] = get_resource_path("assets/icons/excel.svg")
-        self.addSubInterface(self.excel_interface, self.get_icon(get_resource_path("assets/icons/excel.svg")), "Excel 转 PDF", parent=self.office_home)
+        self.stackedWidget.addWidget(self.excel_interface)
         self.interfaces["Excel 转 PDF"] = self.excel_interface
 
         # 2. PDF 处理组
@@ -154,27 +183,22 @@ class MainWindow(FluentWindow):
 
         # 2.1 PDF 合并
         self.pdf_merge_interface = UILazyLoader("ui.interfaces.pdf_merge_interface", "PDFMergeInterface", self)
-        self.icon_mapping[self.pdf_merge_interface.objectName()] = get_resource_path("assets/icons/merge.svg")
-        self.addSubInterface(self.pdf_merge_interface, self.get_icon(get_resource_path("assets/icons/merge.svg")), "PDF 合并", parent=self.pdf_home)
+        self.stackedWidget.addWidget(self.pdf_merge_interface)
         self.interfaces["PDF 合并"] = self.pdf_merge_interface
 
         # 2.2 PDF 压缩
-        # 传递 container 给支持的界面
         self.compress_interface = UILazyLoader("ui.interfaces.pdf_compress_interface", "PDFCompressInterface", self, container=self.container)
-        self.icon_mapping[self.compress_interface.objectName()] = get_resource_path("assets/icons/compress.svg")
-        self.addSubInterface(self.compress_interface, self.get_icon(get_resource_path("assets/icons/compress.svg")), "PDF 压缩", parent=self.pdf_home)
+        self.stackedWidget.addWidget(self.compress_interface)
         self.interfaces["PDF 压缩"] = self.compress_interface
 
         # 2.3 PDF 拆分/提取
         self.pdf_split_interface = UILazyLoader("ui.interfaces.pdf_split_interface", "PDFSplitInterface", self)
-        self.icon_mapping[self.pdf_split_interface.objectName()] = get_resource_path("assets/icons/split.svg")
-        self.addSubInterface(self.pdf_split_interface, self.get_icon(get_resource_path("assets/icons/split.svg")), "PDF 拆分/提取", parent=self.pdf_home)
+        self.stackedWidget.addWidget(self.pdf_split_interface)
         self.interfaces["PDF 拆分/提取"] = self.pdf_split_interface
 
         # 2.4 PDF 图片提取
         self.pdf_img_extract_interface = UILazyLoader("ui.interfaces.pdf_image_extract_interface", "PDFImageExtractInterface", self)
-        self.icon_mapping[self.pdf_img_extract_interface.objectName()] = get_resource_path("assets/icons/image.svg")
-        self.addSubInterface(self.pdf_img_extract_interface, self.get_icon(get_resource_path("assets/icons/image.svg")), "PDF 图片提取", parent=self.pdf_home)
+        self.stackedWidget.addWidget(self.pdf_img_extract_interface)
         self.interfaces["PDF 图片提取"] = self.pdf_img_extract_interface
         
         # 3. 图片工具组
@@ -184,26 +208,22 @@ class MainWindow(FluentWindow):
 
         # 3.1 图片取色
         self.color_interface = UILazyLoader("ui.interfaces.color_interface", "ColorInterface", self)
-        self.icon_mapping[self.color_interface.objectName()] = get_resource_path("assets/icons/color_picker.svg")
-        self.addSubInterface(self.color_interface, self.get_icon(get_resource_path("assets/icons/color_picker.svg")), "图片取色", parent=self.image_home)
+        self.stackedWidget.addWidget(self.color_interface)
         self.interfaces["图片取色"] = self.color_interface
 
         # 3.2 PNG 转 SVG
         self.image_vector_interface = UILazyLoader("ui.interfaces.image_vector_interface", "ImageVectorInterface", self)
-        self.icon_mapping[self.image_vector_interface.objectName()] = get_resource_path("assets/icons/vector.svg")
-        self.addSubInterface(self.image_vector_interface, self.get_icon(get_resource_path("assets/icons/vector.svg")), "PNG 转 SVG", parent=self.image_home)
+        self.stackedWidget.addWidget(self.image_vector_interface)
         self.interfaces["PNG 转 SVG"] = self.image_vector_interface
 
         # 3.3 图片格式转换
         self.image_convert_interface = UILazyLoader("ui.interfaces.image_convert_interface", "ImageConvertInterface", self)
-        self.icon_mapping[self.image_convert_interface.objectName()] = get_resource_path("assets/icons/convert.svg")
-        self.addSubInterface(self.image_convert_interface, self.get_icon(get_resource_path("assets/icons/convert.svg")), "图片格式转换", parent=self.image_home)
+        self.stackedWidget.addWidget(self.image_convert_interface)
         self.interfaces["图片格式转换"] = self.image_convert_interface
 
         # 3.4 图片转 PDF
         self.image_pdf_interface = UILazyLoader("ui.interfaces.image_pdf_interface", "ImagePdfInterface", self)
-        self.icon_mapping[self.image_pdf_interface.objectName()] = get_resource_path("assets/icons/pdf.svg")
-        self.addSubInterface(self.image_pdf_interface, self.get_icon(get_resource_path("assets/icons/pdf.svg")), "图片转 PDF", parent=self.image_home)
+        self.stackedWidget.addWidget(self.image_pdf_interface)
         self.interfaces["图片转 PDF"] = self.image_pdf_interface
 
         # 4. 文本工具组
@@ -213,84 +233,92 @@ class MainWindow(FluentWindow):
 
         # 4.1 Markdown 转 PDF
         self.markdown_interface = UILazyLoader("ui.interfaces.markdown_interface", "MarkdownInterface", self, container=self.container)
-        self.icon_mapping[self.markdown_interface.objectName()] = get_resource_path("assets/icons/markdown.svg")
-        self.addSubInterface(self.markdown_interface, self.get_icon(get_resource_path("assets/icons/markdown.svg")), "Markdown 转 PDF", parent=self.text_home)
+        self.stackedWidget.addWidget(self.markdown_interface)
         self.interfaces["Markdown 转 PDF"] = self.markdown_interface
 
         # 4.2 TXT 转 PDF
         self.txt_pdf_interface = UILazyLoader("ui.interfaces.txt_pdf_interface", "TxtPdfInterface", self)
-        self.icon_mapping[self.txt_pdf_interface.objectName()] = get_resource_path("assets/icons/text.svg")
-        self.addSubInterface(self.txt_pdf_interface, self.get_icon(get_resource_path("assets/icons/text.svg")), "TXT 转 PDF", parent=self.text_home)
+        self.stackedWidget.addWidget(self.txt_pdf_interface)
         self.interfaces["TXT 转 PDF"] = self.txt_pdf_interface
 
         # 4.3 代码提取
         self.code_extract_interface = UILazyLoader("ui.interfaces.code_extract_interface", "CodeExtractInterface", self)
-        self.icon_mapping[self.code_extract_interface.objectName()] = get_resource_path("assets/icons/code.svg")
-        self.addSubInterface(self.code_extract_interface, self.get_icon(get_resource_path("assets/icons/code.svg")), "代码提取", parent=self.text_home)
+        self.stackedWidget.addWidget(self.code_extract_interface)
         self.interfaces["代码提取"] = self.code_extract_interface
 
         # 5. 设置界面 (底部)
         self.settings_interface = UILazyLoader("ui.interfaces.settings_interface", "SettingsInterface", self)
-        self.icon_mapping[self.settings_interface.objectName()] = get_resource_path("assets/icons/settings.svg")
         self.addSubInterface(self.settings_interface, self.get_icon(get_resource_path("assets/icons/settings.svg")), "设置", position=NavigationItemPosition.BOTTOM)
         self.interfaces["设置"] = self.settings_interface
 
-        # 默认选中第一个功能的子项
-        self.navigationInterface.setCurrentItem(self.ppt_interface.objectName())
-        
-        # 展开所有组 (可选，根据需求)
-        # self.navigationInterface.expandAll()
+        # 默认显示第一个分类的卡片首页
+        self.navigationInterface.setCurrentItem(self.office_home.objectName())
 
     def initTitleBar(self):
-        """初始化标题栏，添加搜索框"""
-        self.searchBar = SearchLineEdit(self)
-        self.searchBar.setPlaceholderText("搜索功能...")
-        self.searchBar.setFixedWidth(200)
+        """初始化标题栏"""
+        # 隐藏标题栏的软件图标
+        if hasattr(self.titleBar, 'iconLabel'):
+            self.titleBar.iconLabel.hide()
         
-        # 配置搜索补全
-        self.completer = QCompleter(list(self.interfaces.keys()), self.searchBar)
-        self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.completer.setFilterMode(Qt.MatchFlag.MatchContains)
-        self.searchBar.setCompleter(self.completer)
-        
-        # 连接信号
-        self.completer.activated.connect(self.onCompleterActivated)
-        self.searchBar.returnPressed.connect(self.onSearchReturnPressed)
-        
-        # 添加到标题栏
-        self.titleBar.layout().insertWidget(1, self.searchBar, 0, Qt.AlignmentFlag.AlignHCenter)
+        # 隐藏导航栏左上角的返回按钮
+        self.navigationInterface.setReturnButtonVisible(False)
 
     def createCategoryInterface(self, text, objectName):
-        """创建分类界面的辅助函数"""
-        widget = QWidget()
-        widget.setObjectName(objectName)
-        layout = QVBoxLayout(widget)
-        label = TitleLabel(text, widget)
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(label)
-        return widget
-
-    def onCompleterActivated(self, text):
-        """点击补全项时跳转"""
-        if text in self.interfaces:
-            self.switchTo(self.interfaces[text])
-            self.searchBar.clear()
-
-    def onSearchReturnPressed(self):
-        """回车时跳转到第一个匹配项"""
-        text = self.searchBar.text()
-        # 如果完全匹配
-        if text in self.interfaces:
-            self.switchTo(self.interfaces[text])
-            self.searchBar.clear()
-            return
-            
-        # 否则查找第一个包含的
-        for name, interface in self.interfaces.items():
-            if text.lower() in name.lower():
-                self.switchTo(interface)
-                self.searchBar.clear()
-                return
+        """创建分类界面的辅助函数（返回卡片首页）"""
+        # 收集该分类下的所有功能
+        features = []
+        category_mapping = {
+            "office_home": ["PPT 转 PDF", "PPT 转图片", "Word 转 PDF", "Doc 转 Docx", "Excel 转 PDF"],
+            "pdf_home": ["PDF 合并", "PDF 压缩", "PDF 拆分/提取", "PDF 图片提取"],
+            "image_home": ["图片取色", "PNG 转 SVG", "图片格式转换", "图片转 PDF"],
+            "text_home": ["Markdown 转 PDF", "TXT 转 PDF", "代码提取"]
+        }
+        
+        # 图标映射（与实际界面的图标保持一致）
+        icon_mapping_dict = {
+            "PPT 转 PDF": "presentation.svg",
+            "PPT 转图片": "image.svg",
+            "Word 转 PDF": "word.svg",
+            "Doc 转 Docx": "word.svg",
+            "Excel 转 PDF": "excel.svg",
+            "PDF 合并": "merge.svg",
+            "PDF 压缩": "compress.svg",
+            "PDF 拆分/提取": "split.svg",
+            "PDF 图片提取": "image.svg",
+            "图片取色": "color_picker.svg",
+            "PNG 转 SVG": "vector.svg",
+            "图片格式转换": "convert.svg",
+            "图片转 PDF": "pdf.svg",
+            "Markdown 转 PDF": "markdown.svg",
+            "TXT 转 PDF": "text.svg",
+            "代码提取": "code.svg"
+        }
+        
+        feature_names = category_mapping.get(objectName, [])
+        for name in feature_names:
+            icon_file = icon_mapping_dict.get(name, "magic.svg")
+            features.append({
+                "name": name,
+                "icon": get_resource_path(f"assets/icons/{icon_file}"),
+                "description": self.feature_descriptions.get(name, "")
+            })
+        
+        # 创建卡片首页
+        category_home = CategoryHomePage(text, features, self)
+        category_home.setObjectName(objectName)
+        
+        # 连接卡片点击事件
+        category_home.feature_clicked.connect(self.on_category_feature_clicked)
+        
+        # 存储分类首页
+        self.category_homes[text] = category_home
+        
+        return category_home
+    
+    def on_category_feature_clicked(self, feature_name: str):
+        """分类首页的功能卡片被点击"""
+        if feature_name in self.interfaces:
+            self.switchTo(self.interfaces[feature_name])
 
     def switch_to_settings(self):
         """跳转到设置界面"""
