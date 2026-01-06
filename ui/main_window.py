@@ -295,9 +295,8 @@ class MainWindow(FluentWindow):
                 self.switchTo(self.interfaces[feature_name])
                 # 清空搜索框
                 self.search_box.clear()
-                # 自动收起侧边栏（如果不是紧凑模式）
-                if self.navigationInterface.displayMode != NavigationDisplayMode.COMPACT:
-                    self.navigationInterface.collapse()
+                # 自动收起侧边栏（使用 panel.collapse() 方法）
+                self.navigationInterface.panel.collapse()
 
     def createCategoryInterface(self, text, objectName):
         """创建分类界面的辅助函数（返回卡片首页）"""
