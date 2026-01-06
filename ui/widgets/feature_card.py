@@ -1,7 +1,7 @@
 from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGraphicsDropShadowEffect
-from qfluentwidgets import CardWidget, isDarkTheme
+from qfluentwidgets import CardWidget, isDarkTheme, qconfig
 from core.utils.resource_path import get_resource_path
 
 
@@ -20,6 +20,9 @@ class FeatureCard(CardWidget):
         
         self._init_ui()
         self._init_animation()
+        
+        # 监听主题变化
+        qconfig.themeChanged.connect(self._update_theme)
         
     def _init_ui(self):
         """初始化 UI"""
@@ -62,6 +65,9 @@ class FeatureCard(CardWidget):
         except Exception as e:
             print(f"加载图标失败: {e}")
         
+        # 移除图标的边框
+        self.icon_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        
         # 标题
         self.title_label = QLabel(self.title_text, self)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -79,11 +85,13 @@ class FeatureCard(CardWidget):
         desc_font.setPointSize(9)
         self.desc_label.setFont(desc_font)
         
-        # 设置描述颜色为次要文本颜色
+        # 设置文字颜色根据主题，并移除边框
         if isDarkTheme():
-            self.desc_label.setStyleSheet("color: rgba(255, 255, 255, 0.6);")
+            self.title_label.setStyleSheet("QLabel { color: rgba(255, 255, 255, 0.9); border: none; background: transparent; }")
+            self.desc_label.setStyleSheet("QLabel { color: rgba(255, 255, 255, 0.6); border: none; background: transparent; }")
         else:
-            self.desc_label.setStyleSheet("color: rgba(0, 0, 0, 0.6);")
+            self.title_label.setStyleSheet("QLabel { color: rgba(0, 0, 0, 0.9); border: none; background: transparent; }")
+            self.desc_label.setStyleSheet("QLabel { color: rgba(0, 0, 0, 0.6); border: none; background: transparent; }")
         
         # 添加到布局
         layout.addWidget(self.icon_label)
@@ -98,6 +106,48 @@ class FeatureCard(CardWidget):
         self.shadow.setOffset(0, 2)
         self.setGraphicsEffect(self.shadow)
         
+        # 移除边框，保持圆角
+        self.setStyleSheet("""
+            FeatureCard {
+                border: none;
+                border-radius: 8px;
+            }
+        """)
+        
+    def _update_theme(self):
+        """更新主题：重新加载图标、更新文字颜色和边框样式"""
+        from PyQt6.QtSvg import QSvgRenderer
+        from PyQt6.QtGui import QPixmap, QPainter
+        from PyQt6.QtCore import QByteArray
+        
+        # 重新加载图标
+        try:
+            with open(self.icon_path, 'r', encoding='utf-8') as f:
+                svg_content = f.read()
+            # 根据当前主题设置图标颜色
+            color = "#FFFFFF" if isDarkTheme() else "#000000"
+            svg_content = svg_content.replace('currentColor', color)
+            
+            # 渲染 SVG
+            renderer = QSvgRenderer(QByteArray(svg_content.encode('utf-8')))
+            pixmap = QPixmap(48, 48)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
+            
+            self.icon_label.setPixmap(pixmap)
+        except Exception as e:
+            print(f"更新图标失败: {e}")
+        
+        # 更新标题和描述文字颜色，并移除边框
+        if isDarkTheme():
+            self.title_label.setStyleSheet("QLabel { color: rgba(255, 255, 255, 0.9); border: none; background: transparent; }")
+            self.desc_label.setStyleSheet("QLabel { color: rgba(255, 255, 255, 0.6); border: none; background: transparent; }")
+        else:
+            self.title_label.setStyleSheet("QLabel { color: rgba(0, 0, 0, 0.9); border: none; background: transparent; }")
+            self.desc_label.setStyleSheet("QLabel { color: rgba(0, 0, 0, 0.6); border: none; background: transparent; }")
+    
     def _init_animation(self):
         """初始化动画效果"""
         # 位置动画（上浮效果）

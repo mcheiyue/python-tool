@@ -1,60 +1,27 @@
-from PyQt6.QtCore import Qt, QSize, QByteArray, QTimer, QRectF
+from PyQt6.QtCore import Qt, QSize, QTimer, QRectF, QByteArray
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QIconEngine
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QCompleter
-from qfluentwidgets import FluentWindow, NavigationItemPosition, SearchLineEdit, isDarkTheme, TitleLabel, qconfig
+from PyQt6.QtCore import pyqtSignal
+from qfluentwidgets import (FluentWindow, NavigationItemPosition, SearchLineEdit, 
+                          isDarkTheme, TitleLabel, qconfig, NavigationAvatarWidget,
+                          NavigationDisplayMode)
 
-
-class ThemedSvgIconEngine(QIconEngine):
-    """主题感知的 SVG 图标引擎，每次绘制时根据当前主题动态替换颜色"""
+class NavigationSearchLineEdit(SearchLineEdit):
+    """支持在导航栏中使用的搜索框"""
+    clicked = pyqtSignal()
     
-    def __init__(self, svg_path):
-        super().__init__()
-        self.svg_path = svg_path
-        self._svg_content = None
-        self._load_svg()
-        
-    def _load_svg(self):
-        """加载 SVG 内容"""
-        try:
-            with open(self.svg_path, 'r', encoding='utf-8') as f:
-                self._svg_content = f.read()
-        except Exception as e:
-            print(f"Error loading SVG {self.svg_path}: {e}")
-            self._svg_content = ""
-            
-    def _get_colored_svg(self):
-        """根据当前主题获取着色后的 SVG 内容"""
-        if not self._svg_content:
-            return ""
-        # 深色主题用白色，浅色主题用黑色
-        color = "#FFFFFF" if isDarkTheme() else "#000000"
-        return self._svg_content.replace('currentColor', color)
-        
-    def paint(self, painter, rect, mode, state):
-        """绘制图标"""
-        colored_svg = self._get_colored_svg()
-        if not colored_svg:
-            return
-            
-        renderer = QSvgRenderer(QByteArray(colored_svg.encode('utf-8')))
-        renderer.render(painter, QRectF(rect.x(), rect.y(), rect.width(), rect.height()))
-        
-    def pixmap(self, size, mode, state):
-        """生成 Pixmap"""
-        pixmap = QPixmap(size)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        self.paint(painter, QRectF(0, 0, size.width(), size.height()), mode, state)
-        painter.end()
-        return pixmap
-        
-    def clone(self):
-        """克隆图标引擎"""
-        return ThemedSvgIconEngine(self.svg_path)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # 搜索框不需要被选中样式，但需要满足接口要求
+
+    def setSelected(self, isSelected):
+        # 必须实现此方法以满足 NavigationInterface 接口
+        pass
 
 from core.utils.lazy_loader import UILazyLoader
 from core.utils.resource_path import get_resource_path
+from core.utils.icon_provider import ThemedSvgIconEngine
 from ui.widgets import CategoryHomePage
 
 class MainWindow(FluentWindow):
@@ -82,7 +49,6 @@ class MainWindow(FluentWindow):
     def updateNavigationIcons(self):
         """主题切换时刷新导航栏，重新设置所有图标"""
         # QIcon 会缓存 pixmap，所以需要为每个导航项创建全新的 QIcon 实例
-        # 尝试访问 NavigationInterface 的内部项
         nav_panel = getattr(self.navigationInterface, 'panel', self.navigationInterface)
         items_dict = getattr(nav_panel, '_items', {})
         
@@ -101,6 +67,20 @@ class MainWindow(FluentWindow):
     def initDelayed(self):
         self.initNavigation()
         self.initTitleBar()
+        
+        # 初始隐藏搜索框（默认收起状态）
+        self.search_box.hide()
+        
+        # 监听导航栏显示模式变化
+        self.navigationInterface.displayModeChanged.connect(self.on_display_mode_changed)
+
+    def on_display_mode_changed(self, mode: NavigationDisplayMode):
+        """导航栏显示模式变化响应"""
+        # 只有在展开模式或菜单模式下才显示搜索框
+        if mode == NavigationDisplayMode.EXPAND or mode == NavigationDisplayMode.MENU:
+            self.search_box.show()
+        else:
+            self.search_box.hide()
 
     def initWindow(self):
         self.setWindowTitle("AI Office Tool")
@@ -114,7 +94,6 @@ class MainWindow(FluentWindow):
 
     def get_icon(self, path):
         """获取主题感知的 SVG 图标"""
-        # 使用 ThemedSvgIconEngine，图标会在每次绘制时根据当前主题动态着色
         return QIcon(ThemedSvgIconEngine(path))
     
     def _init_feature_descriptions(self):
@@ -146,6 +125,27 @@ class MainWindow(FluentWindow):
         }
 
     def initNavigation(self):
+        # 添加搜索框到导航栏顶部
+        self.search_box = NavigationSearchLineEdit()
+        self.search_box.setPlaceholderText("搜索功能")
+        self.search_box.setFixedWidth(180) # 设置宽度以适应展开状态
+        
+        # 初始化搜索补全
+        self.initSearch()
+        
+        # 将搜索框添加到导航栏
+        # 注意：SearchLineEdit 默认会根据导航栏展开状态调整显示
+        # 我们把它添加到导航栏的最顶部 (position=NavigationItemPosition.TOP)
+        self.navigationInterface.addWidget(
+            routeKey="search_box",
+            widget=self.search_box,
+            onClick=self.on_search_clicked,
+            position=NavigationItemPosition.TOP
+        )
+        
+        # 添加分隔符
+        self.navigationInterface.addSeparator()
+
         # 1. Office 转换组
         self.office_home = self.createCategoryInterface("Office 工具", "office_home")
         self.icon_mapping["office_home"] = get_resource_path("assets/icons/presentation.svg")
@@ -262,6 +262,42 @@ class MainWindow(FluentWindow):
         
         # 隐藏导航栏左上角的返回按钮
         self.navigationInterface.setReturnButtonVisible(False)
+
+    def initSearch(self):
+        """初始化搜索功能"""
+        # 获取所有功能名称
+        items = list(self.feature_descriptions.keys())
+        
+        # 设置补全器
+        completer = QCompleter(items, self.search_box)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setMaxVisibleItems(10)
+        
+        # 连接搜索框
+        self.search_box.setCompleter(completer)
+        # 处理回车或选中
+        self.search_box.returnPressed.connect(self.on_search_complete)
+        completer.activated.connect(self.on_search_complete)
+
+    def on_search_clicked(self):
+        # 搜索框点击时不进行页面切换，仅保持焦点
+        self.search_box.setFocus()
+
+    def on_search_complete(self, text=None):
+        """搜索完成处理"""
+        if not text:
+            text = self.search_box.text()
+            
+        if text in self.feature_descriptions:
+            # 跳转到对应功能
+            feature_name = text
+            if feature_name in self.interfaces:
+                self.switchTo(self.interfaces[feature_name])
+                # 清空搜索框
+                self.search_box.clear()
+                # 自动收起侧边栏（如果不是紧凑模式）
+                if self.navigationInterface.displayMode != NavigationDisplayMode.COMPACT:
+                    self.navigationInterface.collapse()
 
     def createCategoryInterface(self, text, objectName):
         """创建分类界面的辅助函数（返回卡片首页）"""

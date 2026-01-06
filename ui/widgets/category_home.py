@@ -1,6 +1,6 @@
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea, QLabel
-from qfluentwidgets import TitleLabel, FlowLayout
+from qfluentwidgets import TitleLabel, FlowLayout, isDarkTheme, qconfig
 from .feature_card import FeatureCard
 
 
@@ -22,6 +22,10 @@ class CategoryHomePage(QScrollArea):
         self.features = features
         
         self._init_ui()
+        self._update_background()
+        
+        # 监听主题变化
+        qconfig.themeChanged.connect(self._update_background)
         
     def _init_ui(self):
         """初始化 UI"""
@@ -63,7 +67,30 @@ class CategoryHomePage(QScrollArea):
         
         main_layout.addWidget(grid_container)
         main_layout.addStretch()
+    
+    def _update_background(self):
+        """更新背景色以跟随主题"""
+        if isDarkTheme():
+            bg_color = "#202020"  # 深色模式背景
+        else:
+            bg_color = "#f5f5f5"  # 浅色模式背景
         
+        # 设置 QScrollArea 的背景色
+        self.setStyleSheet(f"""
+            CategoryHomePage {{
+                background-color: {bg_color};
+                border: none;
+            }}
+        """)
+        
+        # 设置内部容器的背景色
+        if self.widget():
+            self.widget().setStyleSheet(f"""
+                QWidget {{
+                    background-color: {bg_color};
+                }}
+            """)
+    
     def on_feature_clicked(self, feature_name: str):
         """功能卡片被点击"""
         self.feature_clicked.emit(feature_name)

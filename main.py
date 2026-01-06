@@ -2,7 +2,7 @@ import sys
 import os
 import ctypes
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSettings
 from qfluentwidgets import setTheme, Theme
 
 # 导入应用容器
@@ -24,9 +24,9 @@ if __name__ == "__main__":
     # 初始化应用容器
     container = AppContainer()
     
-    # 加载主题设置 (使用新的配置系统)
-    # 假设默认配置中有 "app.theme_mode"
-    theme_mode = container.config.get("app.theme_mode", "Auto")
+    # 加载主题设置（使用 QSettings，与设置界面保持一致）
+    settings = QSettings("AI_Office_Tool", "Config")
+    theme_mode = settings.value("themeMode", "Auto")
     
     if theme_mode == "Light":
         setTheme(Theme.LIGHT)
