@@ -144,9 +144,11 @@ class GhostscriptTool(ExternalTool):
                                         latest_version = version_tuple
                                         best_path = exe_path
                                         best_ver_str = ver_str
-                            except:
+                            except Exception as e:
+                                # 版本号解析失败，跳过该版本
                                 continue
-                except:
+                except Exception as e:
+                    # 目录列举失败，跳过该根目录
                     continue
             
             if best_path:
@@ -201,6 +203,7 @@ class GhostscriptTool(ExternalTool):
             if res.returncode == 0:
                 # Ghostscript 输出通常是 "10.03.1"
                 return res.stdout.strip().split('\n')[0]
-        except:
+        except Exception as e:
+            # 获取版本号失败（可能文件不存在或执行出错）
             pass
         return None

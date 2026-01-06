@@ -62,8 +62,8 @@ class BaseOfficeConverter(QObject):
                     if doc:
                         try:
                             self._close_document(doc)
-                        except:
-                            pass
+                        except Exception as e:
+                            self.log.emit(f"⚠️ 关闭文档失败: {str(e)}")
 
         except Exception as e:
             self.log.emit(f"🔥 严重错误: {str(e)}")
@@ -73,14 +73,14 @@ class BaseOfficeConverter(QObject):
             if self._app:
                 try:
                     self._quit_app(self._app)
-                except:
-                    pass
+                except Exception as e:
+                    self.log.emit(f"⚠️ 退出应用失败: {str(e)}")
                 self._app = None
             
             try:
                 comtypes.CoUninitialize()
-            except:
-                pass
+            except Exception as e:
+                self.log.emit(f"⚠️ COM 反初始化失败: {str(e)}")
             
             self.finished.emit(success, fail)
             self._is_running = False
