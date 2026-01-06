@@ -1,7 +1,8 @@
 import os
+import subprocess
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
-from PyQt6.QtGui import QFont, QAction, QKeySequence, QDesktopServices
-from PyQt6.QtCore import QUrl
+from PyQt6.QtGui import QFont, QAction, QKeySequence
+from PyQt6.QtCore import QTimer
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton, 
                             ToolButton, TextEdit, LineEdit, ProgressBar, InfoBar, 
                             CardWidget, FluentIcon as FIF)
@@ -255,12 +256,30 @@ class PDFMergeInterface(QWidget):
             if output_path and os.path.exists(output_path):
                 # 打开文件
                 open_btn = PushButton("打开文件")
-                open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(output_path)))
+                def open_file():
+                    def do_open():
+                        if os.name == 'nt':
+                            subprocess.Popen(['explorer', output_path], shell=False)
+                        else:
+                            from PyQt6.QtGui import QDesktopServices
+                            from PyQt6.QtCore import QUrl
+                            QDesktopServices.openUrl(QUrl.fromLocalFile(output_path))
+                    QTimer.singleShot(300, do_open)
+                open_btn.clicked.connect(open_file)
                 bar.addWidget(open_btn)
                 
                 # 打开文件夹
                 folder_btn = PushButton("打开文件夹")
-                folder_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(output_path))))
+                def open_folder():
+                    def do_open():
+                        if os.name == 'nt':
+                            subprocess.Popen(['explorer', os.path.dirname(output_path)], shell=False)
+                        else:
+                            from PyQt6.QtGui import QDesktopServices
+                            from PyQt6.QtCore import QUrl
+                            QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(output_path)))
+                    QTimer.singleShot(300, do_open)
+                folder_btn.clicked.connect(open_folder)
                 bar.addWidget(folder_btn)
             
             bar.show()

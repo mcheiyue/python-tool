@@ -71,10 +71,9 @@ class PluginBase(ABC):
 
     @property
     def is_available(self) -> bool:
-        if self._available is None:
-            result = self.check_availability()
-            self._available = result.get("available", False)
-        return self._available
+        # 移除缓存，每次实时检查，以便响应 ExternalToolManager 的状态变更
+        result = self.check_availability()
+        return result.get("available", False)
     
     def get_executable_path(self) -> Optional[str]:
         """获取关联外部工具的可执行路径"""

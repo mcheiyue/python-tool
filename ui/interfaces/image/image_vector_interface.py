@@ -1,7 +1,8 @@
 import os
+import subprocess
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog
-from PyQt6.QtGui import QFont, QDesktopServices, QAction, QKeySequence
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QFont, QAction, QKeySequence
+from PyQt6.QtCore import Qt, QTimer
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slider, 
                             CheckBox, PushButton, PrimaryPushButton, TextEdit, InfoBar, 
                             FluentIcon as FIF)
@@ -206,7 +207,17 @@ class ImageVectorInterface(QWidget):
             
             # 添加打开文件夹按钮
             open_folder_btn = PushButton("打开所在文件夹")
-            open_folder_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(path))))
+            def open_folder():
+                def do_open():
+                    folder_path = os.path.dirname(path)
+                    if os.name == 'nt':
+                        subprocess.Popen(['explorer', folder_path], shell=False)
+                    else:
+                        from PyQt6.QtGui import QDesktopServices
+                        from PyQt6.QtCore import QUrl
+                        QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+                QTimer.singleShot(300, do_open)
+            open_folder_btn.clicked.connect(open_folder)
             bar.addWidget(open_folder_btn)
             
             bar.show()

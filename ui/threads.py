@@ -160,7 +160,7 @@ class DocToDocxThread(QThread):
 
 class PDFRenderThread(QThread):
     """PDF 页面渲染线程"""
-    def __init__(self, renderer, files, output_dir, dpi, output_format, page_range=None):
+    def __init__(self, renderer, files, output_dir, dpi, output_format, page_range=None, use_ghostscript=False):
         super().__init__()
         self.renderer = renderer
         self.files = files
@@ -168,6 +168,7 @@ class PDFRenderThread(QThread):
         self.dpi = dpi
         self.output_format = output_format
         self.page_range = page_range
+        self.use_ghostscript = use_ghostscript
 
     def run(self):
         self.renderer.render_all(
@@ -175,5 +176,6 @@ class PDFRenderThread(QThread):
             self.output_dir,
             self.dpi,
             self.output_format,
-            self.page_range
+            self.page_range,
+            use_ghostscript=self.use_ghostscript
         )

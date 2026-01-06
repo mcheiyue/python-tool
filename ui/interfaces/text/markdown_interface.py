@@ -1,16 +1,25 @@
 import markdown
 import os
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextBrowser, QSplitter, QFileDialog, QMenu
+import subprocess
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextBrowser, QSplitter, QFileDialog, QMenu, QLabel
 from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtGui import QFont, QAction, QKeySequence, QDesktopServices
-from PyQt6.QtCore import Qt, QUrl
-from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, TextEdit, InfoBar, 
-                            FluentIcon as FIF, isDarkTheme, qconfig, ComboBox, ToolButton, PushButton)
+# 确保 QPageSize 独立导入，避免因其他导入错误被忽略
+try:
+    from PyQt6.QtGui import QPageSize
+except ImportError:
+    QPageSize = None
+
+from PyQt6.QtCore import Qt, QUrl, QTimer
+from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, TextEdit, InfoBar,
+                            FluentIcon as FIF, isDarkTheme, qconfig, ComboBox, ToolButton, PushButton,
+                            CaptionLabel, InfoBarPosition)
 
 from core.plugins import PluginManager
 from core.utils.md_normalizer import normalize_markdown
 from core.utils.docx_processor import DocxProcessor
 from ui.threads import WorkerThread
+from core.external_tools.manager import ExternalToolManager
 
 class MarkdownInterface(QWidget):
     def __init__(self, parent=None, container=None):
@@ -31,7 +40,7 @@ class MarkdownInterface(QWidget):
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)
-
+        
         # 工具栏
         self.toolbar = QHBoxLayout()
         
@@ -47,14 +56,14 @@ class MarkdownInterface(QWidget):
         self.format_combo.addItem("Word 文档", "docx")
         self.format_combo.setToolTip("选择导出的文件格式")
         
+        # 引擎状态提示
+        self.engine_status_label = CaptionLabel("", self)
+        self.engine_status_label.setTextColor("#808080", "#a0a0a0")
+        
         # 检查能力插件 (使用新的能力注册机制)
         self.docx_converter = self.plugin_manager.get_preferred_plugin("markdown_to_docx", self.config)
         self.pdf_converter = self.plugin_manager.get_preferred_plugin("markdown_to_pdf", self.config)
         
-        # 如果有 DOCX 转换器，自动选择 DOCX 作为默认（因为它通常依赖外部工具，优先级较高）
-        if self.docx_converter:
-            self.format_combo.setCurrentIndex(1)
-
         self.export_btn = PrimaryPushButton(FIF.SAVE, "导出文件", self)
         self.export_btn.setToolTip("导出为选中格式 (Ctrl+S)")
         self.export_btn.clicked.connect(self.export_file)
@@ -62,7 +71,16 @@ class MarkdownInterface(QWidget):
         self.toolbar.addWidget(self.bg_combo)
         self.toolbar.addWidget(self.format_combo)
         self.toolbar.addWidget(self.export_btn)
+        self.toolbar.addWidget(self.engine_status_label) # 添加状态标签
         self.toolbar.addStretch(1)
+        
+        # 监听工具状态变更 (优先从容器获取管理器以保持单例一致性)
+        if hasattr(self.container, 'external_tool_manager') and self.container.external_tool_manager:
+            self.tool_manager = self.container.external_tool_manager
+        else:
+            self.tool_manager = ExternalToolManager()
+            
+        self.tool_manager.signals.tool_status_changed.connect(self.on_tool_status_changed)
         
         # 快捷键
         self.save_action = QAction(self)
@@ -117,8 +135,17 @@ class MarkdownInterface(QWidget):
         
         self.vbox.addWidget(self.splitter, 1)
         
+        # 如果有 DOCX 转换器，自动选择 DOCX 作为默认（因为它通常依赖外部工具，优先级较高）
+        # 注意：这会触发 currentIndexChanged，所以必须在连接信号之前设置，或者确保 update_ui_state 能处理未初始化的组件
+        if self.docx_converter:
+            self.format_combo.setCurrentIndex(1)
+            
         # 初始化样式
         self.update_style()
+        
+        # 延迟连接信号，防止初始化时组件未就绪导致崩溃
+        self.format_combo.currentIndexChanged.connect(self.update_ui_state)
+        self.update_ui_state() # 初始化 UI 状态
         
         # 默认文本
         default_text = "# Hello World\n\n欢迎使用 **Markdown 转 PDF** 工具！\n\n"
@@ -144,12 +171,22 @@ class MarkdownInterface(QWidget):
             highlight_css = hl_plugin.get_css(style_name)
 
         base_css = """
-            body { font-family: "Microsoft YaHei", sans-serif; padding: 20px; }
+            body { font-family: "Microsoft YaHei", sans-serif; padding: 20px; line-height: 1.6; }
             h1, h2, h3 { margin-top: 20px; border-bottom: 1px solid #eee; }
             a { text-decoration: none; }
-            code { padding: 2px 4px; border-radius: 4px; font-family: Consolas; }
-            pre { padding: 10px; border: 1px solid #e0e0e0; margin: 10px 0; border-radius: 6px; }
-            blockquote { border-left: 4px solid #ddd; padding-left: 10px; margin: 10px 0; }
+            code { padding: 2px 4px; border-radius: 4px; font-family: Consolas, monospace; font-size: 0.9em; }
+            pre {
+                padding: 10px;
+                border: 1px solid #e0e0e0;
+                margin: 10px 0;
+                border-radius: 6px;
+                white-space: pre-wrap;       /* CSS3 */
+                white-space: -moz-pre-wrap;  /* Mozilla */
+                white-space: -pre-wrap;      /* Opera 4-6 */
+                white-space: -o-pre-wrap;    /* Opera 7 */
+                word-wrap: break-word;       /* Internet Explorer 5.5+ */
+            }
+            blockquote { border-left: 4px solid #ddd; padding-left: 10px; margin: 10px 0; color: #777; }
             table { border-collapse: collapse; width: 100%; margin: 10px 0; border: 1px solid #e0e0e0; }
             th, td { border: 1px solid #e0e0e0; padding: 8px; }
             ul, ol { padding-left: 20px; }
@@ -289,16 +326,32 @@ class MarkdownInterface(QWidget):
 
             def docx_task(content, output_path):
                 # 统一调用接口
-                # 注意：这里我们假设插件实现了 convert_to_docx 方法，或者我们可以使用通用的 convert 方法
-                # 为了兼容性，最好在能力接口中标准化方法名，但目前我们先检查特定方法
+                # 优化：优先使用内存流处理，避免多次文件读写导致的文件损坏或占用问题
                 
-                if hasattr(self.docx_converter, 'convert_to_docx'):
-                     self.docx_converter.convert_to_docx(content, output_path)
+                # 1. 如果插件支持直接输出字节流，则优先使用
+                if hasattr(self.docx_converter, 'convert_to_docx_bytes'):
+                    docx_bytes = self.docx_converter.convert_to_docx_bytes(content)
+                    
+                    # 2. 在内存中进行后处理 (修复首段缩进等)
+                    processed_bytes = DocxProcessor.apply_custom_processing(
+                        docx_bytes,
+                        disable_first_para_indent=True
+                    )
+                    
+                    # 3. 统一进行一次性写入 (原子操作)
+                    with open(output_path, 'wb') as f:
+                        f.write(processed_bytes)
+                        
                 else:
-                     self.docx_converter.convert(content, output_format="docx", output_path=output_path)
-                
-                # 后处理样式 (修复首段缩进等)
-                DocxProcessor.process_file(output_path, disable_first_para_indent=True)
+                    # 降级方案：旧的文件处理方式 (兼容未实现 bytes 接口的插件)
+                    if hasattr(self.docx_converter, 'convert_to_docx'):
+                         self.docx_converter.convert_to_docx(content, output_path)
+                    else:
+                         self.docx_converter.convert(content, output_format="docx", output_path=output_path)
+                    
+                    # 后处理样式 (修复首段缩进等)
+                    DocxProcessor.process_file(output_path, disable_first_para_indent=True)
+                    
                 return output_path
 
             self.worker = WorkerThread(docx_task, normalized_content, path)
@@ -311,8 +364,18 @@ class MarkdownInterface(QWidget):
             path, _ = QFileDialog.getSaveFileName(self, "保存 PDF", "markdown_output.pdf", "PDF Files (*.pdf)")
             if not path: return
             
-            # 优先使用插件
+            # 优先使用插件 (Pandoc)，但必须检查是否有 PDF 引擎
+            use_plugin = False
             if self.pdf_converter:
+                # 检查 has_pdf_engine 属性 (如果插件支持)
+                if hasattr(self.pdf_converter, 'has_pdf_engine'):
+                    if self.pdf_converter.has_pdf_engine:
+                        use_plugin = True
+                else:
+                    # 旧版本插件，假设可用
+                    use_plugin = True
+
+            if use_plugin:
                 plugin_name = self.pdf_converter.display_name
                 InfoBar.info("正在导出", f"正在使用 {plugin_name} 生成 PDF...", duration=5000, parent=self)
                 self.export_btn.setEnabled(False)
@@ -322,6 +385,8 @@ class MarkdownInterface(QWidget):
                 normalized_content = normalize_markdown(raw_content)
                 
                 def pdf_task(content, output_path):
+                    # 尝试传递额外的参数以优化 PDF 输出 (如果支持)
+                    # 例如: --pdf-engine=xelatex 以支持 UTF-8 (取决于系统环境，这里主要依赖插件默认配置)
                     self.pdf_converter.convert(
                         content=content,
                         output_path=output_path,
@@ -334,15 +399,29 @@ class MarkdownInterface(QWidget):
                 self.worker.error.connect(lambda e: self.on_export_finished(False, str(e)))
                 self.worker.start()
             
-            # 降级到内置转换
+            # 降级到内置转换 (QPrinter)
             else:
+                if self.pdf_converter and hasattr(self.pdf_converter, 'has_pdf_engine') and not self.pdf_converter.has_pdf_engine:
+                     InfoBar.warning("PDF 引擎缺失", "Pandoc 已安装但未检测到 PDF 引擎 (如 XeLaTeX)。\n已自动降级使用内置渲染引擎。", duration=5000, parent=self)
+                else:
+                     InfoBar.info("使用内置引擎", "正在使用内置渲染引擎导出 PDF...", duration=3000, parent=self)
+                
                 if not self.webview:
                     InfoBar.warning("未就绪", "请先加载预览以使用内置 PDF 导出", parent=self)
                     return
                 try:
                     printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+                    # 显式设置分辨率，防止模糊 (默认 HighResolution 有时在不同 DPI 下表现不一致)
+                    printer.setResolution(300)
                     printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
                     printer.setOutputFileName(path)
+                    
+                    # 设置页面大小为 A4 (带异常保护，防止旧环境未重启导致的 NameError)
+                    try:
+                        if 'QPageSize' in globals() and QPageSize:
+                            printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+                    except (NameError, TypeError, AttributeError):
+                        print("Warning: QPageSize not available, skipping page size setting. Please restart app.")
                     
                     # 临时渲染一份白色背景的 HTML 用于打印 (如果需要)
                     force_light = self.bg_combo.currentText() == "白色背景"
@@ -376,26 +455,113 @@ class MarkdownInterface(QWidget):
         self.export_btn.setText("导出文件")
         
         if success:
+            path = message
+            
+            # 修正：InfoBar 添加 Widget 后布局可能需要调整，改用自定义方式或确保正确显示
+            # 使用更稳健的方式：直接显示成功信息，按钮稍微精简或使用 addWidget
+            # 注意：message 是路径
+            
             bar = InfoBar.success(
                 title="导出成功",
-                content=f"文件已保存",
+                content=f"文件已保存到: {os.path.basename(path)}",
                 duration=5000,
+                position=InfoBarPosition.TOP_RIGHT, # 明确位置
                 parent=self
             )
             
-            # 这里的 message 实际上是 output_path
-            path = message
             if path and os.path.exists(path):
-                # 打开文件
-                open_btn = PushButton("打开文件")
-                open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(path)))
-                bar.addWidget(open_btn)
+                # 强制转换为绝对路径，确保系统能正确打开文件
+                abs_path = os.path.abspath(path)
                 
-                # 打开文件夹
-                folder_btn = PushButton("打开文件夹")
-                folder_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(path))))
+                def open_file(file_path):
+                    """使用最可靠的方式打开文件（避免环境变量继承问题）"""
+                    def do_open():
+                        try:
+                            # 确保文件存在且可读
+                            if not os.path.exists(file_path):
+                                InfoBar.error("文件不存在", "导出的文件似乎已被删除或移动", parent=self)
+                                return
+                                
+                            if os.name == 'nt':
+                                # 使用 explorer.exe 打开文件，避免 Qt 环境变量被子进程继承
+                                # explorer.exe 是系统进程，不会继承当前进程的环境变量
+                                subprocess.Popen(['explorer', file_path], shell=False)
+                            else:
+                                QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
+                        except Exception as e:
+                            InfoBar.error("打开失败", str(e), parent=self)
+                    
+                    # 使用 QTimer 延迟执行，确保文件完全写入
+                    QTimer.singleShot(300, do_open)
+
+                def open_folder(folder_path):
+                    """打开所在目录"""
+                    try:
+                        if os.name == 'nt':
+                            # 使用 explorer.exe 打开目录
+                            subprocess.Popen(['explorer', folder_path], shell=False)
+                        else:
+                            QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+                    except Exception as e:
+                         InfoBar.error("打开目录失败", str(e), parent=self)
+
+                # 增加样式以确保按钮紧凑
+                open_btn = PushButton("打开")
+                open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                open_btn.clicked.connect(lambda: open_file(abs_path))
+                
+                folder_btn = PushButton("目录")
+                folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                folder_btn.clicked.connect(lambda: open_folder(os.path.dirname(abs_path)))
+                
+                bar.addWidget(open_btn)
                 bar.addWidget(folder_btn)
             
             bar.show()
         else:
             InfoBar.error("导出失败", message, parent=self)
+
+    def on_tool_status_changed(self, name):
+        """工具/插件状态变更时刷新能力"""
+        # 重新获取首选插件
+        self.docx_converter = self.plugin_manager.get_preferred_plugin("markdown_to_docx", self.config)
+        self.pdf_converter = self.plugin_manager.get_preferred_plugin("markdown_to_pdf", self.config)
+        
+        # 刷新 UI 状态提示
+        self.update_ui_state()
+
+    def update_ui_state(self):
+        """更新 UI 状态提示"""
+        idx = self.format_combo.currentIndex()
+        fmt = "docx" if idx == 1 else "pdf" if idx == 0 else None
+        
+        if fmt == "docx":
+            if self.docx_converter:
+                plugin_name = self.docx_converter.display_name
+                self.engine_status_label.setText(f"引擎: {plugin_name} (增强)")
+                self.export_btn.setEnabled(True)
+                self.export_btn.setToolTip(f"使用 {plugin_name} 导出 Word 文档")
+            else:
+                self.engine_status_label.setText("引擎: 不可用 (缺失插件)")
+                self.export_btn.setEnabled(False) # 禁用导出按钮
+                self.export_btn.setToolTip("需要安装 Pandoc 插件才能导出 Word 文档")
+                
+        elif fmt == "pdf":
+            # 检查插件及其 PDF 引擎状态
+            has_engine = False
+            if self.pdf_converter:
+                if hasattr(self.pdf_converter, 'has_pdf_engine'):
+                    has_engine = self.pdf_converter.has_pdf_engine
+                else:
+                    has_engine = True
+
+            if has_engine:
+                plugin_name = self.pdf_converter.display_name
+                self.engine_status_label.setText(f"引擎: {plugin_name} (增强)")
+                self.export_btn.setEnabled(True)
+                self.export_btn.setToolTip(f"使用 {plugin_name} 导出 PDF (支持复杂排版)")
+            else:
+                reason = "(缺少 PDF 引擎)" if self.pdf_converter else "(内置)"
+                self.engine_status_label.setText(f"引擎: 内置组件 {reason}")
+                self.export_btn.setEnabled(True)
+                self.export_btn.setToolTip("使用内置浏览器引擎导出 PDF (不支持复杂排版)")

@@ -4,6 +4,28 @@
 
 ---
 
+## [1.2.0] - 2026-01-06
+
+### 🐛 重大 Bug 修复
+- **修复 WPS Office 渲染异常问题**：解决程序"打开文件"功能导致 WPS 界面显示错乱的问题
+  - **问题根因**：Qt 应用设置的 DPI 缩放等环境变量会被子进程继承，导致 WPS Office 使用错误的渲染参数
+  - **解决方案**：改用 `explorer.exe` 作为中间层打开文件，实现进程环境隔离
+  - **影响范围**：修复了 5 个界面文件中的文件打开逻辑
+    - `ui/interfaces/settings_interface.py` - 设置界面"打开目录"按钮
+    - `ui/interfaces/pdf/pdf_merge_interface.py` - PDF 合并完成后的操作按钮
+    - `ui/interfaces/image/image_vector_interface.py` - PNG 转 SVG 完成后的操作按钮
+    - `ui/interfaces/image/image_convert_interface.py` - 图片格式转换完成后的操作按钮
+    - `ui/interfaces/text/markdown_interface.py` - Markdown 导出完成后的操作按钮
+  - **跨平台兼容**：保留非 Windows 系统的原有实现，确保 macOS/Linux 正常工作
+  - **用户体验改进**：使用 `QTimer.singleShot()` 延迟执行，避免阻塞主线程
+
+### 🛠️ 技术改进
+- **统一文件打开机制**：所有文件/文件夹打开操作统一使用安全的方式
+- **环境变量隔离**：防止 Qt 环境变量污染外部应用程序
+- **异步执行优化**：使用定时器替代阻塞调用，提升 UI 响应速度
+
+---
+
 ## [1.1.0] - 2026-01-06
 
 ### ✨ 新功能

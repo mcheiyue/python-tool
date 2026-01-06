@@ -1,13 +1,14 @@
 import os
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QGridLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QGridLayout, QCheckBox
 from PyQt6.QtGui import QFont
-from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton, 
+from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
                             TextEdit, LineEdit, InfoBar, FluentIcon as FIF,
                             ComboBox, SpinBox)
 
 from core.features.pdf.pdf_page_renderer import PDFPageRenderer
 from ui.widgets import DragDropListWidget
 from ui.threads import PDFRenderThread
+from core.external_tools.manager import ExternalToolManager
 
 class PDFRenderInterface(QWidget):
     """PDF 页面渲染界面"""
@@ -16,6 +17,9 @@ class PDFRenderInterface(QWidget):
         super().__init__(parent=parent)
         self.setObjectName("pdf_render_interface")
         self.renderer = PDFPageRenderer()
+        
+        # 监听工具状态变化
+        ExternalToolManager().signals.tool_status_changed.connect(self.on_tool_status_changed)
         
         # 检查 PyMuPDF 是否可用
         if not PDFPageRenderer.is_available():
@@ -32,6 +36,18 @@ class PDFRenderInterface(QWidget):
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)
+        
+        # 增强模式提示 (默认创建 Checkbox，根据状态启用/禁用)
+        self.gs_check = QCheckBox("使用增强渲染模式 (Ghostscript)", self)
+        self.gs_check.setToolTip("使用 Ghostscript 引擎，支持更精确的色彩还原和文字渲染")
+        self.vbox.addWidget(self.gs_check)
+        
+        self.gs_hint = BodyLabel("提示: 安装或启用 Ghostscript 插件可开启增强模式", self)
+        self.gs_hint.setTextColor("#999999", "#666666")
+        self.vbox.addWidget(self.gs_hint)
+        
+        # 初始化状态
+        self.update_gs_ui()
 
         # 内容区域：文件列表 + 日志
         self.content_layout = QHBoxLayout()
@@ -212,13 +228,16 @@ class PDFRenderInterface(QWidget):
         self.log_text.clear()
         
         # 创建并启动线程
+        use_gs = self.gs_check.isChecked() if self.gs_check else False
+
         self.thread = PDFRenderThread(
             self.renderer,
             self.files,
             out_dir,
             dpi,
             output_format,
-            page_range
+            page_range,
+            use_ghostscript=use_gs
         )
         self.thread.start()
 
@@ -231,3 +250,20 @@ class PDFRenderInterface(QWidget):
         self.start_btn.setEnabled(True)
         self.start_btn.setText("开始渲染")
         InfoBar.success("完成", f"成功渲染 {success} 个文件", duration=3000, parent=self)
+
+    def on_tool_status_changed(self, name):
+        """工具状态变更"""
+        if name == "ghostscript":
+            self.update_gs_ui()
+            
+    def update_gs_ui(self):
+        """更新 Ghostscript 相关 UI"""
+        is_available = self.renderer.is_gs_available()
+        self.gs_check.setEnabled(is_available)
+        if not is_available:
+            self.gs_check.setChecked(False)
+            self.gs_check.setText("使用增强渲染模式 (Ghostscript) - 未启用")
+            self.gs_hint.show()
+        else:
+            self.gs_check.setText("使用增强渲染模式 (Ghostscript)")
+            self.gs_hint.hide()

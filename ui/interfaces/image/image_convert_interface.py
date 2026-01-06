@@ -1,7 +1,8 @@
 import os
+import subprocess
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog
-from PyQt6.QtGui import QFont, QAction, QKeySequence, QDesktopServices
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QFont, QAction, QKeySequence
+from PyQt6.QtCore import Qt, QTimer
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slider, 
                             PushButton, PrimaryPushButton, TextEdit, InfoBar, 
                             FluentIcon as FIF)
@@ -210,7 +211,16 @@ class ImageConvertInterface(QWidget):
             if self.files:
                 first_dir = os.path.dirname(self.files[0])
                 open_folder_btn = PushButton("打开所在文件夹")
-                open_folder_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(first_dir)))
+                def open_folder():
+                    def do_open():
+                        if os.name == 'nt':
+                            subprocess.Popen(['explorer', first_dir], shell=False)
+                        else:
+                            from PyQt6.QtGui import QDesktopServices
+                            from PyQt6.QtCore import QUrl
+                            QDesktopServices.openUrl(QUrl.fromLocalFile(first_dir))
+                    QTimer.singleShot(300, do_open)
+                open_folder_btn.clicked.connect(open_folder)
                 bar.addWidget(open_folder_btn)
             
             bar.show()

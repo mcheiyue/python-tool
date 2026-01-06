@@ -104,3 +104,24 @@ class DragDropListWidget(QListWidget):
             path = url.toLocalFile()
             if os.path.isfile(path): files.append(path)
         if files: self.files_dropped.emit(files)
+
+    def add_files(self, files: list):
+        """添加文件列表"""
+        for path in files:
+            if os.path.exists(path):
+                # 检查是否已存在
+                items = self.findItems(os.path.basename(path), Qt.MatchFlag.MatchExactly)
+                if not items:
+                    self.addItem(os.path.basename(path))
+                    # 可以在 item data 中存储完整路径
+                    self.item(self.count()-1).setData(Qt.ItemDataRole.UserRole, path)
+
+    def get_files(self) -> list:
+        """获取当前列表中的所有文件路径"""
+        files = []
+        for i in range(self.count()):
+            item = self.item(i)
+            path = item.data(Qt.ItemDataRole.UserRole)
+            if path and os.path.exists(path):
+                files.append(path)
+        return files

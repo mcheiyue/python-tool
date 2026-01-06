@@ -1,7 +1,12 @@
 import importlib
 from typing import Dict, List, Optional
+from PyQt6.QtCore import QObject, pyqtSignal
 from config.loader import ConfigLoader
 from .base import ExternalTool
+
+class ToolSignals(QObject):
+    """工具状态信号"""
+    tool_status_changed = pyqtSignal(str) # tool_name
 
 # 工具注册表：名称 -> (模块路径, 类名)
 TOOL_REGISTRY = {
@@ -17,10 +22,12 @@ class ExternalToolManager:
     
     _instance = None
     _tools: Dict[str, ExternalTool] = {}
+    signals = None
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
+            cls._instance.signals = ToolSignals()
         return cls._instance
     
     def _load_tool(self, name: str) -> Optional[ExternalTool]:
@@ -68,6 +75,8 @@ class ExternalToolManager:
             # 如果工具已加载，更新其状态
             if name in self._tools:
                 self._tools[name].clear_cache()
+            
+            self.signals.tool_status_changed.emit(name)
 
     def enable_tool(self, name: str):
         """启用工具"""
@@ -81,6 +90,8 @@ class ExternalToolManager:
         # 如果工具已加载，更新其状态
         if name in self._tools:
             self._tools[name].clear_cache()
+            
+        self.signals.tool_status_changed.emit(name)
 
     def uninstall_tool(self, name: str) -> bool:
         """卸载工具（删除物理文件）"""

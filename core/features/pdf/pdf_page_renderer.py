@@ -4,8 +4,12 @@ PDF 页面渲染模块 - 使用 PyMuPDF 将 PDF 页面渲染为图片
 import os
 import traceback
 from typing import List, Optional, Tuple
+import subprocess
+import platform
 
 from PyQt6.QtCore import QObject, pyqtSignal
+
+from core.external_tools.manager import ExternalToolManager
 
 try:
     import fitz  # PyMuPDF
@@ -37,11 +41,16 @@ class PDFPageRenderer(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._is_running = False
+        self.gs_tool = ExternalToolManager().get_tool("ghostscript")
     
     @staticmethod
     def is_available() -> bool:
         """检查 PyMuPDF 是否可用"""
         return PYMUPDF_AVAILABLE
+
+    def is_gs_available(self) -> bool:
+        """检查 Ghostscript 是否可用"""
+        return self.gs_tool.check_installed() and not self.gs_tool.is_disabled
     
     def stop(self):
         """停止当前任务"""
@@ -87,7 +96,8 @@ class PDFPageRenderer(QObject):
         page_num: int,
         output_path: str,
         dpi: int = 300,
-        output_format: str = 'png'
+        output_format: str = 'png',
+        use_ghostscript: bool = False
     ) -> bool:
         """
         渲染单个页面为图片
@@ -98,10 +108,17 @@ class PDFPageRenderer(QObject):
             output_path: 输出文件路径
             dpi: 渲染分辨率
             output_format: 输出格式 (png/jpg/webp)
+            use_ghostscript: 是否使用 Ghostscript 引擎 (质量更好)
         
         Returns:
             bool: 是否成功
         """
+        # 如果请求使用 Ghostscript 且可用，则尝试使用 GS
+        if use_ghostscript and self.is_gs_available():
+            if self.render_with_ghostscript(pdf_path, page_num, output_path, dpi, output_format):
+                return True
+            self.log.emit("Ghostscript 渲染失败，回退到 PyMuPDF...")
+
         if not PYMUPDF_AVAILABLE:
             self.log.emit("错误: PyMuPDF 模块未安装")
             return False
@@ -139,6 +156,94 @@ class PDFPageRenderer(QObject):
         except Exception as e:
             self.log.emit(f"错误: 渲染页面失败 - {str(e)}")
             return False
+
+    def render_with_ghostscript(
+        self,
+        pdf_path: str,
+        page_num: int,
+        output_path: str,
+        dpi: int = 300,
+        output_format: str = 'png'
+    ) -> bool:
+        """
+        使用 Ghostscript 渲染单个页面
+        """
+        gs_path = self.gs_tool.get_path()
+        if not gs_path:
+            return False
+
+        # 准备设备参数
+        device_map = {
+            'png': 'png16m',
+            'jpg': 'jpeg',
+            'jpeg': 'jpeg',
+            'webp': 'png16m', # GS 原生不支持 webp，先转 png
+        }
+        
+        fmt = output_format.lower()
+        device = device_map.get(fmt, 'png16m')
+        
+        # 实际输出路径 (如果是 webp，先输出为 png)
+        real_output = output_path
+        if fmt == 'webp':
+            real_output = output_path + ".png"
+
+        # 构建命令
+        # -dFirstPage=N -dLastPage=N (GS 页码从 1 开始)
+        gs_page = page_num + 1
+        
+        cmd = [
+            gs_path,
+            "-dSAFER",
+            "-dBATCH",
+            "-dNOPAUSE",
+            f"-dFirstPage={gs_page}",
+            f"-dLastPage={gs_page}",
+            f"-sDEVICE={device}",
+            f"-r{dpi}",
+            f"-sOutputFile={real_output}",
+            pdf_path
+        ]
+        
+        try:
+            # Windows 下隐藏窗口
+            startupinfo = None
+            if platform.system() == 'Windows':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                startupinfo=startupinfo
+            )
+            stdout, stderr = process.communicate()
+            
+            if process.returncode != 0:
+                self.log.emit(f"Ghostscript 错误: {stderr.decode('utf-8', errors='ignore')}")
+                return False
+
+            # 如果目标是 webp，需要转换 (利用 Pillow)
+            if fmt == 'webp':
+                try:
+                    from PIL import Image
+                    img = Image.open(real_output)
+                    img.save(output_path, 'WEBP')
+                    img.close()
+                    os.remove(real_output)
+                except ImportError:
+                    self.log.emit("缺少 Pillow 库，无法转换为 WebP")
+                    return False
+                except Exception as e:
+                    self.log.emit(f"WebP 转换失败: {e}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            self.log.emit(f"Ghostscript 执行异常: {e}")
+            return False
     
     def render_all(
         self,
@@ -146,7 +251,8 @@ class PDFPageRenderer(QObject):
         output_dir: str,
         dpi: int = 300,
         output_format: str = 'png',
-        page_range: Optional[Tuple[int, int]] = None
+        page_range: Optional[Tuple[int, int]] = None,
+        use_ghostscript: bool = False
     ):
         """
         批量渲染多个 PDF 的所有页面
@@ -157,9 +263,11 @@ class PDFPageRenderer(QObject):
             dpi: 渲染分辨率
             output_format: 输出格式
             page_range: 页面范围 (start, end)，None 表示全部
+            use_ghostscript: 是否优先使用 Ghostscript
         """
-        if not PYMUPDF_AVAILABLE:
-            self.log.emit("错误: PyMuPDF 模块未安装，无法进行渲染")
+        # 只要有一个引擎可用就行
+        if not PYMUPDF_AVAILABLE and not (use_ghostscript and self.is_gs_available()):
+            self.log.emit("错误: 未找到可用的 PDF 渲染引擎 (PyMuPDF 或 Ghostscript)")
             self.finished.emit(0, len(pdf_files))
             return
         
@@ -223,21 +331,36 @@ class PDFPageRenderer(QObject):
                     zoom = dpi / 72.0
                     mat = fitz.Matrix(zoom, zoom)
                     
-                    # 渲染页面
-                    pix = page.get_pixmap(matrix=mat)
-                    
                     # 生成输出文件名
                     output_name = f"page_{page_num + 1:04d}.{output_format}"
                     output_path = os.path.join(file_out_dir, output_name)
+
+                    success = False
                     
-                    # 保存图片
-                    if output_format in ['jpg', 'jpeg']:
-                        pix.save(output_path, output='jpeg', jpg_quality=95)
-                    else:
-                        pix.save(output_path)
+                    # 1. 尝试 Ghostscript (如果启用)
+                    if use_ghostscript and self.is_gs_available():
+                        success = self.render_with_ghostscript(pdf_path, page_num, output_path, dpi, output_format)
                     
-                    rendered_count += 1
-                    self.log.emit(f"  渲染: 第 {page_num + 1} 页 -> {output_name}")
+                    # 2. 回退到 PyMuPDF
+                    if not success:
+                        if use_ghostscript: # 只有在尝试过 GS 后才提示
+                             pass # 静默回退，或者可以在日志里提一句
+                             
+                        # 渲染页面
+                        pix = page.get_pixmap(matrix=mat)
+                        
+                        # 保存图片
+                        if output_format in ['jpg', 'jpeg']:
+                            pix.save(output_path, output='jpeg', jpg_quality=95)
+                        elif output_format == 'webp':
+                             pix.save(output_path)
+                        else:
+                            pix.save(output_path)
+                        success = True
+
+                    if success:
+                        rendered_count += 1
+                        self.log.emit(f"  渲染: 第 {page_num + 1} 页 -> {output_name}")
                 
                 doc.close()
                 

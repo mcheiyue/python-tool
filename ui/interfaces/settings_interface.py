@@ -1,7 +1,8 @@
 import os
 import webbrowser
+import subprocess
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
-from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtCore import QSettings, Qt, QTimer
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget, 
                             ComboBox, Theme, setTheme, FluentIcon as FIF,
                             PushButton, ToolButton, CaptionLabel)
@@ -285,7 +286,15 @@ class SettingsInterface(QWidget):
                 pass
         
         if os.path.exists(libs_path):
-            os.startfile(libs_path)
+            # 使用 explorer.exe 打开文件夹，避免环境变量污染
+            def do_open():
+                if os.name == 'nt':
+                    subprocess.Popen(['explorer', libs_path], shell=False)
+                else:
+                    from PyQt6.QtGui import QDesktopServices
+                    from PyQt6.QtCore import QUrl
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(libs_path))
+            QTimer.singleShot(100, do_open)
 
     def on_changed(self, index):
         if index == 0:
