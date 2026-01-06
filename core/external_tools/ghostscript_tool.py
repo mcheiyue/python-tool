@@ -15,6 +15,7 @@ class GhostscriptTool(ExternalTool):
     name = "ghostscript"
     display_name = "Ghostscript"
     description = "用于 PDF 压缩和处理的解释器"
+    features = "提供 PDF 压缩功能"
     download_url = "https://ghostscript.com/releases/gsdnld.html"
     is_required = True  # PDF 压缩功能的核心依赖
     

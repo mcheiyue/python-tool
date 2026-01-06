@@ -12,6 +12,7 @@ class LibreOfficeTool(ExternalTool):
     name = "libreoffice"
     display_name = "LibreOffice"
     description = "开源办公套件，可作为 Microsoft Office 的免费替代品"
+    features = "支持 Word、Excel、PowerPoint 文档转换和处理"
     download_url = "https://www.libreoffice.org/download/download/"
     is_required = False  # Office 转换的可选依赖
     

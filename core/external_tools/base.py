@@ -15,6 +15,9 @@ class ExternalTool(ABC):
     # 功能描述
     description: str = ""
     
+    # 功能用途说明（用于界面提示）
+    features: str = ""
+    
     # 官方下载地址
     download_url: str = ""
     
@@ -76,6 +79,7 @@ class ExternalTool(ABC):
             "name": self.name,
             "display_name": self.display_name,
             "description": self.description,
+            "features": self.features,
             "installed": installed,
             "disabled": self.is_disabled,
             "version": self.get_version() if installed else None,

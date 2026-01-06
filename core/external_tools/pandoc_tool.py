@@ -14,6 +14,7 @@ class PandocTool(ExternalTool):
     name = "pandoc"
     display_name = "Pandoc"
     description = "专业文档转换工具，支持数学公式和高级排版"
+    features = "提供 Markdown 转 PDF 功能（支持数学公式）"
     download_url = "https://pandoc.org/installing.html"
     is_required = False  # Markdown 转 PDF 的可选依赖
     

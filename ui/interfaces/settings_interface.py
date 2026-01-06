@@ -133,7 +133,7 @@ class SettingsInterface(QWidget):
     def _create_tool_card(self, status):
         """Create a card widget for a tool"""
         card = CardWidget(self)
-        card.setFixedHeight(80)
+        card.setFixedHeight(100)  # 增加高度以容纳功能说明
         layout = QHBoxLayout(card)
         layout.setContentsMargins(20, 10, 20, 10)
         
@@ -175,6 +175,12 @@ class SettingsInterface(QWidget):
         status_label = CaptionLabel(status_text, self)
         status_label.setStyleSheet(f"color: {color};")
         info_layout.addWidget(status_label)
+        
+        # Features Label (功能说明)
+        if status.get("features"):
+            features_label = CaptionLabel(f"💡 {status['features']}", self)
+            features_label.setStyleSheet("color: #605E5C;")  # 使用中性灰色
+            info_layout.addWidget(features_label)
         
         layout.addLayout(info_layout)
         layout.addStretch(1)
