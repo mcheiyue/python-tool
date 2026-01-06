@@ -21,11 +21,27 @@
     - PyMuPDF 未安装时优雅降级提示
   - 依赖更新：添加 `PyMuPDF>=1.23.0` 到 requirements.txt
 
+- **LibreOffice 备用引擎支持**：为无 Microsoft Office 用户提供免费替代方案
+  - 新增文件：
+    - `core/external_tools/libreoffice_tool.py` - LibreOffice 检测工具
+    - `core/engines/office/libreoffice.py` - LibreOffice 转换引擎（CLI 模式）
+  - 功能特性：
+    - 跨平台支持（Windows/Linux/macOS）
+    - 自动检测 LibreOffice 安装位置
+    - 智能引擎选择（MS Office → LibreOffice → 提示安装）
+    - 支持 Word/Excel/PowerPoint 转 PDF
+    - 在设置界面显示 LibreOffice 状态
+  - 架构改进：
+    - 修改 `app/container.py` 实现引擎自动选择
+    - 更新外部工具管理器注册 LibreOffice
+    - 更新界面提示文本支持双引擎
+
 ### 🐛 Bug修复
 - **修复 ComboBox 数据绑定问题**：解决 QFluentWidgets 的 addItem 方法参数类型错误
 
 ### 📝 文档更新
-- 更新 README.md 添加 PDF 页面渲染功能说明
+- 更新 README.md 添加 LibreOffice 支持说明
+- 更新 CHANGELOG.md 记录 LibreOffice 集成
 - 创建详细的功能升级实施计划文档（`plans/feature_upgrade_plan.md`）
 
 ---

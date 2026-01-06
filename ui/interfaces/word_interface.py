@@ -19,7 +19,7 @@ class WordInterface(QWidget):
         self.vbox.setSpacing(20)
 
         self.title = SubtitleLabel("Word 转 PDF", self)
-        self.desc = BodyLabel("批量转换 Word 文件 (需安装 MS Word)", self)
+        self.desc = BodyLabel("批量转换 Word 文件 (支持 MS Word 或 LibreOffice)", self)
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)

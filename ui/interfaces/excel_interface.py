@@ -19,7 +19,7 @@ class ExcelInterface(QWidget):
         self.vbox.setSpacing(20)
 
         self.title = SubtitleLabel("Excel 转 PDF", self)
-        self.desc = BodyLabel("批量转换 Excel 文件 (需安装 MS Excel)", self)
+        self.desc = BodyLabel("批量转换 Excel 文件 (支持 MS Excel 或 LibreOffice)", self)
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)

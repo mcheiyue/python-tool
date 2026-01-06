@@ -19,7 +19,7 @@ class PPTInterface(QWidget):
         self.vbox.setSpacing(20)
 
         self.title = SubtitleLabel("PowerPoint 转 PDF", self)
-        self.desc = BodyLabel("批量转换 PPT 文件 (需安装 MS PowerPoint)", self)
+        self.desc = BodyLabel("批量转换 PPT 文件 (支持 MS PowerPoint 或 LibreOffice)", self)
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)

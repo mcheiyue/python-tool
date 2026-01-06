@@ -7,6 +7,7 @@ from .base import ExternalTool
 TOOL_REGISTRY = {
     "ghostscript": ("core.external_tools.ghostscript_tool", "GhostscriptTool"),
     "pandoc": ("core.external_tools.pandoc_tool", "PandocTool"),
+    "libreoffice": ("core.external_tools.libreoffice_tool", "LibreOfficeTool"),
     # 未来可扩展 Tesseract, Whisper 等
     # "tesseract": ("core.external_tools.tesseract_tool", "TesseractTool"),
 }

@@ -11,7 +11,7 @@
 ## ✨ 核心功能
 
 ### 📄 文档转换
-- **Office 转 PDF**: 批量转换 Word/Excel/PPT 为 PDF
+- **Office 转 PDF**: 批量转换 Word/Excel/PPT 为 PDF（支持 MS Office 或 LibreOffice）
 - **Doc 转 Docx**: 旧版 Word 文档格式升级
 - **Markdown 转 PDF**: 实时预览 + 高质量导出（支持数学公式）
 - **TXT 转 PDF**: 文本文件转 PDF，支持中文
@@ -39,10 +39,10 @@
 ## 🚀 快速开始
 
 ### 环境要求
-- **操作系统**: Windows 10/11
+- **操作系统**: Windows 10/11、Linux、macOS
 - **Python**: 3.8+
-- **Microsoft Office**: Word/Excel/PowerPoint 功能需要
-- **可选组件**: Ghostscript (PDF压缩), Pandoc (Markdown增强)
+- **Office 套件**: Microsoft Office 或 LibreOffice（Word/Excel/PowerPoint 转换功能需要）
+- **可选组件**: Ghostscript (PDF压缩), Pandoc (Markdown增强), PyMuPDF (PDF页面渲染)
 
 ### 安装步骤
 
@@ -94,12 +94,17 @@ python main.py
 
 ## 💡 最近更新
 
-### v1.1.0 (2026-01-06) - PDF 页面渲染功能
+### v1.1.0 (2026-01-06) - 功能增强版
 - ✨ 新增 PDF 页面渲染功能（PyMuPDF）
   - 支持 72-600 DPI 高质量渲染
   - 支持 PNG/JPG/WebP 输出格式
   - 支持页面范围选择
   - 支持矢量图形渲染
+- ✨ 新增 LibreOffice 备用引擎支持
+  - 无需 Microsoft Office 即可转换文档
+  - 跨平台支持（Windows/Linux/macOS）
+  - 智能引擎自动选择
+  - 完全免费开源
 
 ### v1.0.1 (2026-01-06) - 代码质量优化
 - ✅ 修复 Image 资源泄漏问题（内存优化 5-10%）
@@ -164,7 +169,10 @@ build/build_dev.bat
 
 ## ⚠️ 注意事项
 
-- Office 转换功能需要本地安装 Microsoft Office
+- Office 转换功能需要安装 **Microsoft Office 或 LibreOffice**（二选一）
+  - 优先使用 Microsoft Office（如已安装）
+  - 无 MS Office 时自动降级到 LibreOffice
+  - LibreOffice 下载：https://www.libreoffice.org/download/
 - PDF 压缩功能需要 Ghostscript 插件
 - PDF 页面渲染功能需要 PyMuPDF 库（`pip install PyMuPDF>=1.23.0`）
 - Markdown 高级功能（数学公式）需要 Pandoc 插件
