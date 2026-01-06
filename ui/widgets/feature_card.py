@@ -1,8 +1,7 @@
-from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve, QPoint
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QVBoxLayout, QLabel, QGraphicsDropShadowEffect
 from qfluentwidgets import CardWidget, isDarkTheme, qconfig
-from core.utils.resource_path import get_resource_path
 
 
 class FeatureCard(CardWidget):
@@ -150,51 +149,42 @@ class FeatureCard(CardWidget):
     
     def _init_animation(self):
         """初始化动画效果"""
-        # 位置动画（上浮效果）
-        self.pos_animation = QPropertyAnimation(self, b"pos", self)
-        self.pos_animation.setDuration(200)
-        self.pos_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        
-        # 记录初始位置
-        self._normal_pos = None
+        # 不再使用位置动画，避免与 FlowLayout 冲突
+        # 改用 margins 实现上浮效果
+        self._original_margins = self.layout().contentsMargins()
+        self._is_hovering = False
         
     def enterEvent(self, event):
-        """鼠标进入事件"""
+        """鼠标进入事件 - 只增强阴影效果，不改变位置"""
         super().enterEvent(event)
         
-        # 记录初始位置
-        if self._normal_pos is None:
-            self._normal_pos = self.pos()
+        if self._is_hovering:
+            return
         
-        # 上浮 4px
-        hover_pos = QPoint(self._normal_pos.x(), self._normal_pos.y() - 4)
+        self._is_hovering = True
         
-        self.pos_animation.stop()
-        self.pos_animation.setStartValue(self.pos())
-        self.pos_animation.setEndValue(hover_pos)
-        self.pos_animation.start()
-        
-        # 增强阴影效果
+        # 只增强阴影效果，不移动卡片位置
+        # 这样不会干扰 FlowLayout 的布局
         self.shadow.setBlurRadius(25)
         self.shadow.setColor(QColor(0, 0, 0, 100))
         self.shadow.setOffset(0, 4)
         
     def leaveEvent(self, event):
-        """鼠标离开事件"""
+        """鼠标离开事件 - 恢复阴影效果"""
         super().leaveEvent(event)
         
-        if self._normal_pos:
-            self.pos_animation.stop()
-            self.pos_animation.setStartValue(self.pos())
-            self.pos_animation.setEndValue(self._normal_pos)
-            self.pos_animation.start()
+        if not self._is_hovering:
+            return
+        
+        self._is_hovering = False
         
         # 恢复阴影效果
         self.shadow.setBlurRadius(15)
         self.shadow.setColor(QColor(0, 0, 0, 60))
         self.shadow.setOffset(0, 2)
-        
+    
     def mousePressEvent(self, event):
+
         """鼠标点击事件"""
         super().mousePressEvent(event)
         if event.button() == Qt.MouseButton.LeftButton:
