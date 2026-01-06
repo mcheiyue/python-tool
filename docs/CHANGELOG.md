@@ -6,6 +6,46 @@
 
 ## [1.2.0] - 2026-01-06
 
+### ✨ 新增功能
+
+#### 1. HTML ↔ Markdown 双向转换器
+- **核心引擎**：`core/features/text/markdown_converter.py`
+- **用户界面**：`ui/interfaces/text/markdown_html_interface.py`
+- **功能特性**：
+  - HTML 转 Markdown（基于 html2text，网页保存/博客迁移）
+  - Markdown 转 HTML（基于 Python-Markdown，生成网页）
+  - 支持表格、代码块、链接等复杂元素
+  - 可选 Pandoc 增强模式（更好的格式保留和高级特性）
+  - 实时预览和批量转换支持
+- **依赖更新**：添加 `html2text>=2020.1.16` 到 requirements.txt
+- **实现成本**：⭐ (简单) | **用户价值**：⭐⭐⭐⭐ (高)
+
+#### 2. DOCX ↔ Markdown 双向转换器
+- **核心引擎**：`core/features/office/word_converter.py`
+- **用户界面**：`ui/interfaces/office/word_markdown_interface.py`
+- **功能特性**：
+  - Word 文档转 Markdown（基于 Pandoc，企业文档迁移）
+  - Markdown 转 Word 文档（基于 Pandoc + 自定义样式优化）
+  - 支持标题、列表、表格、代码块等元素
+  - 自动处理首段缩进问题（中文排版优化）
+  - 统一字体样式（中文：微软雅黑，英文：Calibri）
+  - 使用内存流处理，避免文件锁定和损坏问题
+- **依赖要求**：需要 Pandoc 外部工具支持
+- **实现成本**：⭐⭐⭐ (较高) | **用户价值**：⭐⭐⭐ (中)
+
+#### 3. PDF 转图片增强（Ghostscript 支持）
+- **核心引擎**：`core/features/pdf/pdf_page_renderer.py` (增强)
+- **功能特性**：
+  - **基础引擎**：PyMuPDF（快速渲染，免费开源）
+  - **增强引擎**：Ghostscript（专业级质量，更精确的色彩还原）
+  - 支持 4 种 DPI 预设（72/150/300/600 DPI）
+  - 支持 PNG/JPG/WebP 多种输出格式
+  - 支持全部页面或指定范围渲染
+  - 批量处理多个 PDF 文件
+  - 实时进度显示和详细日志
+  - 智能引擎降级（GS 不可用时自动切换到 PyMuPDF）
+- **实现成本**：⭐⭐ (中等) | **用户价值**：⭐⭐⭐⭐⭐ (极高)
+
 ### 🐛 重大 Bug 修复
 - **修复 WPS Office 渲染异常问题**：解决程序"打开文件"功能导致 WPS 界面显示错乱的问题
   - **问题根因**：Qt 应用设置的 DPI 缩放等环境变量会被子进程继承，导致 WPS Office 使用错误的渲染参数
@@ -23,6 +63,18 @@
 - **统一文件打开机制**：所有文件/文件夹打开操作统一使用安全的方式
 - **环境变量隔离**：防止 Qt 环境变量污染外部应用程序
 - **异步执行优化**：使用定时器替代阻塞调用，提升 UI 响应速度
+
+### 📝 依赖更新
+- 新增：`html2text>=2020.1.16` - HTML 转 Markdown 核心库
+- 推荐：Pandoc 外部工具 - 增强 Markdown 转换能力
+
+### 🎯 功能优先级实施
+按照 `docs/ROADMAP.md` 规划的优先级顺序完成：
+- ✅ **立即实现（高 ROI）**：
+  - PDF 转图片（PyMuPDF 基础 + Ghostscript 增强）
+  - HTML ↔ Markdown（html2text 基础 + Pandoc 增强）
+- ✅ **计划实现（中期）**：
+  - DOCX ↔ Markdown（python-docx 基础 + Pandoc 增强）
 
 ---
 
