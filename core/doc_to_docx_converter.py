@@ -38,8 +38,9 @@ class DocToDocxConverter(QObject):
             self._app = comtypes.client.CreateObject("Word.Application", dynamic=True)
             try:
                 self._app.Visible = False
-            except:
-                pass
+            except Exception as e:
+                # 某些版本的 Word 可能不支持隐藏窗口
+                self.log.emit(f"提示: 无法隐藏 Word 窗口: {str(e)}")
             
             for idx, path in enumerate(file_paths):
                 if not self._is_running:
@@ -86,8 +87,9 @@ class DocToDocxConverter(QObject):
                         try:
                             # 0 = wdDoNotSaveChanges
                             doc.Close(0)
-                        except:
-                            pass
+                        except Exception as e:
+                            # 文档可能已经被关闭或损坏
+                            self.log.emit(f"提示: 关闭文档时出错: {str(e)}")
 
         except Exception as e:
             self.log.emit(f"🔥 严重错误: {str(e)}")
@@ -97,14 +99,16 @@ class DocToDocxConverter(QObject):
             if self._app:
                 try:
                     self._app.Quit()
-                except:
-                    pass
+                except Exception as e:
+                    # Word 退出失败，可能已经崩溃或被手动关闭
+                    self.log.emit(f"提示: Word 退出异常: {str(e)}")
                 self._app = None
             
             try:
                 comtypes.CoUninitialize()
-            except:
-                pass
+            except Exception as e:
+                # COM 反初始化失败，通常可以忽略
+                self.log.emit(f"提示: COM 反初始化异常: {str(e)}")
             
             self.finished.emit(success, fail)
             self._is_running = False

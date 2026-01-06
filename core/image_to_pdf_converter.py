@@ -37,20 +37,21 @@ class ImageToPdfConverter(QObject):
 
             for path in image_paths:
                 self.log.emit(f"处理图片: {os.path.basename(path)}")
-                img = Image.open(path)
-                
-                # 转换颜色模式，PDF 不支持 RGBA
-                if img.mode == 'RGBA':
-                    background = Image.new('RGB', img.size, (255, 255, 255))
-                    background.paste(img, mask=img.split()[3])
-                    img = background
-                elif img.mode != 'RGB':
-                    img = img.convert('RGB')
-                
-                if first_image is None:
-                    first_image = img
-                else:
-                    images.append(img)
+                with Image.open(path) as img:
+                    # 转换颜色模式，PDF 不支持 RGBA
+                    if img.mode == 'RGBA':
+                        background = Image.new('RGB', img.size, (255, 255, 255))
+                        background.paste(img, mask=img.split()[3])
+                        converted_img = background
+                    elif img.mode != 'RGB':
+                        converted_img = img.convert('RGB')
+                    else:
+                        converted_img = img.copy()
+                    
+                    if first_image is None:
+                        first_image = converted_img
+                    else:
+                        images.append(converted_img)
 
             if first_image:
                 # 确保输出目录存在
@@ -60,6 +61,11 @@ class ImageToPdfConverter(QObject):
 
                 self.log.emit("正在生成 PDF 文件...")
                 first_image.save(output_file, "PDF", resolution=100.0, save_all=True, append_images=images)
+                
+                # 关闭所有 Image 对象
+                first_image.close()
+                for img in images:
+                    img.close()
                 
                 self.log.emit(f"成功生成: {os.path.basename(output_file)}")
                 self.finished.emit(True, output_file)
@@ -78,20 +84,22 @@ class ImageToPdfConverter(QObject):
             for path in image_paths:
                 try:
                     self.log.emit(f"处理图片: {os.path.basename(path)}")
-                    img = Image.open(path)
-                    
-                    if img.mode == 'RGBA':
-                        background = Image.new('RGB', img.size, (255, 255, 255))
-                        background.paste(img, mask=img.split()[3])
-                        img = background
-                    elif img.mode != 'RGB':
-                        img = img.convert('RGB')
+                    with Image.open(path) as img:
+                        if img.mode == 'RGBA':
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            background.paste(img, mask=img.split()[3])
+                            converted_img = background
+                        elif img.mode != 'RGB':
+                            converted_img = img.convert('RGB')
+                        else:
+                            converted_img = img.copy()
 
-                    base_name = os.path.splitext(os.path.basename(path))[0]
-                    output_file = os.path.join(output_dir, f"{base_name}.pdf")
-                    
-                    img.save(output_file, "PDF", resolution=100.0)
-                    success_count += 1
+                        base_name = os.path.splitext(os.path.basename(path))[0]
+                        output_file = os.path.join(output_dir, f"{base_name}.pdf")
+                        
+                        converted_img.save(output_file, "PDF", resolution=100.0)
+                        converted_img.close()
+                        success_count += 1
                     
                 except Exception as e:
                     self.log.emit(f"转换 {os.path.basename(path)} 失败: {str(e)}")

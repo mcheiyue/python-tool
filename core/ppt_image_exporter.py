@@ -34,8 +34,9 @@ class PPTImageExporter(QObject):
                 try:
                     ppt_app.Visible = 1
                     ppt_app.WindowState = 2  # 最小化窗口，避免干扰用户
-                except:
-                    pass
+                except Exception as e:
+                    # 某些版本的 PowerPoint 可能不支持窗口状态设置
+                    self.log.emit(f"提示: 无法最小化 PowerPoint 窗口: {str(e)}")
             except Exception as e:
                 self.log.emit(f"无法启动 PowerPoint: {str(e)}")
                 self.finished.emit(0, 0)
@@ -109,8 +110,9 @@ class PPTImageExporter(QObject):
             if ppt_app:
                 try:
                     ppt_app.Quit()
-                except:
-                    pass
+                except Exception as e:
+                    # PowerPoint 退出失败，可能已经崩溃或被手动关闭
+                    self.log.emit(f"提示: PowerPoint 退出异常: {str(e)}")
             comtypes.CoUninitialize()
             self.finished.emit(success_count, fail_count)
             self._is_running = False

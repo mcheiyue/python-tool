@@ -45,10 +45,5 @@
         "merge": {
             "default_output_name": "merged.pdf"
         }
-    },
-    "ocr": {
-        "engine": "paddle",
-        "language": "ch",
-        "enable_gpu": false
     }
 }

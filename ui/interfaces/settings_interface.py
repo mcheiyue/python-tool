@@ -234,13 +234,25 @@ class SettingsInterface(QWidget):
         self.refresh_tools_ui()
 
     def _uninstall_tool(self, name):
-        # TODO: Add confirmation dialog?
+        from qfluentwidgets import MessageBox
+        
+        # 获取工具的显示名称
         manager = AppContainer().external_tool_manager
-        if manager.uninstall_tool(name):
-            self.refresh_tools_ui()
-        else:
-            # Show error?
-            pass
+        tool = manager.get_tool(name)
+        display_name = tool.display_name if tool else name
+        
+        # 显示确认对话框
+        title = "确认卸载"
+        content = f"确定要卸载便携版组件吗？\n\n这将删除 {display_name} 的便携版文件。"
+        
+        w = MessageBox(title, content, self)
+        if w.exec():
+            if manager.uninstall_tool(name):
+                self.refresh_tools_ui()
+            else:
+                # 卸载失败，显示错误提示
+                error_box = MessageBox("卸载失败", f"无法卸载 {display_name}，请检查文件权限。", self)
+                error_box.exec()
 
     def _refresh_single_tool(self, tool_name):
         """Refresh status for a single tool (reloads entire list for simplicity)"""

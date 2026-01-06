@@ -20,7 +20,8 @@ def get_app_root():
             current_dir = os.path.dirname(os.path.abspath(__file__))
             # core/utils/resource_path.py -> core/utils -> core -> root
             return os.path.dirname(os.path.dirname(current_dir))
-        except:
+        except Exception:
+            # __file__ 不可用时，使用当前工作目录作为后备方案
             return os.getcwd()
 
 def get_resource_path(relative_path):
