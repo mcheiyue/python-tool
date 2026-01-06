@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "git": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-server-git",
+        "--repository",
+        "."
+      ]
+    }
+  }
+}

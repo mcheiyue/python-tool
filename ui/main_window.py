@@ -111,6 +111,7 @@ class MainWindow(FluentWindow):
             "PDF 压缩": "压缩 PDF 文件大小",
             "PDF 拆分/提取": "拆分或提取 PDF 页面",
             "PDF 图片提取": "从 PDF 中提取所有图片",
+            "PDF 页面渲染": "将 PDF 页面渲染为高清图片",
             
             # 图片工具
             "图片取色": "提取图片中的主要颜色",
@@ -200,6 +201,11 @@ class MainWindow(FluentWindow):
         self.pdf_img_extract_interface = UILazyLoader("ui.interfaces.pdf_image_extract_interface", "PDFImageExtractInterface", self)
         self.stackedWidget.addWidget(self.pdf_img_extract_interface)
         self.interfaces["PDF 图片提取"] = self.pdf_img_extract_interface
+
+        # 2.5 PDF 页面渲染
+        self.pdf_render_interface = UILazyLoader("ui.interfaces.pdf_render_interface", "PDFRenderInterface", self)
+        self.stackedWidget.addWidget(self.pdf_render_interface)
+        self.interfaces["PDF 页面渲染"] = self.pdf_render_interface
         
         # 3. 图片工具组
         self.image_home = self.createCategoryInterface("图片工具箱", "image_home")
@@ -304,7 +310,7 @@ class MainWindow(FluentWindow):
         features = []
         category_mapping = {
             "office_home": ["PPT 转 PDF", "PPT 转图片", "Word 转 PDF", "Doc 转 Docx", "Excel 转 PDF"],
-            "pdf_home": ["PDF 合并", "PDF 压缩", "PDF 拆分/提取", "PDF 图片提取"],
+            "pdf_home": ["PDF 合并", "PDF 压缩", "PDF 拆分/提取", "PDF 图片提取", "PDF 页面渲染"],
             "image_home": ["图片取色", "PNG 转 SVG", "图片格式转换", "图片转 PDF"],
             "text_home": ["Markdown 转 PDF", "TXT 转 PDF", "代码提取"]
         }
@@ -320,6 +326,7 @@ class MainWindow(FluentWindow):
             "PDF 压缩": "compress.svg",
             "PDF 拆分/提取": "split.svg",
             "PDF 图片提取": "image.svg",
+            "PDF 页面渲染": "convert.svg",
             "图片取色": "color_picker.svg",
             "PNG 转 SVG": "vector.svg",
             "图片格式转换": "convert.svg",

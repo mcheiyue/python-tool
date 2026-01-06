@@ -24,7 +24,11 @@ if __name__ == "__main__":
     # 初始化应用容器
     container = AppContainer()
     
+    # 必须先创建 QApplication 实例
+    app = QApplication(sys.argv)
+    
     # 加载主题设置（使用 QSettings，与设置界面保持一致）
+    # 注意：setTheme 必须在 QApplication 创建之后调用，否则主题设置可能被系统主题变化覆盖
     settings = QSettings("AI_Office_Tool", "Config")
     theme_mode = settings.value("themeMode", "Auto")
     
@@ -34,8 +38,6 @@ if __name__ == "__main__":
         setTheme(Theme.DARK)
     else:
         setTheme(Theme.AUTO)
-    
-    app = QApplication(sys.argv)
     
     # 将容器注入主窗口
     w = MainWindow(container)

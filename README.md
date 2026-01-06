@@ -21,6 +21,7 @@
 - **PDF 拆分**: 按页面范围灵活拆分
 - **PDF 压缩**: Ghostscript 引擎压缩
 - **图片提取**: 批量提取 PDF 中的所有图片
+- **页面渲染**: 将 PDF 页面渲染为高清图片（支持矢量图形）
 
 ### 🖼️ 图像处理
 - **格式转换**: JPG/PNG/WEBP/BMP/ICO 互转
@@ -93,6 +94,13 @@ python main.py
 
 ## 💡 最近更新
 
+### v1.1.0 (2026-01-06) - PDF 页面渲染功能
+- ✨ 新增 PDF 页面渲染功能（PyMuPDF）
+  - 支持 72-600 DPI 高质量渲染
+  - 支持 PNG/JPG/WebP 输出格式
+  - 支持页面范围选择
+  - 支持矢量图形渲染
+
 ### v1.0.1 (2026-01-06) - 代码质量优化
 - ✅ 修复 Image 资源泄漏问题（内存优化 5-10%）
 - ✅ 新增工具卸载确认对话框
@@ -158,6 +166,7 @@ build/build_dev.bat
 
 - Office 转换功能需要本地安装 Microsoft Office
 - PDF 压缩功能需要 Ghostscript 插件
+- PDF 页面渲染功能需要 PyMuPDF 库（`pip install PyMuPDF>=1.23.0`）
 - Markdown 高级功能（数学公式）需要 Pandoc 插件
 - 推荐使用便携版插件部署方式
 

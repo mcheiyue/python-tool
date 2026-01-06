@@ -4,6 +4,32 @@
 
 ---
 
+## [1.1.0] - 2026-01-06
+
+### ✨ 新功能
+- **PDF 页面渲染功能**：集成 PyMuPDF，将 PDF 页面渲染为高清图片
+  - 新增文件：
+    - `core/pdf_page_renderer.py` - 核心渲染引擎
+    - `ui/interfaces/pdf_render_interface.py` - 用户界面
+    - `ui/threads.py` - PDFRenderThread 线程类
+  - 功能特性：
+    - 支持 4 种 DPI 预设（72/150/300/600）
+    - 支持 PNG/JPG/WebP 输出格式
+    - 支持全部页面或指定范围渲染
+    - 支持批量处理多个 PDF 文件
+    - 实时进度显示和详细日志
+    - PyMuPDF 未安装时优雅降级提示
+  - 依赖更新：添加 `PyMuPDF>=1.23.0` 到 requirements.txt
+
+### 🐛 Bug修复
+- **修复 ComboBox 数据绑定问题**：解决 QFluentWidgets 的 addItem 方法参数类型错误
+
+### 📝 文档更新
+- 更新 README.md 添加 PDF 页面渲染功能说明
+- 创建详细的功能升级实施计划文档（`plans/feature_upgrade_plan.md`）
+
+---
+
 ## [1.0.1] - 2026-01-06
 
 ### 🐛 Bug修复
