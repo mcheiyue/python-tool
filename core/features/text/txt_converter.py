@@ -1,7 +1,7 @@
 from fpdf import FPDF
 import os
 from PyQt6.QtCore import QObject, pyqtSignal
-from core.font_finder import FontFinder
+from core.features.text.font_finder import FontFinder
 
 class TxtConverter(QObject):
     finished = pyqtSignal(int, int) # success, fail

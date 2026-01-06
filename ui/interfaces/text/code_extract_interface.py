@@ -5,7 +5,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
                             PrimaryPushButton, TextEdit, LineEdit, InfoBar, 
                             FluentIcon as FIF)
 
-from core.code_extractor import CodeExtractor
+from core.features.text.code_extractor import CodeExtractor
 from ui.threads import CodeExtractThread
 
 class CodeExtractInterface(QWidget):

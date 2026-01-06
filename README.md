@@ -128,12 +128,13 @@ python-tool/
 ├── main.py              # 应用入口
 ├── app/                 # 依赖注入容器
 ├── core/                # 核心业务逻辑
+│   ├── features/        # 业务功能实现（按领域分组）
 │   ├── engines/         # 引擎抽象层（PDF/Office）
 │   ├── plugins/         # 插件系统
 │   ├── external_tools/  # 外部工具管理
 │   └── utils/           # 通用工具
 ├── ui/                  # 用户界面
-│   ├── interfaces/      # 功能页面
+│   ├── interfaces/      # 功能页面（按领域分组）
 │   └── widgets/         # 自定义组件
 ├── config/              # 配置管理
 ├── docs/                # 文档

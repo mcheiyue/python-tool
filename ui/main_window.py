@@ -153,27 +153,27 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.office_home, self.get_icon(get_resource_path("assets/icons/presentation.svg")), "Office 转换")
 
         # 1.1 PPT 转 PDF（添加到stackedWidget但不在导航栏显示）
-        self.ppt_interface = UILazyLoader("ui.interfaces.ppt_interface", "PPTInterface", self)
+        self.ppt_interface = UILazyLoader("ui.interfaces.office.ppt_interface", "PPTInterface", self)
         self.stackedWidget.addWidget(self.ppt_interface)
         self.interfaces["PPT 转 PDF"] = self.ppt_interface
 
         # 1.2 PPT 转图片
-        self.ppt_img_interface = UILazyLoader("ui.interfaces.ppt_image_interface", "PPTImageInterface", self)
+        self.ppt_img_interface = UILazyLoader("ui.interfaces.office.ppt_image_interface", "PPTImageInterface", self)
         self.stackedWidget.addWidget(self.ppt_img_interface)
         self.interfaces["PPT 转图片"] = self.ppt_img_interface
 
         # 1.3 Word 转 PDF
-        self.word_interface = UILazyLoader("ui.interfaces.word_interface", "WordInterface", self)
+        self.word_interface = UILazyLoader("ui.interfaces.office.word_interface", "WordInterface", self)
         self.stackedWidget.addWidget(self.word_interface)
         self.interfaces["Word 转 PDF"] = self.word_interface
 
         # 1.4 Doc 转 Docx
-        self.doc_to_docx_interface = UILazyLoader("ui.interfaces.doc_to_docx_interface", "DocToDocxInterface", self)
+        self.doc_to_docx_interface = UILazyLoader("ui.interfaces.office.doc_to_docx_interface", "DocToDocxInterface", self)
         self.stackedWidget.addWidget(self.doc_to_docx_interface)
         self.interfaces["Doc 转 Docx"] = self.doc_to_docx_interface
 
         # 1.5 Excel 转 PDF
-        self.excel_interface = UILazyLoader("ui.interfaces.excel_interface", "ExcelInterface", self)
+        self.excel_interface = UILazyLoader("ui.interfaces.office.excel_interface", "ExcelInterface", self)
         self.stackedWidget.addWidget(self.excel_interface)
         self.interfaces["Excel 转 PDF"] = self.excel_interface
 
@@ -183,27 +183,27 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.pdf_home, self.get_icon(get_resource_path("assets/icons/pdf.svg")), "PDF 处理")
 
         # 2.1 PDF 合并
-        self.pdf_merge_interface = UILazyLoader("ui.interfaces.pdf_merge_interface", "PDFMergeInterface", self)
+        self.pdf_merge_interface = UILazyLoader("ui.interfaces.pdf.pdf_merge_interface", "PDFMergeInterface", self)
         self.stackedWidget.addWidget(self.pdf_merge_interface)
         self.interfaces["PDF 合并"] = self.pdf_merge_interface
 
         # 2.2 PDF 压缩
-        self.compress_interface = UILazyLoader("ui.interfaces.pdf_compress_interface", "PDFCompressInterface", self, container=self.container)
+        self.compress_interface = UILazyLoader("ui.interfaces.pdf.pdf_compress_interface", "PDFCompressInterface", self, container=self.container)
         self.stackedWidget.addWidget(self.compress_interface)
         self.interfaces["PDF 压缩"] = self.compress_interface
 
         # 2.3 PDF 拆分/提取
-        self.pdf_split_interface = UILazyLoader("ui.interfaces.pdf_split_interface", "PDFSplitInterface", self)
+        self.pdf_split_interface = UILazyLoader("ui.interfaces.pdf.pdf_split_interface", "PDFSplitInterface", self)
         self.stackedWidget.addWidget(self.pdf_split_interface)
         self.interfaces["PDF 拆分/提取"] = self.pdf_split_interface
 
         # 2.4 PDF 图片提取
-        self.pdf_img_extract_interface = UILazyLoader("ui.interfaces.pdf_image_extract_interface", "PDFImageExtractInterface", self)
+        self.pdf_img_extract_interface = UILazyLoader("ui.interfaces.pdf.pdf_image_extract_interface", "PDFImageExtractInterface", self)
         self.stackedWidget.addWidget(self.pdf_img_extract_interface)
         self.interfaces["PDF 图片提取"] = self.pdf_img_extract_interface
 
         # 2.5 PDF 页面渲染
-        self.pdf_render_interface = UILazyLoader("ui.interfaces.pdf_render_interface", "PDFRenderInterface", self)
+        self.pdf_render_interface = UILazyLoader("ui.interfaces.pdf.pdf_render_interface", "PDFRenderInterface", self)
         self.stackedWidget.addWidget(self.pdf_render_interface)
         self.interfaces["PDF 页面渲染"] = self.pdf_render_interface
         
@@ -213,22 +213,22 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.image_home, self.get_icon(get_resource_path("assets/icons/image.svg")), "图片工具")
 
         # 3.1 图片取色
-        self.color_interface = UILazyLoader("ui.interfaces.color_interface", "ColorInterface", self)
+        self.color_interface = UILazyLoader("ui.interfaces.image.color_interface", "ColorInterface", self)
         self.stackedWidget.addWidget(self.color_interface)
         self.interfaces["图片取色"] = self.color_interface
 
         # 3.2 PNG 转 SVG
-        self.image_vector_interface = UILazyLoader("ui.interfaces.image_vector_interface", "ImageVectorInterface", self)
+        self.image_vector_interface = UILazyLoader("ui.interfaces.image.image_vector_interface", "ImageVectorInterface", self)
         self.stackedWidget.addWidget(self.image_vector_interface)
         self.interfaces["PNG 转 SVG"] = self.image_vector_interface
 
         # 3.3 图片格式转换
-        self.image_convert_interface = UILazyLoader("ui.interfaces.image_convert_interface", "ImageConvertInterface", self)
+        self.image_convert_interface = UILazyLoader("ui.interfaces.image.image_convert_interface", "ImageConvertInterface", self)
         self.stackedWidget.addWidget(self.image_convert_interface)
         self.interfaces["图片格式转换"] = self.image_convert_interface
 
         # 3.4 图片转 PDF
-        self.image_pdf_interface = UILazyLoader("ui.interfaces.image_pdf_interface", "ImagePdfInterface", self)
+        self.image_pdf_interface = UILazyLoader("ui.interfaces.image.image_pdf_interface", "ImagePdfInterface", self)
         self.stackedWidget.addWidget(self.image_pdf_interface)
         self.interfaces["图片转 PDF"] = self.image_pdf_interface
 
@@ -238,17 +238,17 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.text_home, self.get_icon(get_resource_path("assets/icons/text.svg")), "文本工具")
 
         # 4.1 Markdown 转 PDF
-        self.markdown_interface = UILazyLoader("ui.interfaces.markdown_interface", "MarkdownInterface", self, container=self.container)
+        self.markdown_interface = UILazyLoader("ui.interfaces.text.markdown_interface", "MarkdownInterface", self, container=self.container)
         self.stackedWidget.addWidget(self.markdown_interface)
         self.interfaces["Markdown 转 PDF"] = self.markdown_interface
 
         # 4.2 TXT 转 PDF
-        self.txt_pdf_interface = UILazyLoader("ui.interfaces.txt_pdf_interface", "TxtPdfInterface", self)
+        self.txt_pdf_interface = UILazyLoader("ui.interfaces.text.txt_pdf_interface", "TxtPdfInterface", self)
         self.stackedWidget.addWidget(self.txt_pdf_interface)
         self.interfaces["TXT 转 PDF"] = self.txt_pdf_interface
 
         # 4.3 代码提取
-        self.code_extract_interface = UILazyLoader("ui.interfaces.code_extract_interface", "CodeExtractInterface", self)
+        self.code_extract_interface = UILazyLoader("ui.interfaces.text.code_extract_interface", "CodeExtractInterface", self)
         self.stackedWidget.addWidget(self.code_extract_interface)
         self.interfaces["代码提取"] = self.code_extract_interface
 

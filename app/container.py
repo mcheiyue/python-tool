@@ -33,7 +33,7 @@ class AppContainer:
     @property
     def doc_to_docx_converter(self):
         if self._doc_to_docx_converter is None:
-            from core.doc_to_docx_converter import DocToDocxConverter
+            from core.features.office.doc_to_docx_converter import DocToDocxConverter
             self._doc_to_docx_converter = DocToDocxConverter()
         return self._doc_to_docx_converter
 

@@ -132,6 +132,9 @@ def save_icons(image, output_dir, prefix):
     print(f"Generated: {prefix} (PNGs + ICO)")
 
 if __name__ == "__main__":
-    input_file = r"D:\Github\python-tool\icon.png"
-    output_folder = r"D:\Github\python-tool\assets\processed_icons"
+    # 使用相对路径，从项目根目录引用
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    input_file = os.path.join(project_root, "assets", "icon.png")
+    output_folder = os.path.join(project_root, "assets", "processed_icons")
     process_image(input_file, output_folder)

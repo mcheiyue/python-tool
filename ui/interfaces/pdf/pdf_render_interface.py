@@ -5,7 +5,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushBut
                             TextEdit, LineEdit, InfoBar, FluentIcon as FIF,
                             ComboBox, SpinBox)
 
-from core.pdf_page_renderer import PDFPageRenderer
+from core.features.pdf.pdf_page_renderer import PDFPageRenderer
 from ui.widgets import DragDropListWidget
 from ui.threads import PDFRenderThread
 

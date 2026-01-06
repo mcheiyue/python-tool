@@ -12,7 +12,7 @@ Office Toolkit 采用**分层架构设计**，遵循**关注点分离原则**，
 ┌─────────────────────────────────────────┐
 │          UI Layer (用户界面层)            │
 │   ├─ main_window.py                     │
-│   ├─ interfaces/ (功能界面)              │
+│   ├─ interfaces/ (按领域分组的功能界面)    │
 │   └─ widgets/ (自定义组件)                │
 └─────────────────────────────────────────┘
                   ▼
@@ -25,7 +25,7 @@ Office Toolkit 采用**分层架构设计**，遵循**关注点分离原则**，
 │       Business Layer (业务逻辑层)         │
 │   ├─ core/engines/ (引擎抽象)            │
 │   ├─ core/plugins/ (插件系统)            │
-│   └─ core/*.py (业务逻辑)                │
+│   └─ core/features/ (功能领域模块)       │
 └─────────────────────────────────────────┘
                   ▼
 ┌─────────────────────────────────────────┐
@@ -155,9 +155,9 @@ class UILazyLoader:
 
 | 模块 | 职责 |
 |------|------|
+| `features/` | 按领域组织的业务逻辑 (pdf, image, office, text) |
 | `engines/` | 业务引擎抽象（PDF/Office/OCR） |
 | `plugins/` | 插件系统实现 |
-| `*.py` | 具体业务逻辑（转换器、合并器等） |
 
 ### Infrastructure Layer
 

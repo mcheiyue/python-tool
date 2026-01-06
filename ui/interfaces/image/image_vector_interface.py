@@ -6,7 +6,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slid
                             CheckBox, PushButton, PrimaryPushButton, TextEdit, InfoBar, 
                             FluentIcon as FIF)
 
-from core.image_vectorizer import ImageVectorizer
+from core.features.image.image_vectorizer import ImageVectorizer
 from ui.widgets import DragDropListWidget
 from ui.threads import ImageVectorThread
 

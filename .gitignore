@@ -64,6 +64,7 @@ config.json
 libs/
 plugins/
 temp_output/
+assets/processed_icons/
 
 # Build outputs
 release/

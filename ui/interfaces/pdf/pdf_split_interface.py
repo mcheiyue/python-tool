@@ -6,7 +6,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
                             PrimaryPushButton, TextEdit, LineEdit, InfoBar, 
                             FluentIcon as FIF)
 
-from core.pdf_splitter import PDFSplitter
+from core.features.pdf.pdf_splitter import PDFSplitter
 from ui.threads import PDFSplitThread
 
 class PDFSplitInterface(QWidget):
