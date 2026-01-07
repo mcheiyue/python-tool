@@ -167,8 +167,8 @@ build/build_dev.bat
 
 ### 反馈与交流
 如果您发现了 Bug 或有新功能建议，欢迎提交 Issue：
-- [提交 Bug 报告](https://github.com/mcheiyue/python-tool/issues/new?template=bug_report.md)
-- [提交功能建议](https://github.com/mcheiyue/python-tool/issues/new?template=feature_request.md)
+- [提交 Bug 报告](../../issues/new?template=bug_report.md)
+- [提交功能建议](../../issues/new?template=feature_request.md)
 
 ---
 
