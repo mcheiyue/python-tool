@@ -129,7 +129,8 @@ class MainWindow(FluentWindow):
             "代码提取": "从文件中提取代码块",
             
             # 实用工具
-            "批量重命名": "支持模板变量的批量文件重命名工具"
+            "批量重命名": "支持模板变量的批量文件重命名工具",
+            "剪贴板图片助手": "快速查看、保存剪贴板图片，或复制图片到剪贴板"
         }
 
     def initNavigation(self):
@@ -289,6 +290,11 @@ class MainWindow(FluentWindow):
         self.stackedWidget.addWidget(self.batch_rename_interface)
         self.interfaces["批量重命名"] = self.batch_rename_interface
 
+        # 5.2 剪贴板图片助手
+        self.clipboard_interface = UILazyLoader("ui.interfaces.utils.clipboard_interface", "ClipboardInterface", self)
+        self.stackedWidget.addWidget(self.clipboard_interface)
+        self.interfaces["剪贴板图片助手"] = self.clipboard_interface
+
         # 6. 设置界面 (底部)
         self.settings_interface = UILazyLoader("ui.interfaces.settings_interface", "SettingsInterface", self)
         self.addSubInterface(self.settings_interface, self.get_icon(get_resource_path("assets/icons/settings.svg")), "设置", position=NavigationItemPosition.BOTTOM)
@@ -350,7 +356,7 @@ class MainWindow(FluentWindow):
             "pdf_home": ["PDF 合并", "PDF 压缩", "PDF 拆分/提取", "PDF 图片提取", "PDF 页面渲染"],
             "image_home": ["图片取色", "PNG 转 SVG", "图片格式转换", "图片转 PDF"],
             "text_home": ["Markdown 转 PDF", "Markdown ↔ HTML", "Markdown 批量转 PDF", "TXT 转 PDF", "代码提取"],
-            "utils_home": ["批量重命名"]
+            "utils_home": ["批量重命名", "剪贴板图片助手"]
         }
         
         # 图标映射（与实际界面的图标保持一致）
@@ -376,7 +382,8 @@ class MainWindow(FluentWindow):
             "Markdown 批量转 PDF": "markdown.svg",
             "TXT 转 PDF": "text.svg",
             "代码提取": "code.svg",
-            "批量重命名": "magic.svg"
+            "批量重命名": "magic.svg",
+            "剪贴板图片助手": "image.svg"
         }
         
         feature_names = category_mapping.get(objectName, [])
