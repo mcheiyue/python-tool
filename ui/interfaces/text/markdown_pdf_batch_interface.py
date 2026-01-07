@@ -5,9 +5,9 @@ Markdown 批量转 PDF 界面
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QGridLayout, QCheckBox
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import QThread
-from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PrimaryPushButton, 
-                            PushButton, ProgressBar, TextEdit, InfoBar, 
+from PyQt6.QtCore import QThread, Qt
+from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PrimaryPushButton,
+                            PushButton, ProgressBar, TextEdit, InfoBar, InfoBarPosition,
                             LineEdit, ComboBox, IconWidget, FluentIcon as FIF)
 
 from core.features.text.markdown_pdf_pandoc import PandocMarkdownToPdf
@@ -163,6 +163,7 @@ class MarkdownPdfBatchInterface(QWidget):
         self.files = []
         self.converter = PandocMarkdownToPdf()
         self.thread = None
+        self._has_pdf_engine = False  # 标记是否存在可用的 PDF 引擎
         
         self.converter.log.connect(self.append_log)
         self.converter.progress.connect(self.update_progress)
@@ -172,7 +173,16 @@ class MarkdownPdfBatchInterface(QWidget):
         self.check_pandoc_status()
 
     def check_pandoc_status(self):
-        """检查 Pandoc 状态并更新 UI"""
+        """检查 Pandoc 状态和 PDF 引擎状态并更新 UI"""
+        # 1. 检查 PDF 引擎
+        self._detect_and_set_default_engine()
+
+        if not self._has_pdf_engine:
+            self._set_status_error("缺少 PDF 引擎 (xelatex/pdflatex/lualatex/wkhtmltopdf)", show_btn=False)
+            self.check_state()
+            return
+
+        # 2. 检查 Pandoc
         if not self.pandoc_tool:
             self._set_status_error("内部错误: 未找到组件管理器")
             return
@@ -248,7 +258,8 @@ class MarkdownPdfBatchInterface(QWidget):
         has_files = len(self.files) > 0
         has_pandoc = self.pandoc_tool and self.pandoc_tool.is_available()
         has_output = bool(self.out_edit.text())
-        self.start_btn.setEnabled(has_files and has_pandoc and has_output)
+        # 必须同时满足: 有文件 + Pandoc可用 + 输出路径 + 有PDF引擎
+        self.start_btn.setEnabled(has_files and has_pandoc and has_output and self._has_pdf_engine)
 
     def append_log(self, text):
         self.log_text.append(text)
@@ -318,7 +329,8 @@ class MarkdownPdfBatchInterface(QWidget):
         for engine, index in engines:
             if shutil.which(engine):
                 self.engine_combo.setCurrentIndex(index)
+                self._has_pdf_engine = True
                 return
-                
-        # 如果都没有，默认选 wkhtmltopdf (因为它最容易安装且体积小)，并提示
-        # 这里保持 xelatex 为默认(index 0)，因为它是功能最全的
+        
+        # 未找到任何引擎
+        self._has_pdf_engine = False

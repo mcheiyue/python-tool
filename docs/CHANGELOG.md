@@ -34,6 +34,7 @@
   - 支持数学公式渲染 (MathJax)
   - 支持代码语法高亮 (Tango 风格)
   - 自动检测并选择可用的 PDF 引擎 (XeLaTeX/PDFLaTeX/LuaLaTeX/wkhtmltopdf)
+  - **交互优化**: 缺少 PDF 引擎时状态栏红色提示并禁用按钮，避免运行时错误和用户困惑
   - 智能处理中文环境下的字体配置
 - **LibreOffice 格式转换集成**
   - 新增 `core/features/office/libreoffice_converter.py`
