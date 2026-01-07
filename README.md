@@ -87,7 +87,9 @@ python main.py
 
 ## 📖 文档
 
-- 📋 [完整更新日志](docs/CHANGELOG.md) - 所有版本更新记录
+- 📘 [用户使用手册](docs/USER_MANUAL.md) - 功能详细使用指南
+- 🔧 [API 参考文档](docs/API_REFERENCE.md) - 开发者接口文档
+-  [完整更新日志](docs/CHANGELOG.md) - 所有版本更新记录
 - 🏗️ [架构设计文档](docs/ARCHITECTURE.md) - 技术架构说明
 - 🔨 [构建部署指南](docs/BUILD_GUIDE.md) - Nuitka 编译打包
 - 🗺️ [开发路线图](docs/ROADMAP.md) - 未来功能规划
@@ -155,12 +157,17 @@ python-tool/
 # 安装开发依赖
 pip install -r requirements.txt
 
-# 运行测试
-python tests/test_imports.py
+# 运行测试 (使用 pytest)
+pytest
 
 # 快速编译（开发版）
 build/build_dev.bat
 ```
+
+### 反馈与交流
+如果您发现了 Bug 或有新功能建议，欢迎提交 Issue：
+- [提交 Bug 报告](https://github.com/your-username/python-tool/issues/new?template=bug_report.md)
+- [提交功能建议](https://github.com/your-username/python-tool/issues/new?template=feature_request.md)
 
 ---
 

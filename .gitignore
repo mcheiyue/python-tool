@@ -63,6 +63,7 @@ Thumbs.db
 config.json
 libs/
 plugins/
+logs/
 temp_output/
 assets/processed_icons/
 

@@ -72,3 +72,41 @@ xelatex not found. Please select a different --pdf-engine or install xelatex
 2026-01-07 15:50:55 | DEBUG    | OfficeToolkit | 使用缓存的插件路径: d:\Github\python-tool\libs\.temp\session_jp05p3s8\pandoc
 2026-01-07 15:50:55 | INFO     | OfficeToolkit | [DONE] 插件解压 - 0.00s
 2026-01-07 16:18:33 | INFO     | OfficeToolkit | PluginLoader 初始化完成
+2026-01-07 16:22:10 | INFO     | OfficeToolkit | PluginLoader 初始化完成
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | [START] PDF 加密
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 加密 PDF: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_pdf_encrypt0\test.pdf -> C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_pdf_encrypt0\encrypted.pdf
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 加密成功: encrypted.pdf
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | [DONE] PDF 加密 - 0.00s
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | [START] PDF 加密
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 加密 PDF: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_pdf_decrypt0\test.pdf -> C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_pdf_decrypt0\encrypted_for_decrypt.pdf
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 加密成功: encrypted_for_decrypt.pdf
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | [DONE] PDF 加密 - 0.00s
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | [START] PDF 解密
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 解密 PDF: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_pdf_decrypt0\encrypted_for_decrypt.pdf -> C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_pdf_decrypt0\decrypted.pdf
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 解密成功: decrypted.pdf
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | [DONE] PDF 解密 - 0.00s
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | [START] PDF 元数据写入
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 写入 PDF 元数据: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_read_write_metadata0\test.pdf -> C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_read_write_metadata0\metadata_test.pdf
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 元数据写入成功: metadata_test.pdf
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | [DONE] PDF 元数据写入 - 0.00s
+2026-01-07 16:36:00 | INFO     | OfficeToolkit | 读取 PDF 元数据: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-0\test_read_write_metadata0\metadata_test.pdf
+2026-01-07 16:36:00 | DEBUG    | OfficeToolkit | 元数据读取成功，包含 2 个字段
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | [START] PDF 加密
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 加密 PDF: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_pdf_encrypt0\test.pdf -> C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_pdf_encrypt0\encrypted.pdf
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 加密成功: encrypted.pdf
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | [DONE] PDF 加密 - 0.00s
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | [START] PDF 加密
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 加密 PDF: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_pdf_decrypt0\test.pdf -> C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_pdf_decrypt0\encrypted_for_decrypt.pdf
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 加密成功: encrypted_for_decrypt.pdf
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | [DONE] PDF 加密 - 0.00s
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | [START] PDF 解密
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 解密 PDF: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_pdf_decrypt0\encrypted_for_decrypt.pdf -> C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_pdf_decrypt0\decrypted.pdf
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 解密成功: decrypted.pdf
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | [DONE] PDF 解密 - 0.00s
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | [START] PDF 元数据写入
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 写入 PDF 元数据: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_read_write_metadata0\test.pdf -> C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_read_write_metadata0\metadata_test.pdf
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 元数据写入成功: metadata_test.pdf
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | [DONE] PDF 元数据写入 - 0.00s
+2026-01-07 16:39:49 | INFO     | OfficeToolkit | 读取 PDF 元数据: C:\Users\heiyue\AppData\Local\Temp\pytest-of-heiyue\pytest-1\test_read_write_metadata0\metadata_test.pdf
+2026-01-07 16:39:49 | DEBUG    | OfficeToolkit | 元数据读取成功，包含 6 个字段
+2026-01-07 16:42:27 | INFO     | OfficeToolkit | PluginLoader 初始化完成
