@@ -42,6 +42,18 @@
   - 支持格式: ODT↔DOCX, ODS↔XLSX, ODP↔PPTX, 及转 PDF
   - 自动处理 LibreOffice 路径检测和无头模式转换
 
+### 🚀 体验优化 (Phase 3)
+- **批量文件重命名引擎**
+  - 新增 `core/features/utils/batch_rename.py`
+  - 支持 7 种模板变量 (`{name}`, `{ext}`, `{index}`, `{date}` 等)
+  - 实时预览重命名结果，支持自动处理命名冲突
+  - 提供 5 个常用预设模板，支持文件/文件夹批量处理
+- **剪贴板图片快速助手**
+  - 新增 `core/features/image/clipboard_handler.py`
+  - 支持直接预览剪贴板中的图片
+  - 支持保存为 PNG/JPG/BMP 格式
+  - 支持一键复制本地图片文件到剪贴板
+
 ## [1.2.0] - 2026-01-06
 
 ### ✨ 新增功能
