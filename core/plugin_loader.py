@@ -10,11 +10,16 @@ import atexit
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
+from core.utils.logger import AppLogger, timed_operation
 
 # 必须与打包工具保持一致
 SECRET_KEY_SEED = b"PythonTool-Plugin-Secret-Key-2024"
 SECRET_KEY = hashlib.sha256(SECRET_KEY_SEED).digest()
 MAGIC_HEADER = b"MCY\x00"
+
+class SecurityError(Exception):
+    """插件安全相关异常"""
+    pass
 
 class PluginLoader:
     _instance = None
@@ -29,8 +34,10 @@ class PluginLoader:
 
     def _init(self):
         """初始化清理机制"""
+        self.logger = AppLogger()
         atexit.register(self.cleanup)
         self._clean_stale_temps()
+        self.logger.info("PluginLoader 初始化完成")
 
     def _clean_stale_temps(self):
         """清理上次未正常退出留下的临时目录"""
@@ -69,7 +76,28 @@ class PluginLoader:
         unpadder = padding.PKCS7(128).unpadder()
         data = unpadder.update(padded_data) + unpadder.finalize()
         return data
+    
+    def _safe_extract(self, tar, target_base):
+        """
+        安全解压 TAR 文件，防止路径穿越攻击
+        :param tar: tarfile.TarFile 对象
+        :param target_base: 目标解压目录
+        """
+        target_base_abs = os.path.abspath(target_base)
+        
+        for member in tar.getmembers():
+            # 计算成员的绝对路径
+            member_path = os.path.join(target_base, member.name)
+            member_path_abs = os.path.abspath(member_path)
+            
+            # 检查路径是否在目标目录内
+            if not member_path_abs.startswith(target_base_abs + os.sep) and member_path_abs != target_base_abs:
+                raise SecurityError(f"路径穿越攻击检测: {member.name}")
+        
+        # 所有路径验证通过，执行解压
+        tar.extractall(path=target_base)
 
+    @timed_operation("插件解压")
     def extract_plugin(self, mcy_path, persistent=False):
         """
         解压插件
@@ -78,16 +106,20 @@ class PluginLoader:
         :return: 解压后的目录路径
         """
         if not os.path.exists(mcy_path):
+            self.logger.error(f"插件文件不存在: {mcy_path}")
             raise FileNotFoundError(f"Plugin file not found: {mcy_path}")
 
         # 检查缓存
         if mcy_path in self._extracted_cache:
             path = self._extracted_cache[mcy_path]
             if os.path.exists(path):
+                self.logger.debug(f"使用缓存的插件路径: {path}")
                 return path
             else:
                 del self._extracted_cache[mcy_path]
 
+        self.logger.info(f"开始解压插件: {os.path.basename(mcy_path)}, 模式: {'持久' if persistent else '临时'}")
+        
         try:
             with open(mcy_path, "rb") as f:
                 # 校验 Header
@@ -128,11 +160,12 @@ class PluginLoader:
             if not os.path.exists(target_base):
                 os.makedirs(target_base, exist_ok=True)
 
-            # 4. 解包 TAR
+            # 4. 解包 TAR（安全检查：防止路径穿越攻击）
             import io
             tar_buffer = io.BytesIO(tar_data)
             with tarfile.open(fileobj=tar_buffer, mode="r") as tar:
-                tar.extractall(path=target_base)
+                # 安全检查：验证所有成员路径，防止路径穿越
+                self._safe_extract(tar, target_base)
                 
                 # 获取解压出的顶层目录名（通常是 ghostscript 或 pandoc）
                 members = tar.getnames()
@@ -143,10 +176,14 @@ class PluginLoader:
                 
                 # 存入缓存
                 self._extracted_cache[mcy_path] = final_path
+                self.logger.info(f"插件解压成功: {final_path}")
                 return final_path
 
+        except SecurityError as e:
+            self.logger.error(f"安全检查失败: {e}")
+            raise
         except Exception as e:
-            print(f"Failed to load plugin: {e}")
+            self.logger.error(f"插件加载失败: {e}")
             return None
 
 # 全局单例

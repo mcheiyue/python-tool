@@ -1,0 +1,22 @@
+2026-01-07 15:12:21 | INFO     | OfficeToolkit | PluginLoader 初始化完成
+2026-01-07 15:12:21 | INFO     | OfficeToolkit | [START] 插件解压
+2026-01-07 15:12:21 | INFO     | OfficeToolkit | 开始解压插件: pandoc.mcy, 模式: 临时
+2026-01-07 15:12:23 | INFO     | OfficeToolkit | 插件解压成功: d:\Github\python-tool\libs\.temp\session_5pvs6qnd\pandoc
+2026-01-07 15:12:23 | INFO     | OfficeToolkit | [DONE] 插件解压 - 1.69s
+2026-01-07 15:12:31 | INFO     | OfficeToolkit | [START] 插件解压
+2026-01-07 15:12:31 | DEBUG    | OfficeToolkit | 使用缓存的插件路径: d:\Github\python-tool\libs\.temp\session_5pvs6qnd\pandoc
+2026-01-07 15:12:31 | INFO     | OfficeToolkit | [DONE] 插件解压 - 0.00s
+2026-01-07 15:14:01 | INFO     | OfficeToolkit | [START] 插件解压
+2026-01-07 15:14:01 | INFO     | OfficeToolkit | 开始解压插件: pandoc.mcy, 模式: 临时
+2026-01-07 15:14:03 | INFO     | OfficeToolkit | 插件解压成功: d:\Github\python-tool\libs\.temp\session_pso95ba5\pandoc
+2026-01-07 15:14:03 | INFO     | OfficeToolkit | [DONE] 插件解压 - 1.77s
+2026-01-07 15:14:04 | INFO     | OfficeToolkit | [START] 插件解压
+2026-01-07 15:14:04 | INFO     | OfficeToolkit | 开始解压插件: ghostscript.mcy, 模式: 临时
+2026-01-07 15:14:05 | INFO     | OfficeToolkit | 插件解压成功: d:\Github\python-tool\libs\.temp\session_bnduih87\ghostscript
+2026-01-07 15:14:05 | INFO     | OfficeToolkit | [DONE] 插件解压 - 0.54s
+2026-01-07 15:14:07 | INFO     | OfficeToolkit | [START] 插件解压
+2026-01-07 15:14:07 | DEBUG    | OfficeToolkit | 使用缓存的插件路径: d:\Github\python-tool\libs\.temp\session_pso95ba5\pandoc
+2026-01-07 15:14:07 | INFO     | OfficeToolkit | [DONE] 插件解压 - 0.00s
+2026-01-07 15:14:10 | INFO     | OfficeToolkit | [START] 插件解压
+2026-01-07 15:14:10 | DEBUG    | OfficeToolkit | 使用缓存的插件路径: d:\Github\python-tool\libs\.temp\session_bnduih87\ghostscript
+2026-01-07 15:14:10 | INFO     | OfficeToolkit | [DONE] 插件解压 - 0.00s

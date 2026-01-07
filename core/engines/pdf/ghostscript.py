@@ -78,19 +78,28 @@ class GhostscriptCompressor(BasePdfCompressor):
                     path
                 ]
 
-                # 执行命令 (Windows 下隐藏控制台窗口)
+                # 执行命令 (Windows 下隐藏控制台窗口，添加超时控制)
                 startupinfo = None
                 if os.name == 'nt':
                     startupinfo = subprocess.STARTUPINFO()
                     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 
                 process = subprocess.Popen(
-                    cmd, 
-                    stdout=subprocess.PIPE, 
+                    cmd,
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     startupinfo=startupinfo
                 )
-                stdout, stderr = process.communicate()
+                
+                # 添加超时控制：每个 PDF 最多处理 60 秒
+                try:
+                    stdout, stderr = process.communicate(timeout=60)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate()  # 清理僵尸进程
+                    fail += 1
+                    self.log.emit(f"❌ 超时 {name}: 处理时间超过 60 秒")
+                    continue
                 
                 if process.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                     success += 1
