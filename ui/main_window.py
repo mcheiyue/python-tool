@@ -106,6 +106,7 @@ class MainWindow(FluentWindow):
             "Doc 转 Docx": "升级旧版 .doc 为 .docx 格式",
             "Excel 转 PDF": "将 Excel 表格转换为 PDF",
             "Word ↔ Markdown": "Word 文档与 Markdown 互转",
+            "LibreOffice 格式转换": "批量转换办公文档格式 (ODT↔DOCX, ODS↔XLSX)",
             
             # PDF 工具
             "PDF 合并": "将多个 PDF 文件合并为一个",
@@ -123,6 +124,7 @@ class MainWindow(FluentWindow):
             # 文本工具
             "Markdown 转 PDF": "将 Markdown 文档转为 PDF",
             "Markdown ↔ HTML": "Markdown 与 HTML 格式互转",
+            "Markdown 批量转 PDF": "批量转换 Markdown 文档为 PDF (支持数学公式)",
             "TXT 转 PDF": "将文本文件转换为 PDF",
             "代码提取": "从文件中提取代码块"
         }
@@ -183,6 +185,11 @@ class MainWindow(FluentWindow):
         self.word_markdown_interface = UILazyLoader("ui.interfaces.office.word_markdown_interface", "WordMarkdownInterface", self)
         self.stackedWidget.addWidget(self.word_markdown_interface)
         self.interfaces["Word ↔ Markdown"] = self.word_markdown_interface
+
+        # 1.7 LibreOffice 格式转换
+        self.libreoffice_batch_interface = UILazyLoader("ui.interfaces.office.libreoffice_batch_interface", "LibreOfficeBatchInterface", self)
+        self.stackedWidget.addWidget(self.libreoffice_batch_interface)
+        self.interfaces["LibreOffice 格式转换"] = self.libreoffice_batch_interface
 
         # 2. PDF 处理组
         self.pdf_home = self.createCategoryInterface("PDF 工具箱", "pdf_home")
@@ -264,6 +271,11 @@ class MainWindow(FluentWindow):
         self.stackedWidget.addWidget(self.markdown_html_interface)
         self.interfaces["Markdown ↔ HTML"] = self.markdown_html_interface
 
+        # 4.5 Markdown 批量转 PDF
+        self.markdown_pdf_batch_interface = UILazyLoader("ui.interfaces.text.markdown_pdf_batch_interface", "MarkdownPdfBatchInterface", self)
+        self.stackedWidget.addWidget(self.markdown_pdf_batch_interface)
+        self.interfaces["Markdown 批量转 PDF"] = self.markdown_pdf_batch_interface
+
         # 5. 设置界面 (底部)
         self.settings_interface = UILazyLoader("ui.interfaces.settings_interface", "SettingsInterface", self)
         self.addSubInterface(self.settings_interface, self.get_icon(get_resource_path("assets/icons/settings.svg")), "设置", position=NavigationItemPosition.BOTTOM)
@@ -321,10 +333,10 @@ class MainWindow(FluentWindow):
         # 收集该分类下的所有功能
         features = []
         category_mapping = {
-            "office_home": ["PPT 转 PDF", "PPT 转图片", "Word 转 PDF", "Doc 转 Docx", "Excel 转 PDF", "Word ↔ Markdown"],
+            "office_home": ["PPT 转 PDF", "PPT 转图片", "Word 转 PDF", "Doc 转 Docx", "Excel 转 PDF", "Word ↔ Markdown", "LibreOffice 格式转换"],
             "pdf_home": ["PDF 合并", "PDF 压缩", "PDF 拆分/提取", "PDF 图片提取", "PDF 页面渲染"],
             "image_home": ["图片取色", "PNG 转 SVG", "图片格式转换", "图片转 PDF"],
-            "text_home": ["Markdown 转 PDF", "Markdown ↔ HTML", "TXT 转 PDF", "代码提取"]
+            "text_home": ["Markdown 转 PDF", "Markdown ↔ HTML", "Markdown 批量转 PDF", "TXT 转 PDF", "代码提取"]
         }
         
         # 图标映射（与实际界面的图标保持一致）
@@ -335,6 +347,7 @@ class MainWindow(FluentWindow):
             "Doc 转 Docx": "word.svg",
             "Excel 转 PDF": "excel.svg",
             "Word ↔ Markdown": "markdown.svg",
+            "LibreOffice 格式转换": "convert.svg",
             "PDF 合并": "merge.svg",
             "PDF 压缩": "compress.svg",
             "PDF 拆分/提取": "split.svg",
@@ -346,6 +359,7 @@ class MainWindow(FluentWindow):
             "图片转 PDF": "pdf.svg",
             "Markdown 转 PDF": "markdown.svg",
             "Markdown ↔ HTML": "markdown.svg",
+            "Markdown 批量转 PDF": "markdown.svg",
             "TXT 转 PDF": "text.svg",
             "代码提取": "code.svg"
         }

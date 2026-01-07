@@ -28,6 +28,19 @@
   - 支持权限控制（禁止打印/复制）
   - 支持 PDF 解密
 
+### 🔌 插件深度集成 (Phase 2)
+- **Markdown 转 PDF 增强 (Pandoc)**
+  - 新增 `core/features/text/markdown_pdf_pandoc.py`
+  - 支持数学公式渲染 (MathJax)
+  - 支持代码语法高亮 (Tango 风格)
+  - 自动检测并选择可用的 PDF 引擎 (XeLaTeX/PDFLaTeX/LuaLaTeX/wkhtmltopdf)
+  - 智能处理中文环境下的字体配置
+- **LibreOffice 格式转换集成**
+  - 新增 `core/features/office/libreoffice_converter.py`
+  - 实现通用格式批量转换功能
+  - 支持格式: ODT↔DOCX, ODS↔XLSX, ODP↔PPTX, 及转 PDF
+  - 自动处理 LibreOffice 路径检测和无头模式转换
+
 ## [1.2.0] - 2026-01-06
 
 ### ✨ 新增功能
