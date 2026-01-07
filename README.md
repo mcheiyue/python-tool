@@ -28,6 +28,7 @@
 - **图片转 PDF**: 多图合并为 PDF
 - **PNG 转 SVG**: 位图矢量化
 - **取色工具**: 提取主色调配色方案
+- **去水印工具**: Gemini AI 生成图片去水印
 
 ### 🔧 实用工具
 - **批量重命名**: 支持多种模板变量，实时预览，批量处理文件/文件夹
@@ -166,8 +167,8 @@ build/build_dev.bat
 
 ### 反馈与交流
 如果您发现了 Bug 或有新功能建议，欢迎提交 Issue：
-- [提交 Bug 报告](https://github.com/your-username/python-tool/issues/new?template=bug_report.md)
-- [提交功能建议](https://github.com/your-username/python-tool/issues/new?template=feature_request.md)
+- [提交 Bug 报告](https://github.com/mcheiyue/python-tool/issues/new?template=bug_report.md)
+- [提交功能建议](https://github.com/mcheiyue/python-tool/issues/new?template=feature_request.md)
 
 ---
 

@@ -120,6 +120,7 @@ class MainWindow(FluentWindow):
             "PNG 转 SVG": "将 PNG 图片转为矢量 SVG",
             "图片格式转换": "在多种图片格式间转换",
             "图片转 PDF": "将图片转换为 PDF 文档",
+            "图片去水印": "移除 AI 生成图片的水印（当前支持 Gemini）",
             
             # 文本工具
             "Markdown 转 PDF": "将 Markdown 文档转为 PDF",
@@ -250,6 +251,11 @@ class MainWindow(FluentWindow):
         self.stackedWidget.addWidget(self.image_pdf_interface)
         self.interfaces["图片转 PDF"] = self.image_pdf_interface
 
+        # 3.5 图片去水印
+        self.watermark_remove_interface = UILazyLoader("ui.interfaces.image.watermark_remove_interface", "WatermarkRemoveInterface", self)
+        self.stackedWidget.addWidget(self.watermark_remove_interface)
+        self.interfaces["图片去水印"] = self.watermark_remove_interface
+
         # 4. 文本工具组
         self.text_home = self.createCategoryInterface("文本工具箱", "text_home")
         self.icon_mapping["text_home"] = get_resource_path("assets/icons/text.svg")
@@ -354,7 +360,7 @@ class MainWindow(FluentWindow):
         category_mapping = {
             "office_home": ["PPT 转 PDF", "PPT 转图片", "Word 转 PDF", "Doc 转 Docx", "Excel 转 PDF", "Word ↔ Markdown", "LibreOffice 格式转换"],
             "pdf_home": ["PDF 合并", "PDF 压缩", "PDF 拆分/提取", "PDF 图片提取", "PDF 页面渲染"],
-            "image_home": ["图片取色", "PNG 转 SVG", "图片格式转换", "图片转 PDF"],
+            "image_home": ["图片取色", "PNG 转 SVG", "图片格式转换", "图片转 PDF", "图片去水印"],
             "text_home": ["Markdown 转 PDF", "Markdown ↔ HTML", "Markdown 批量转 PDF", "TXT 转 PDF", "代码提取"],
             "utils_home": ["批量重命名", "剪贴板图片助手"]
         }
@@ -377,6 +383,7 @@ class MainWindow(FluentWindow):
             "PNG 转 SVG": "vector.svg",
             "图片格式转换": "convert.svg",
             "图片转 PDF": "pdf.svg",
+            "图片去水印": "eraser.svg",
             "Markdown 转 PDF": "markdown.svg",
             "Markdown ↔ HTML": "markdown.svg",
             "Markdown 批量转 PDF": "markdown.svg",

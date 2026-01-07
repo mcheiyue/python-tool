@@ -4,7 +4,17 @@
 
 ---
 
-## [1.4.0] - 2026-01-07
+## [1.5.0] - 2026-01-07
+
+### ✨ 新增功能
+- **Gemini AI 图片去水印工具**:
+  - 核心引擎：`core/features/image/gemini_watermark_remover.py`
+  - 用户界面：`ui/interfaces/image/watermark_remove_interface.py`
+  - 功能特性：
+    - 移除 Gemini AI 生成图片中的水印
+    - 支持拖拽上传，批量处理
+    - 实时预览处理效果，支持滚动查看
+    - 自适应不同尺寸的水印 (48x48 / 96x96)
 
 ### 🔄 持续改进 (Phase 4)
 - **质量保障体系**：
@@ -110,7 +120,7 @@
   - **基础引擎**：PyMuPDF（快速渲染，免费开源）
   - **增强引擎**：Ghostscript（专业级质量，更精确的色彩还原）
   - 支持 4 种 DPI 预设（72/150/300/600 DPI）
-  - 支持 PNG/JPG/WebP 多种输出格式
+  - 支持 PNG/JPG/WebP 输出格式
   - 支持全部页面或指定范围渲染
   - 批量处理多个 PDF 文件
   - 实时进度显示和详细日志

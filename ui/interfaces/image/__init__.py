@@ -1,1 +1,2 @@
 # Image interfaces package
+from .watermark_remove_interface import WatermarkRemoveInterface
