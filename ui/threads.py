@@ -94,9 +94,15 @@ class TxtPdfThread(QThread):
         self.converter = converter
         self.files = files
         self.output_dir = output_dir
+        self._is_cancelled = False
+
+    def cancel(self):
+        """取消任务"""
+        self._is_cancelled = True
 
     def run(self):
-        self.converter.convert(self.files, self.output_dir)
+        if not self._is_cancelled:
+            self.converter.convert(self.files, self.output_dir)
 
 class CodeExtractThread(QThread):
     def __init__(self, extractor, root_dir, extensions, output_path):
@@ -185,9 +191,15 @@ class PDFImageExtractThread(QThread):
         self.extractor = extractor
         self.files = files
         self.output_dir = output_dir
+        self._is_cancelled = False
+
+    def cancel(self):
+        """取消任务"""
+        self._is_cancelled = True
 
     def run(self):
-        self.extractor.extract(self.files, self.output_dir)
+        if not self._is_cancelled:
+            self.extractor.extract(self.files, self.output_dir)
 
 class ImageConvertThread(QThread):
     def __init__(self, converter, input_path, output_path, output_format, quality, rotate_angle=0, flip_mode=None):

@@ -17,12 +17,14 @@
   - 所有线程类现在支持 `cancel()` 方法
   - 实现优雅的任务中断，避免数据损坏
 
-- **5 个核心界面添加取消功能**
+- **7 个界面添加取消功能**
   - ✅ PDF 压缩界面 (`pdf_compress_interface.py`) - 支持取消长时间压缩任务
   - ✅ 图片格式转换界面 (`image_convert_interface.py`) - 支持取消批量转换，清空队列
   - ✅ PDF 页面渲染界面 (`pdf_render_interface.py`) - 支持取消渲染任务
   - ✅ PDF 合并界面 (`pdf_merge_interface.py`) - 支持取消合并操作
   - ✅ PDF 拆分界面 (`pdf_split_interface.py`) - 支持取消拆分任务
+  - ✅ TXT 转 PDF 界面 (`txt_pdf_interface.py`) - 支持取消批量文本转换
+  - ✅ PDF 图片提取界面 (`pdf_image_extract_interface.py`) - 支持取消图片提取任务
 
 - **用户体验改进**
   - 长时间任务可随时取消，无需等待完成或强制关闭

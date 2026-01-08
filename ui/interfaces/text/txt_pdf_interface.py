@@ -1,10 +1,10 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
-from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton, 
+from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
                             TextEdit, LineEdit, InfoBar, FluentIcon as FIF)
 
 from core.features.text.txt_converter import TxtConverter
-from ui.widgets import DragDropListWidget
+from ui.widgets import DragDropListWidget, CancellableProgressWidget
 from ui.threads import TxtPdfThread
 
 class TxtPdfInterface(QWidget):
@@ -34,6 +34,12 @@ class TxtPdfInterface(QWidget):
         self.content_layout.addWidget(self.log_text, 4)
         self.vbox.addLayout(self.content_layout)
 
+        # 进度条
+        self.progress = CancellableProgressWidget(self)
+        self.progress.cancel_clicked.connect(self.on_cancel_task)
+        self.progress.hide()
+        self.vbox.addWidget(self.progress)
+        
         # 底部
         self.bottom_layout = QHBoxLayout()
         self.out_label = BodyLabel("输出目录:", self)
@@ -93,6 +99,12 @@ class TxtPdfInterface(QWidget):
 
     def check_state(self):
         self.start_btn.setEnabled(bool(self.files) and bool(self.out_edit.text()))
+    
+    def on_cancel_task(self):
+        """处理取消任务请求"""
+        if self.thread and self.thread.isRunning():
+            self.log_text.append("用户请求取消任务...")
+            self.thread.cancel()
 
     def start_conversion(self):
         out_dir = self.out_edit.text()
@@ -100,13 +112,23 @@ class TxtPdfInterface(QWidget):
         
         self.start_btn.setEnabled(False)
         self.log_text.clear()
+        self.progress.start(len(self.files))
+        self.progress.show()
+        
         self.thread = TxtPdfThread(self.converter, self.files, out_dir)
         self.thread.start()
 
     def on_finished(self, success, fail):
         self.start_btn.setEnabled(True)
         self.start_btn.setText("开始转换")
-        if fail > 0:
-            InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+        
+        # 检查是否被取消
+        if self.progress.is_cancelled:
+            self.progress.set_complete(success=False)
+            InfoBar.warning("已取消", "转换任务已取消", duration=3000, parent=self)
         else:
-            InfoBar.success("完成", f"成功 {success}", duration=3000, parent=self)
+            self.progress.set_complete(success=(fail == 0))
+            if fail > 0:
+                InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+            else:
+                InfoBar.success("完成", f"成功 {success}", duration=3000, parent=self)
