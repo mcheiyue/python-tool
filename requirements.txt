@@ -16,3 +16,4 @@ cryptography>=41.0.0
 vtracer>=0.6.0
 pytest>=7.4.0
 pytest-qt>=4.2.0
+pypinyin>=0.51.0

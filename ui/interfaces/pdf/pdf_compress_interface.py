@@ -3,13 +3,15 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QApp
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import QSettings # Keep QSettings for backward compatibility if needed, but we prefer ConfigLoader
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton, 
-                            PrimaryPushButton, ProgressBar, TextEdit, InfoBar, 
+                            PrimaryPushButton, TextEdit, InfoBar,
                             LineEdit, ComboBox, IconWidget, FluentIcon as FIF)
 
 from core.engines.pdf.ghostscript import GhostscriptCompressor
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
+from ui.widgets.enhanced_progress import EnhancedProgressBar
 from ui.threads import CompressThread
+from ui.design_system import Margins, Spacing
 
 class PDFCompressInterface(QWidget):
     def __init__(self, parent=None, container=None):
@@ -18,8 +20,8 @@ class PDFCompressInterface(QWidget):
         self.setObjectName("pdf_compress_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
 
         self.title = SubtitleLabel("PDF 压缩工具", self)
         self.desc = BodyLabel("使用 Ghostscript 压缩 PDF 文件体积", self)
@@ -30,7 +32,7 @@ class PDFCompressInterface(QWidget):
         # 设置区域
         self.settings_card = CardWidget(self)
         self.settings_layout = QVBoxLayout(self.settings_card)
-        self.settings_layout.setContentsMargins(20, 20, 20, 20)
+        self.settings_layout.setContentsMargins(*Margins.CARD)
 
         # 获取工具
         self.gs_tool = AppContainer().external_tool_manager.get_tool("ghostscript")
@@ -93,8 +95,7 @@ class PDFCompressInterface(QWidget):
 
         # 底部
         self.bottom_layout = QHBoxLayout()
-        self.progress = ProgressBar(self)
-        self.progress.setRange(0, 100)
+        self.progress = EnhancedProgressBar(self)
         self.progress.hide()
         
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始压缩", self)
@@ -195,9 +196,7 @@ class PDFCompressInterface(QWidget):
         self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
 
     def update_progress(self, curr, total, msg):
-        self.progress.show()
-        self.progress.setMaximum(total)
-        self.progress.setValue(curr)
+        self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"处理中... ({curr}/{total})")
 
     def start_compression(self):
@@ -222,5 +221,6 @@ class PDFCompressInterface(QWidget):
     def on_finished(self, success, fail):
         self.start_btn.setEnabled(True)
         self.start_btn.setText("开始压缩")
+        self.progress.stop()
         self.progress.hide()
         InfoBar.success("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)

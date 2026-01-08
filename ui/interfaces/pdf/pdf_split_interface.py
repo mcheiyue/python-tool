@@ -2,12 +2,14 @@ import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QFileDialog
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
-from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton, 
-                            PrimaryPushButton, TextEdit, LineEdit, InfoBar, 
+from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
+                            PrimaryPushButton, TextEdit, LineEdit, InfoBar,
                             FluentIcon as FIF)
 
 from core.features.pdf.pdf_splitter import PDFSplitter
 from ui.threads import PDFSplitThread
+from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.design_system import Margins, Spacing
 
 class PDFSplitInterface(QWidget):
     def __init__(self, parent=None):
@@ -16,8 +18,8 @@ class PDFSplitInterface(QWidget):
         self.splitter = PDFSplitter()
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
 
         self.title = SubtitleLabel("PDF 拆分/提取", self)
         self.desc = BodyLabel("按范围拆分 PDF 或提取特定页面 (如: 1-5, 8, 10-end)", self)
@@ -28,8 +30,8 @@ class PDFSplitInterface(QWidget):
         # 输入区域
         self.card = CardWidget(self)
         self.card_layout = QGridLayout(self.card)
-        self.card_layout.setContentsMargins(20, 20, 20, 20)
-        self.card_layout.setSpacing(15)
+        self.card_layout.setContentsMargins(*Margins.CARD)
+        self.card_layout.setSpacing(Spacing.MD)
 
         self.file_label = BodyLabel("源文件:", self)
         self.file_edit = LineEdit(self)
@@ -65,6 +67,11 @@ class PDFSplitInterface(QWidget):
         self.log_text.setFont(QFont("Consolas", 10))
         self.vbox.addWidget(self.log_text)
 
+        # 进度条
+        self.progress = EnhancedProgressBar(self)
+        self.progress.hide()
+        self.vbox.addWidget(self.progress)
+
         # 按钮
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始拆分", self)
         self.start_btn.clicked.connect(self.start_split)
@@ -74,7 +81,7 @@ class PDFSplitInterface(QWidget):
         self.thread = None
         self.splitter.log.connect(self.log_text.append)
         self.splitter.finished.connect(self.on_finished)
-        self.splitter.progress.connect(self.update_btn) # 简单复用
+        self.splitter.progress.connect(self.update_progress)
 
     def browse_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择 PDF", "", "PDF (*.pdf)")
@@ -110,12 +117,15 @@ class PDFSplitInterface(QWidget):
         self.thread = PDFSplitThread(self.splitter, file_path, ranges, output_dir)
         self.thread.start()
 
-    def update_btn(self, curr, total, msg):
+    def update_progress(self, curr, total, msg):
+        self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"处理中... {curr}/{total}")
 
     def on_finished(self, success, msg):
         self.start_btn.setEnabled(True)
         self.start_btn.setText("开始拆分")
+        self.progress.stop()
+        self.progress.hide()
         if success:
             InfoBar.success("完成", msg, parent=self)
         else:

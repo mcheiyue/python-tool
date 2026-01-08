@@ -5,12 +5,14 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import QThread
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton, 
-                            PrimaryPushButton, ProgressBar, TextEdit, InfoBar, 
+                            PrimaryPushButton, TextEdit, InfoBar,
                             ComboBox, IconWidget, FluentIcon as FIF)
 
 from core.features.office.libreoffice_converter import LibreOfficeFormatConverter
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
+from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.design_system import Margins, Spacing
 
 
 class LibreOfficeConvertThread(QThread):
@@ -58,8 +60,8 @@ class LibreOfficeBatchInterface(QWidget):
         self.setObjectName("libreoffice_batch_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
         
         # 标题
         self.title = SubtitleLabel("LibreOffice 格式转换", self)
@@ -71,7 +73,7 @@ class LibreOfficeBatchInterface(QWidget):
         # 设置卡片
         self.settings_card = CardWidget(self)
         self.settings_layout = QVBoxLayout(self.settings_card)
-        self.settings_layout.setContentsMargins(20, 20, 20, 20)
+        self.settings_layout.setContentsMargins(*Margins.CARD)
         
         # 获取工具
         self.lo_tool = AppContainer().external_tool_manager.get_tool("libreoffice")
@@ -135,8 +137,7 @@ class LibreOfficeBatchInterface(QWidget):
         
         # 底部
         self.bottom_layout = QHBoxLayout()
-        self.progress = ProgressBar(self)
-        self.progress.setRange(0, 100)
+        self.progress = EnhancedProgressBar(self)
         self.progress.hide()
         
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始转换", self)
@@ -292,9 +293,7 @@ class LibreOfficeBatchInterface(QWidget):
     
     def update_progress(self, curr, total, msg):
         """更新进度"""
-        self.progress.show()
-        self.progress.setMaximum(total)
-        self.progress.setValue(curr)
+        self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"处理中... ({curr}/{total})")
     
     def start_conversion(self):
@@ -326,6 +325,7 @@ class LibreOfficeBatchInterface(QWidget):
         self.start_btn.setText("开始转换")
         self.add_btn.setEnabled(True)
         self.clear_btn.setEnabled(True)
+        self.progress.stop()
         self.progress.hide()
         
         if fail == 0:

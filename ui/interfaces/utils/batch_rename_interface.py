@@ -6,10 +6,12 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFileDialog,
 from PyQt6.QtGui import QFont, QColor
 from PyQt6.QtCore import Qt, QThread
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PrimaryPushButton,
-                            PushButton, ProgressBar, TextEdit, InfoBar, LineEdit,
+                            PushButton, TextEdit, InfoBar, LineEdit,
                             FluentIcon as FIF)
 
 from core.features.utils import BatchRenamer
+from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.design_system import Margins, Spacing
 
 
 class RenameThread(QThread):
@@ -44,8 +46,8 @@ class BatchRenameInterface(QWidget):
         self.setObjectName("batch_rename_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
         
         # 标题
         self.title = SubtitleLabel("批量文件重命名", self)
@@ -57,7 +59,7 @@ class BatchRenameInterface(QWidget):
         # 模板设置卡片
         self.template_card = CardWidget(self)
         self.template_layout = QVBoxLayout(self.template_card)
-        self.template_layout.setContentsMargins(20, 20, 20, 20)
+        self.template_layout.setContentsMargins(*Margins.CARD)
         
         # 模板输入行
         self.template_input_layout = QHBoxLayout()
@@ -94,9 +96,9 @@ class BatchRenameInterface(QWidget):
         self.index_layout.addStretch(1)
         
         self.template_layout.addLayout(self.template_input_layout)
-        self.template_layout.addSpacing(10)
+        self.template_layout.addSpacing(Spacing.MD)
         self.template_layout.addLayout(self.preset_layout)
-        self.template_layout.addSpacing(10)
+        self.template_layout.addSpacing(Spacing.MD)
         self.template_layout.addLayout(self.index_layout)
         
         self.vbox.addWidget(self.template_card)
@@ -140,8 +142,7 @@ class BatchRenameInterface(QWidget):
         # 底部
         self.bottom_layout = QHBoxLayout()
         
-        self.progress = ProgressBar(self)
-        self.progress.setRange(0, 100)
+        self.progress = EnhancedProgressBar(self)
         self.progress.hide()
         
         self.execute_btn = PrimaryPushButton(FIF.ACCEPT, "执行重命名", self)
@@ -149,7 +150,7 @@ class BatchRenameInterface(QWidget):
         self.execute_btn.setEnabled(False)
         
         self.bottom_layout.addWidget(self.progress)
-        self.bottom_layout.addSpacing(20)
+        self.bottom_layout.addSpacing(Spacing.LG)
         self.bottom_layout.addWidget(self.execute_btn)
         
         self.vbox.addLayout(self.bottom_layout)
@@ -341,9 +342,7 @@ class BatchRenameInterface(QWidget):
     
     def update_progress(self, curr, total, msg):
         """更新进度"""
-        self.progress.show()
-        self.progress.setMaximum(total)
-        self.progress.setValue(curr)
+        self.progress.update_progress(curr, total, msg)
         self.execute_btn.setText(f"重命名中... ({curr}/{total})")
     
     def on_rename_finished(self):
@@ -354,6 +353,7 @@ class BatchRenameInterface(QWidget):
         self.add_btn.setEnabled(True)
         self.add_folder_btn.setEnabled(True)
         self.clear_btn.setEnabled(True)
+        self.progress.stop()
         self.progress.hide()
         
         InfoBar.success("完成", "批量重命名已完成", duration=3000, parent=self)

@@ -2,12 +2,14 @@ import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QFont
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget, 
-                            PrimaryPushButton, PushButton, ProgressBar, TextEdit, 
+                            PrimaryPushButton, PushButton, TextEdit,
                             InfoBar, FluentIcon as FIF)
 
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
+from ui.widgets.enhanced_progress import EnhancedProgressBar
 from ui.threads import ConversionThread
+from ui.design_system import Margins, Spacing
 
 class PPTInterface(QWidget):
     def __init__(self, parent=None):
@@ -15,8 +17,8 @@ class PPTInterface(QWidget):
         self.setObjectName("ppt_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
 
         self.title = SubtitleLabel("PowerPoint 转 PDF", self)
         self.desc = BodyLabel("批量转换 PPT 文件 (支持 MS PowerPoint 或 LibreOffice)", self)
@@ -26,7 +28,7 @@ class PPTInterface(QWidget):
 
         self.card = CardWidget(self)
         self.card_layout = QHBoxLayout(self.card)
-        self.card_layout.setContentsMargins(20, 10, 20, 10)
+        self.card_layout.setContentsMargins(*Margins.CARD)
 
         self.icon = IconWidget(FIF.TILES)
         self.icon.setFixedSize(48, 48)
@@ -65,8 +67,7 @@ class PPTInterface(QWidget):
 
         self.bottom_layout = QHBoxLayout()
         
-        self.progress = ProgressBar(self)
-        self.progress.setRange(0, 100)
+        self.progress = EnhancedProgressBar(self)
         self.progress.hide()
         
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始转换", self)
@@ -118,9 +119,7 @@ class PPTInterface(QWidget):
         self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
 
     def update_progress(self, curr, total, name):
-        self.progress.show()
-        self.progress.setMaximum(total)
-        self.progress.setValue(curr)
+        self.progress.update_progress(curr, total, name)
         self.start_btn.setText(f"处理中... ({curr}/{total})")
 
     def start_conversion(self):
@@ -139,6 +138,7 @@ class PPTInterface(QWidget):
         self.clear_btn.setEnabled(True)
         self.list_widget.setEnabled(True)
         self.start_btn.setText("开始转换")
+        self.progress.stop()
         self.progress.hide()
         if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
         else: InfoBar.success("完成", f"成功 {success}", duration=3000, parent=self)

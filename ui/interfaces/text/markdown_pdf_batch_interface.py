@@ -7,12 +7,14 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QGri
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import QThread, Qt
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PrimaryPushButton,
-                            PushButton, ProgressBar, TextEdit, InfoBar, InfoBarPosition,
+                            PushButton, TextEdit, InfoBar, InfoBarPosition,
                             LineEdit, ComboBox, IconWidget, FluentIcon as FIF)
 
 from core.features.text.markdown_pdf_pandoc import PandocMarkdownToPdf
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
+from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.design_system import Margins, Spacing
 
 
 class MarkdownPdfBatchThread(QThread):
@@ -46,8 +48,8 @@ class MarkdownPdfBatchInterface(QWidget):
         self.setObjectName("markdown_pdf_batch_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
 
         # 标题
         self.title = SubtitleLabel("Markdown → PDF 批量转换", self)
@@ -62,7 +64,7 @@ class MarkdownPdfBatchInterface(QWidget):
         # 设置区域
         self.settings_card = CardWidget(self)
         self.settings_layout = QVBoxLayout(self.settings_card)
-        self.settings_layout.setContentsMargins(20, 20, 20, 20)
+        self.settings_layout.setContentsMargins(*Margins.CARD)
 
         # 状态指示行
         self.status_layout = QHBoxLayout()
@@ -143,8 +145,7 @@ class MarkdownPdfBatchInterface(QWidget):
         self.browse_btn = PushButton(FIF.FOLDER, "浏览", self)
         self.browse_btn.clicked.connect(self.browse_output)
         
-        self.progress = ProgressBar(self)
-        self.progress.setRange(0, 100)
+        self.progress = EnhancedProgressBar(self)
         self.progress.hide()
         
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始转换", self)
@@ -266,9 +267,7 @@ class MarkdownPdfBatchInterface(QWidget):
         self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
 
     def update_progress(self, curr, total, msg):
-        self.progress.show()
-        self.progress.setMaximum(total)
-        self.progress.setValue(curr)
+        self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"转换中... ({curr}/{total})")
 
     def start_conversion(self):
@@ -311,6 +310,7 @@ class MarkdownPdfBatchInterface(QWidget):
     def on_finished(self, success, fail):
         self.start_btn.setEnabled(True)
         self.start_btn.setText("开始转换")
+        self.progress.stop()
         self.progress.hide()
         InfoBar.success("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
 

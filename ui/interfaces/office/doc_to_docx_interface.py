@@ -2,12 +2,14 @@ import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QFont
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget, 
-                            PrimaryPushButton, PushButton, ProgressBar, TextEdit, 
+                            PrimaryPushButton, PushButton, TextEdit,
                             InfoBar, FluentIcon as FIF, CheckBox, LineEdit, MessageDialog)
 
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
+from ui.widgets.enhanced_progress import EnhancedProgressBar
 from ui.threads import DocToDocxThread
+from ui.design_system import Margins, Spacing
 
 class DocToDocxInterface(QWidget):
     def __init__(self, parent=None):
@@ -15,8 +17,8 @@ class DocToDocxInterface(QWidget):
         self.setObjectName("doc_to_docx_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
 
         self.title = SubtitleLabel("Doc 转 Docx", self)
         self.desc = BodyLabel("将旧版 Word 文档 (.doc) 转换为新版格式 (.docx)", self)
@@ -27,7 +29,7 @@ class DocToDocxInterface(QWidget):
         # 顶部工具栏
         self.card = CardWidget(self)
         self.card_layout = QHBoxLayout(self.card)
-        self.card_layout.setContentsMargins(20, 10, 20, 10)
+        self.card_layout.setContentsMargins(*Margins.CARD)
 
         self.icon = IconWidget(FIF.TILES)
         self.icon.setFixedSize(48, 48)
@@ -52,7 +54,7 @@ class DocToDocxInterface(QWidget):
         # 设置区域：输出目录
         self.settings_card = CardWidget(self)
         self.settings_layout = QHBoxLayout(self.settings_card)
-        self.settings_layout.setContentsMargins(20, 10, 20, 10)
+        self.settings_layout.setContentsMargins(*Margins.CARD)
 
         self.same_dir_cb = CheckBox("输出到同目录", self)
         self.same_dir_cb.setChecked(True)
@@ -75,8 +77,8 @@ class DocToDocxInterface(QWidget):
         # 内容区域
         self.content_card = CardWidget(self)
         self.content_layout = QHBoxLayout(self.content_card)
-        self.content_layout.setContentsMargins(20, 20, 20, 20)
-        self.content_layout.setSpacing(15)
+        self.content_layout.setContentsMargins(*Margins.CARD)
+        self.content_layout.setSpacing(Spacing.MD)
         
         self.list_widget = DragDropListWidget(self)
         self.list_widget.files_dropped.connect(self.on_files_dropped)
@@ -100,8 +102,7 @@ class DocToDocxInterface(QWidget):
         # 底部控制栏
         self.bottom_layout = QHBoxLayout()
         
-        self.progress = ProgressBar(self)
-        self.progress.setRange(0, 100)
+        self.progress = EnhancedProgressBar(self)
         self.progress.hide()
         
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始转换", self)
@@ -163,9 +164,7 @@ class DocToDocxInterface(QWidget):
         self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
 
     def update_progress(self, curr, total, name):
-        self.progress.show()
-        self.progress.setMaximum(total)
-        self.progress.setValue(curr)
+        self.progress.update_progress(curr, total, name)
         self.start_btn.setText(f"处理中... ({curr}/{total})")
 
     def start_conversion(self):
@@ -226,6 +225,7 @@ class DocToDocxInterface(QWidget):
         self.list_widget.setEnabled(True)
         self.settings_card.setEnabled(True)
         self.start_btn.setText("开始转换")
+        self.progress.stop()
         self.progress.hide()
         if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
         else: InfoBar.success("完成", f"成功 {success}", duration=3000, parent=self)

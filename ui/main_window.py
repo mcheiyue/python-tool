@@ -1,11 +1,14 @@
 from PyQt6.QtCore import Qt, QSize, QTimer, QRectF, QByteArray
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QIconEngine
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QIconEngine, QShortcut, QKeySequence
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QCompleter
 from PyQt6.QtCore import pyqtSignal
-from qfluentwidgets import (FluentWindow, NavigationItemPosition, SearchLineEdit, 
+from qfluentwidgets import (FluentWindow, NavigationItemPosition, SearchLineEdit,
                           isDarkTheme, TitleLabel, qconfig, NavigationAvatarWidget,
                           NavigationDisplayMode)
+
+from core.utils.fuzzy_search import FuzzySearchEngine
+from ui.widgets.search_popup import SearchResultPopup
 
 class NavigationSearchLineEdit(SearchLineEdit):
     """支持在导航栏中使用的搜索框"""
@@ -39,6 +42,10 @@ class MainWindow(FluentWindow):
         
         # 初始化功能描述数据
         self._init_feature_descriptions()
+        
+        # 初始化模糊搜索引擎
+        self.search_engine = FuzzySearchEngine(self.feature_descriptions)
+        self.search_popup = None
         
         # 监听主题变化
         qconfig.themeChanged.connect(self.updateNavigationIcons)
@@ -98,6 +105,34 @@ class MainWindow(FluentWindow):
     
     def _init_feature_descriptions(self):
         """初始化功能描述数据"""
+        # 功能名称 -> 图标文件名映射
+        self.icon_name_map = {
+            "PPT 转 PDF": "presentation.svg",
+            "PPT 转图片": "image.svg",
+            "Word 转 PDF": "word.svg",
+            "Doc 转 Docx": "word.svg",
+            "Excel 转 PDF": "excel.svg",
+            "Word ↔ Markdown": "markdown.svg",
+            "LibreOffice 格式转换": "convert.svg",
+            "PDF 合并": "merge.svg",
+            "PDF 压缩": "compress.svg",
+            "PDF 拆分/提取": "split.svg",
+            "PDF 图片提取": "image.svg",
+            "PDF 页面渲染": "convert.svg",
+            "图片取色": "color_picker.svg",
+            "PNG 转 SVG": "vector.svg",
+            "图片格式转换": "convert.svg",
+            "图片转 PDF": "pdf.svg",
+            "图片去水印": "eraser.svg",
+            "Markdown 转 PDF": "markdown.svg",
+            "Markdown ↔ HTML": "markdown.svg",
+            "Markdown 批量转 PDF": "markdown.svg",
+            "TXT 转 PDF": "text.svg",
+            "代码提取": "code.svg",
+            "批量重命名": "magic.svg",
+            "剪贴板图片助手": "image.svg"
+        }
+
         self.feature_descriptions = {
             # Office 工具
             "PPT 转 PDF": "将 PowerPoint 文件转换为 PDF 格式",
@@ -137,11 +172,15 @@ class MainWindow(FluentWindow):
     def initNavigation(self):
         # 添加搜索框到导航栏顶部
         self.search_box = NavigationSearchLineEdit()
-        self.search_box.setPlaceholderText("搜索功能")
+        self.search_box.setPlaceholderText("搜索功能 (Ctrl+K)")
         self.search_box.setFixedWidth(180) # 设置宽度以适应展开状态
         
-        # 初始化搜索补全
+        # 初始化搜索功能
         self.initSearch()
+        
+        # 初始化全局快捷键
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        self.search_shortcut.activated.connect(self.activate_search)
         
         # 将搜索框添加到导航栏
         # 注意：SearchLineEdit 默认会根据导航栏展开状态调整显示
@@ -320,38 +359,72 @@ class MainWindow(FluentWindow):
 
     def initSearch(self):
         """初始化搜索功能"""
-        # 获取所有功能名称
-        items = list(self.feature_descriptions.keys())
+        # 初始化搜索弹窗
+        self.search_popup = SearchResultPopup(self)
+        self.search_popup.itemClicked.connect(self.on_search_result_clicked)
         
-        # 设置补全器
-        completer = QCompleter(items, self.search_box)
-        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        completer.setMaxVisibleItems(10)
+        # 监听输入变化
+        self.search_box.textChanged.connect(self.on_search_text_changed)
+        self.search_box.returnPressed.connect(self.on_search_return_pressed)
         
-        # 连接搜索框
-        self.search_box.setCompleter(completer)
-        # 处理回车或选中
-        self.search_box.returnPressed.connect(self.on_search_complete)
-        completer.activated.connect(self.on_search_complete)
+    def activate_search(self):
+        """激活搜索框 (Ctrl+K)"""
+        if not self.navigationInterface.isExpanded:
+            self.navigationInterface.panel.expand()
+        
+        self.search_box.setFocus()
+        self.search_box.selectAll()
+
+    def on_search_text_changed(self, text):
+        """搜索文本变化处理"""
+        if not text:
+            self.search_popup.hide()
+            return
+            
+        # 执行模糊搜索
+        results = self.search_engine.search(text)
+        
+        if results:
+            # 准备图标
+            icons = {}
+            for res in results:
+                icon_file = self.icon_name_map.get(res.name, "magic.svg")
+                icons[res.name] = self.get_icon(get_resource_path(f"assets/icons/{icon_file}"))
+                
+            # 显示弹窗
+            # 计算位置：在搜索框下方
+            pos = self.search_box.mapToGlobal(self.search_box.rect().bottomLeft())
+            pos = self.mapFromGlobal(pos)
+            
+            self.search_popup.move(pos.x(), pos.y() + 5)
+            self.search_popup.show_results(results, icons, self.search_box.width())
+        else:
+            self.search_popup.hide()
+
+    def on_search_return_pressed(self):
+        """回车键处理"""
+        if self.search_popup.isVisible() and self.search_popup.count() > 0:
+            # 如果弹窗显示且有结果，选择第一项
+            item = self.search_popup.item(0)
+            feature_name = item.data(Qt.ItemDataRole.UserRole)
+            self.on_search_result_clicked(feature_name)
 
     def on_search_clicked(self):
         # 搜索框点击时不进行页面切换，仅保持焦点
         self.search_box.setFocus()
+        # 如果有文本，重新触发搜索以显示弹窗
+        if self.search_box.text():
+            self.on_search_text_changed(self.search_box.text())
 
-    def on_search_complete(self, text=None):
-        """搜索完成处理"""
-        if not text:
-            text = self.search_box.text()
-            
-        if text in self.feature_descriptions:
-            # 跳转到对应功能
-            feature_name = text
-            if feature_name in self.interfaces:
-                self.switchTo(self.interfaces[feature_name])
-                # 清空搜索框
-                self.search_box.clear()
-                # 自动收起侧边栏（使用 panel.collapse() 方法）
-                self.navigationInterface.panel.collapse()
+    def on_search_result_clicked(self, feature_name):
+        """搜索结果点击处理"""
+        if feature_name in self.interfaces:
+            self.switchTo(self.interfaces[feature_name])
+            # 清空搜索框并隐藏弹窗
+            self.search_box.clear()
+            self.search_popup.hide()
+            # 自动收起侧边栏（使用 panel.collapse() 方法）
+            self.navigationInterface.panel.collapse()
 
     def createCategoryInterface(self, text, objectName):
         """创建分类界面的辅助函数（返回卡片首页）"""
@@ -365,37 +438,10 @@ class MainWindow(FluentWindow):
             "utils_home": ["批量重命名", "剪贴板图片助手"]
         }
         
-        # 图标映射（与实际界面的图标保持一致）
-        icon_mapping_dict = {
-            "PPT 转 PDF": "presentation.svg",
-            "PPT 转图片": "image.svg",
-            "Word 转 PDF": "word.svg",
-            "Doc 转 Docx": "word.svg",
-            "Excel 转 PDF": "excel.svg",
-            "Word ↔ Markdown": "markdown.svg",
-            "LibreOffice 格式转换": "convert.svg",
-            "PDF 合并": "merge.svg",
-            "PDF 压缩": "compress.svg",
-            "PDF 拆分/提取": "split.svg",
-            "PDF 图片提取": "image.svg",
-            "PDF 页面渲染": "convert.svg",
-            "图片取色": "color_picker.svg",
-            "PNG 转 SVG": "vector.svg",
-            "图片格式转换": "convert.svg",
-            "图片转 PDF": "pdf.svg",
-            "图片去水印": "eraser.svg",
-            "Markdown 转 PDF": "markdown.svg",
-            "Markdown ↔ HTML": "markdown.svg",
-            "Markdown 批量转 PDF": "markdown.svg",
-            "TXT 转 PDF": "text.svg",
-            "代码提取": "code.svg",
-            "批量重命名": "magic.svg",
-            "剪贴板图片助手": "image.svg"
-        }
-        
+        # 图标映射（已移至 self.icon_name_map）
         feature_names = category_mapping.get(objectName, [])
         for name in feature_names:
-            icon_file = icon_mapping_dict.get(name, "magic.svg")
+            icon_file = self.icon_name_map.get(name, "magic.svg")
             features.append({
                 "name": name,
                 "icon": get_resource_path(f"assets/icons/{icon_file}"),

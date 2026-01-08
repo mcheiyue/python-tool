@@ -9,6 +9,8 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slid
 
 from core.features.image.image_converter import ImageConverter
 from ui.widgets import DragDropListWidget
+from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.design_system import Margins, Spacing
 
 class ConvertTaskSignals(QObject):
     """任务信号类"""
@@ -50,8 +52,8 @@ class ImageConvertInterface(QWidget):
         self.converter = ImageConverter()
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
 
         self.title = SubtitleLabel("图片格式转换", self)
         self.desc = BodyLabel("支持 JPG, PNG, WEBP, BMP, ICO 格式互转及旋转/翻转", self)
@@ -62,8 +64,8 @@ class ImageConvertInterface(QWidget):
         # 设置区域
         self.settings_card = CardWidget(self)
         self.settings_layout = QGridLayout(self.settings_card)
-        self.settings_layout.setContentsMargins(20, 20, 20, 20)
-        self.settings_layout.setSpacing(15)
+        self.settings_layout.setContentsMargins(*Margins.CARD)
+        self.settings_layout.setSpacing(Spacing.MD)
 
         # 输出格式选择
         self.format_label = BodyLabel("输出格式:", self)
@@ -104,6 +106,11 @@ class ImageConvertInterface(QWidget):
         self.settings_layout.addWidget(self.flip_combo, 1, 3)
 
         self.vbox.addWidget(self.settings_card)
+        
+        # 进度条
+        self.progress = EnhancedProgressBar(self)
+        self.progress.hide()
+        self.vbox.addWidget(self.progress)
 
         # 文件列表
         self.content_layout = QHBoxLayout()
@@ -232,6 +239,8 @@ class ImageConvertInterface(QWidget):
         self.success_count = 0
         self.error_count = 0
         
+        self.progress.start(self.total)
+        
         for input_path in files:
             # 构建输出路径
             dir_name = os.path.dirname(input_path)
@@ -253,6 +262,7 @@ class ImageConvertInterface(QWidget):
 
     def on_task_finished(self, input_path, success, message):
         self.finished_count += 1
+        self.progress.update_progress(self.finished_count, self.total, f"正在转换: {os.path.basename(input_path)}")
         if success:
             self.success_count += 1
             self.log_text.append(f"✅ {os.path.basename(input_path)}")
@@ -264,12 +274,14 @@ class ImageConvertInterface(QWidget):
 
     def on_task_error(self, input_path, error_message):
         self.finished_count += 1
+        self.progress.update_progress(self.finished_count, self.total, f"出错: {os.path.basename(input_path)}")
         self.error_count += 1
         self.log_text.append(f"❌ {os.path.basename(input_path)}: {error_message}")
         self._check_all_done()
 
     def _check_all_done(self):
         if self.finished_count >= self.total:
+            self.progress.stop()
             self.start_btn.setEnabled(True)
             self.log_text.append(f"\n任务完成: 成功 {self.success_count}, 失败 {self.error_count}")
             

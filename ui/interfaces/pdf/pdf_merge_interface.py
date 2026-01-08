@@ -9,7 +9,9 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushBut
 
 from core.features.pdf.pdf_merger import PDFMerger
 from ui.widgets import DragDropListWidget
+from ui.widgets.enhanced_progress import EnhancedProgressBar
 from ui.threads import MergeThread
+from ui.design_system import Margins, Spacing
 
 class PDFMergeInterface(QWidget):
     def __init__(self, parent=None):
@@ -17,8 +19,8 @@ class PDFMergeInterface(QWidget):
         self.setObjectName("pdf_merge_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
 
         # 标题区域
         self.title = SubtitleLabel("PDF 合并工具", self)
@@ -55,9 +57,9 @@ class PDFMergeInterface(QWidget):
         self.remove_btn.clicked.connect(self.remove_selected)
 
         self.toolbar_layout.addWidget(self.up_btn)
-        self.toolbar_layout.addSpacing(5)
+        self.toolbar_layout.addSpacing(Spacing.XS)
         self.toolbar_layout.addWidget(self.down_btn)
-        self.toolbar_layout.addSpacing(15)
+        self.toolbar_layout.addSpacing(Spacing.MD)
         self.toolbar_layout.addWidget(self.remove_btn)
 
         self.vbox.addLayout(self.toolbar_layout)
@@ -65,8 +67,8 @@ class PDFMergeInterface(QWidget):
         # 主要内容区域 (列表 + 日志) - 使用卡片容器
         self.content_card = CardWidget(self)
         self.content_layout = QHBoxLayout(self.content_card)
-        self.content_layout.setContentsMargins(20, 20, 20, 20)
-        self.content_layout.setSpacing(15)
+        self.content_layout.setContentsMargins(*Margins.CARD)
+        self.content_layout.setSpacing(Spacing.MD)
         
         self.list_widget = DragDropListWidget(self, "拖拽 PDF 文件到此处，\n支持拖拽调整顺序")
         self.list_widget.files_dropped.connect(self.on_files_dropped)
@@ -104,14 +106,13 @@ class PDFMergeInterface(QWidget):
         self.bottom_layout.addWidget(self.out_label)
         self.bottom_layout.addWidget(self.out_edit)
         self.bottom_layout.addWidget(self.browse_btn)
-        self.bottom_layout.addSpacing(20)
+        self.bottom_layout.addSpacing(Spacing.LG)
         self.bottom_layout.addWidget(self.start_btn)
         
         self.vbox.addLayout(self.bottom_layout)
         
         # 进度条
-        self.progress = ProgressBar(self)
-        self.progress.setRange(0, 100)
+        self.progress = EnhancedProgressBar(self)
         self.progress.hide()
         self.vbox.addWidget(self.progress)
         
@@ -226,9 +227,7 @@ class PDFMergeInterface(QWidget):
         self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
 
     def update_progress(self, curr, total, msg):
-        self.progress.show()
-        self.progress.setMaximum(total)
-        self.progress.setValue(curr)
+        self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"处理中... {curr}/{total}")
 
     def start_merge(self):
@@ -251,6 +250,7 @@ class PDFMergeInterface(QWidget):
         self.add_btn.setEnabled(True)
         self.clear_btn.setEnabled(True)
         self.start_btn.setText("开始合并")
+        self.progress.stop()
         self.progress.hide()
         
         if success:
