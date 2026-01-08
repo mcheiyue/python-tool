@@ -8,8 +8,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slid
                             FluentIcon as FIF)
 
 from core.features.image.image_converter import ImageConverter
-from ui.widgets import DragDropListWidget
-from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.widgets import DragDropListWidget, CancellableProgressWidget
 from ui.design_system import Margins, Spacing
 
 class ConvertTaskSignals(QObject):
@@ -108,7 +107,8 @@ class ImageConvertInterface(QWidget):
         self.vbox.addWidget(self.settings_card)
         
         # 进度条
-        self.progress = EnhancedProgressBar(self)
+        self.progress = CancellableProgressWidget(self)
+        self.progress.cancel_clicked.connect(self.on_cancel_task)
         self.progress.hide()
         self.vbox.addWidget(self.progress)
 
@@ -169,9 +169,19 @@ class ImageConvertInterface(QWidget):
         self.total = 0
         self.success_count = 0
         self.error_count = 0
+        self._is_cancelling = False  # 取消标志
         
         # 连接日志信号
         self.converter.log.connect(self.log_text.append)
+    
+    def on_cancel_task(self):
+        """处理取消任务请求"""
+        if self.finished_count < self.total:
+            self._is_cancelling = True
+            self.log_text.append("\n用户请求取消任务...")
+            self.log_text.append("正在等待当前任务完成...")
+            # 清空线程池队列中未执行的任务
+            self.thread_pool.clear()
 
     def _get_all_paths(self) -> list:
         """从列表控件获取所有文件路径"""
@@ -238,8 +248,10 @@ class ImageConvertInterface(QWidget):
         self.finished_count = 0
         self.success_count = 0
         self.error_count = 0
+        self._is_cancelling = False  # 重置取消标志
         
         self.progress.start(self.total)
+        self.progress.show()
         
         for input_path in files:
             # 构建输出路径
@@ -262,34 +274,52 @@ class ImageConvertInterface(QWidget):
 
     def on_task_finished(self, input_path, success, message):
         self.finished_count += 1
-        self.progress.update_progress(self.finished_count, self.total, f"正在转换: {os.path.basename(input_path)}")
+        
+        if not self._is_cancelling:
+            self.progress.update_progress(self.finished_count, self.total, f"正在转换: {os.path.basename(input_path)}")
+            
         if success:
             self.success_count += 1
-            self.log_text.append(f"✅ {os.path.basename(input_path)}")
+            if not self._is_cancelling:
+                self.log_text.append(f"✅ {os.path.basename(input_path)}")
         else:
             self.error_count += 1
-            self.log_text.append(f"❌ {os.path.basename(input_path)}: {message}")
+            if not self._is_cancelling:
+                self.log_text.append(f"❌ {os.path.basename(input_path)}: {message}")
         
         self._check_all_done()
 
     def on_task_error(self, input_path, error_message):
         self.finished_count += 1
-        self.progress.update_progress(self.finished_count, self.total, f"出错: {os.path.basename(input_path)}")
+        
+        if not self._is_cancelling:
+            self.progress.update_progress(self.finished_count, self.total, f"出错: {os.path.basename(input_path)}")
+            
         self.error_count += 1
-        self.log_text.append(f"❌ {os.path.basename(input_path)}: {error_message}")
+        if not self._is_cancelling:
+            self.log_text.append(f"❌ {os.path.basename(input_path)}: {error_message}")
         self._check_all_done()
 
     def _check_all_done(self):
         if self.finished_count >= self.total:
-            self.progress.stop()
             self.start_btn.setEnabled(True)
-            self.log_text.append(f"\n任务完成: 成功 {self.success_count}, 失败 {self.error_count}")
             
-            # InfoBar 通知
-            if self.error_count == 0:
-                InfoBar.success("转换完成", f"成功处理 {self.total} 个文件", duration=5000, parent=self)
+            # 检查是否被取消
+            if self._is_cancelling:
+                cancelled_count = self.total - self.finished_count
+                self.log_text.append(f"\n任务已取消: 已完成 {self.finished_count}/{self.total}, 成功 {self.success_count}, 失败 {self.error_count}")
+                self.progress.set_complete(success=False)
+                InfoBar.warning("已取消", f"任务已取消，已处理 {self.finished_count} 个文件", duration=5000, parent=self)
+                self._is_cancelling = False
             else:
-                InfoBar.warning("转换完成", f"成功 {self.success_count}, 失败 {self.error_count}", duration=5000, parent=self)
+                self.log_text.append(f"\n任务完成: 成功 {self.success_count}, 失败 {self.error_count}")
+                self.progress.set_complete(success=(self.error_count == 0))
+                
+                # InfoBar 通知
+                if self.error_count == 0:
+                    InfoBar.success("转换完成", f"成功处理 {self.total} 个文件", duration=5000, parent=self)
+                else:
+                    InfoBar.warning("转换完成", f"成功 {self.success_count}, 失败 {self.error_count}", duration=5000, parent=self)
                 
             # 由于可能包含多个输出目录，这里打开第一个文件的目录
             files = self._get_all_paths()

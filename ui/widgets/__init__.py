@@ -4,3 +4,5 @@ from .color_card import ColorCard
 from .color_bar import ColorBar
 from .feature_card import FeatureCard
 from .category_home import CategoryHomePage
+from .enhanced_progress import EnhancedProgressBar
+from .cancellable_progress import CancellableProgressWidget

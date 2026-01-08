@@ -2,14 +2,13 @@ import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QApplication
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import QSettings # Keep QSettings for backward compatibility if needed, but we prefer ConfigLoader
-from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton, 
+from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
                             PrimaryPushButton, TextEdit, InfoBar,
                             LineEdit, ComboBox, IconWidget, FluentIcon as FIF)
 
 from core.engines.pdf.ghostscript import GhostscriptCompressor
 from app.container import AppContainer
-from ui.widgets import DragDropListWidget
-from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.widgets import DragDropListWidget, CancellableProgressWidget
 from ui.threads import CompressThread
 from ui.design_system import Margins, Spacing
 
@@ -95,14 +94,15 @@ class PDFCompressInterface(QWidget):
 
         # 底部
         self.bottom_layout = QHBoxLayout()
-        self.progress = EnhancedProgressBar(self)
+        self.progress = CancellableProgressWidget(self)
+        self.progress.cancel_clicked.connect(self.on_cancel_task)
         self.progress.hide()
         
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始压缩", self)
         self.start_btn.clicked.connect(self.start_compression)
         self.start_btn.setEnabled(False)
 
-        self.bottom_layout.addWidget(self.progress)
+        self.bottom_layout.addWidget(self.progress, 1)
         self.bottom_layout.addSpacing(20)
         self.bottom_layout.addWidget(self.start_btn)
         self.vbox.addLayout(self.bottom_layout)
@@ -198,6 +198,13 @@ class PDFCompressInterface(QWidget):
     def update_progress(self, curr, total, msg):
         self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"处理中... ({curr}/{total})")
+    
+    def on_cancel_task(self):
+        """处理取消任务请求"""
+        if self.thread and self.thread.isRunning():
+            self.append_log("用户请求取消任务...")
+            self.thread.cancel()
+            # 线程会自然结束，在 on_finished 中处理取消状态
 
     def start_compression(self):
         # 动态获取路径
@@ -210,6 +217,9 @@ class PDFCompressInterface(QWidget):
         quality = self.quality_combo.currentText().split(' ')[0]
         
         self.start_btn.setEnabled(False)
+        self.progress.start(len(self.files))
+        self.progress.show()
+        
         self.thread = CompressThread(self.compressor, self.files, quality, gs_path)
         self.thread.start()
         
@@ -221,6 +231,11 @@ class PDFCompressInterface(QWidget):
     def on_finished(self, success, fail):
         self.start_btn.setEnabled(True)
         self.start_btn.setText("开始压缩")
-        self.progress.stop()
-        self.progress.hide()
-        InfoBar.success("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+        
+        # 检查是否被取消
+        if self.progress.is_cancelled:
+            self.progress.set_complete(success=False)
+            InfoBar.warning("已取消", "压缩任务已取消", duration=3000, parent=self)
+        else:
+            self.progress.set_complete(success=True)
+            InfoBar.success("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)

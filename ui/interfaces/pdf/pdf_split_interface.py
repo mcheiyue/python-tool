@@ -8,7 +8,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
 
 from core.features.pdf.pdf_splitter import PDFSplitter
 from ui.threads import PDFSplitThread
-from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.widgets import CancellableProgressWidget
 from ui.design_system import Margins, Spacing
 
 class PDFSplitInterface(QWidget):
@@ -68,7 +68,8 @@ class PDFSplitInterface(QWidget):
         self.vbox.addWidget(self.log_text)
 
         # 进度条
-        self.progress = EnhancedProgressBar(self)
+        self.progress = CancellableProgressWidget(self)
+        self.progress.cancel_clicked.connect(self.on_cancel_task)
         self.progress.hide()
         self.vbox.addWidget(self.progress)
 
@@ -103,6 +104,12 @@ class PDFSplitInterface(QWidget):
             bool(self.out_edit.text())
         )
 
+    def on_cancel_task(self):
+        """处理取消任务请求"""
+        if self.thread and self.thread.isRunning():
+            self.log_text.append("用户请求取消任务...")
+            self.thread.cancel()
+    
     def start_split(self):
         file_path = self.file_edit.text()
         ranges = self.range_edit.text()
@@ -114,6 +121,9 @@ class PDFSplitInterface(QWidget):
 
         self.start_btn.setEnabled(False)
         self.log_text.clear()
+        self.progress.start(100)  # 拆分任务数量未知，使用默认值
+        self.progress.show()
+        
         self.thread = PDFSplitThread(self.splitter, file_path, ranges, output_dir)
         self.thread.start()
 
@@ -124,9 +134,14 @@ class PDFSplitInterface(QWidget):
     def on_finished(self, success, msg):
         self.start_btn.setEnabled(True)
         self.start_btn.setText("开始拆分")
-        self.progress.stop()
-        self.progress.hide()
-        if success:
-            InfoBar.success("完成", msg, parent=self)
+        
+        # 检查是否被取消
+        if self.progress.is_cancelled:
+            self.progress.set_complete(success=False)
+            InfoBar.warning("已取消", "拆分任务已取消", duration=3000, parent=self)
         else:
-            InfoBar.error("错误", msg, parent=self)
+            self.progress.set_complete(success=success)
+            if success:
+                InfoBar.success("完成", msg, parent=self)
+            else:
+                InfoBar.error("错误", msg, parent=self)

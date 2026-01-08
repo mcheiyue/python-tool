@@ -3,13 +3,12 @@ import subprocess
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QListWidgetItem
 from PyQt6.QtGui import QFont, QAction, QKeySequence
 from PyQt6.QtCore import QTimer, Qt
-from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton, 
-                            ToolButton, TextEdit, LineEdit, ProgressBar, InfoBar, 
+from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
+                            ToolButton, TextEdit, LineEdit, ProgressBar, InfoBar,
                             CardWidget, FluentIcon as FIF)
 
 from core.features.pdf.pdf_merger import PDFMerger
-from ui.widgets import DragDropListWidget
-from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.widgets import DragDropListWidget, CancellableProgressWidget
 from ui.threads import MergeThread
 from ui.design_system import Margins, Spacing
 
@@ -112,7 +111,8 @@ class PDFMergeInterface(QWidget):
         self.vbox.addLayout(self.bottom_layout)
         
         # 进度条
-        self.progress = EnhancedProgressBar(self)
+        self.progress = CancellableProgressWidget(self)
+        self.progress.cancel_clicked.connect(self.on_cancel_task)
         self.progress.hide()
         self.vbox.addWidget(self.progress)
         
@@ -229,6 +229,12 @@ class PDFMergeInterface(QWidget):
     def update_progress(self, curr, total, msg):
         self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"处理中... {curr}/{total}")
+    
+    def on_cancel_task(self):
+        """处理取消任务请求"""
+        if self.thread and self.thread.isRunning():
+            self.log_text.append("用户请求取消任务...")
+            self.thread.cancel()
 
     def start_merge(self):
         output_path = self.out_edit.text().strip()
@@ -241,6 +247,9 @@ class PDFMergeInterface(QWidget):
         self.clear_btn.setEnabled(False)
         self.log_text.clear()
         
+        self.progress.start(len(files))
+        self.progress.show()
+        
         self.thread = MergeThread(self.merger, files, output_path)
         self.thread.start()
 
@@ -250,8 +259,14 @@ class PDFMergeInterface(QWidget):
         self.add_btn.setEnabled(True)
         self.clear_btn.setEnabled(True)
         self.start_btn.setText("开始合并")
-        self.progress.stop()
-        self.progress.hide()
+        
+        # 检查是否被取消
+        if self.progress.is_cancelled:
+            self.progress.set_complete(success=False)
+            InfoBar.warning("已取消", "合并任务已取消", duration=3000, parent=self)
+            return
+        
+        self.progress.set_complete(success=success)
         
         if success:
             bar = InfoBar.success(

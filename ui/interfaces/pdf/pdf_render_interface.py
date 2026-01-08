@@ -6,7 +6,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushBut
                             ComboBox, SpinBox)
 
 from core.features.pdf.pdf_page_renderer import PDFPageRenderer
-from ui.widgets import DragDropListWidget
+from ui.widgets import DragDropListWidget, CancellableProgressWidget
 from ui.threads import PDFRenderThread
 from core.external_tools.manager import ExternalToolManager
 
@@ -113,6 +113,12 @@ class PDFRenderInterface(QWidget):
         self.settings_layout.addWidget(self.end_page_spin, 1, 3)
         
         self.vbox.addLayout(self.settings_layout)
+        
+        # 进度条
+        self.progress = CancellableProgressWidget(self)
+        self.progress.cancel_clicked.connect(self.on_cancel_task)
+        self.progress.hide()
+        self.vbox.addWidget(self.progress)
 
         # 底部按钮区域
         self.bottom_layout = QHBoxLayout()
@@ -205,6 +211,12 @@ class PDFRenderInterface(QWidget):
     def check_state(self):
         """检查按钮状态"""
         self.start_btn.setEnabled(bool(self.files) and bool(self.out_edit.text()))
+    
+    def on_cancel_task(self):
+        """处理取消任务请求"""
+        if self.thread and self.thread.isRunning():
+            self.log_text.append("用户请求取消任务...")
+            self.thread.cancel()
 
     def start_render(self):
         """开始渲染"""
@@ -226,6 +238,8 @@ class PDFRenderInterface(QWidget):
         
         self.start_btn.setEnabled(False)
         self.log_text.clear()
+        self.progress.start(len(self.files))
+        self.progress.show()
         
         # 创建并启动线程
         use_gs = self.gs_check.isChecked() if self.gs_check else False
@@ -243,13 +257,21 @@ class PDFRenderInterface(QWidget):
 
     def update_progress(self, curr, total, msg):
         """更新进度"""
+        self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"渲染中... {curr}/{total}")
 
     def on_finished(self, success, fail):
         """渲染完成"""
         self.start_btn.setEnabled(True)
         self.start_btn.setText("开始渲染")
-        InfoBar.success("完成", f"成功渲染 {success} 个文件", duration=3000, parent=self)
+        
+        # 检查是否被取消
+        if self.progress.is_cancelled:
+            self.progress.set_complete(success=False)
+            InfoBar.warning("已取消", "渲染任务已取消", duration=3000, parent=self)
+        else:
+            self.progress.set_complete(success=True)
+            InfoBar.success("完成", f"成功渲染 {success} 个文件", duration=3000, parent=self)
 
     def on_tool_status_changed(self, name):
         """工具状态变更"""

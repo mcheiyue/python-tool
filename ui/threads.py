@@ -134,9 +134,15 @@ class MergeThread(QThread):
         self.merger = merger
         self.files = files
         self.output_path = output_path
+        self._is_cancelled = False
+
+    def cancel(self):
+        """取消任务"""
+        self._is_cancelled = True
 
     def run(self):
-        self.merger.merge(self.files, self.output_path)
+        if not self._is_cancelled:
+            self.merger.merge(self.files, self.output_path)
 
 class CompressThread(QThread):
     def __init__(self, compressor, files, quality, gs_path):
@@ -145,10 +151,16 @@ class CompressThread(QThread):
         self.files = files
         self.quality = quality
         self.gs_path = gs_path
+        self._is_cancelled = False
+
+    def cancel(self):
+        """取消任务"""
+        self._is_cancelled = True
 
     def run(self):
         # 使用关键字参数传递 gs_path，适配新的引擎接口
-        self.compressor.compress(self.files, self.quality, gs_path=self.gs_path)
+        if not self._is_cancelled:
+            self.compressor.compress(self.files, self.quality, gs_path=self.gs_path)
 
 class PDFSplitThread(QThread):
     def __init__(self, splitter, file_path, ranges, output_dir):
@@ -157,9 +169,15 @@ class PDFSplitThread(QThread):
         self.file_path = file_path
         self.ranges = ranges
         self.output_dir = output_dir
+        self._is_cancelled = False
+
+    def cancel(self):
+        """取消任务"""
+        self._is_cancelled = True
 
     def run(self):
-        self.splitter.split(self.file_path, self.ranges, self.output_dir)
+        if not self._is_cancelled:
+            self.splitter.split(self.file_path, self.ranges, self.output_dir)
 
 class PDFImageExtractThread(QThread):
     def __init__(self, extractor, files, output_dir):
@@ -228,13 +246,19 @@ class PDFRenderThread(QThread):
         self.output_format = output_format
         self.page_range = page_range
         self.use_ghostscript = use_ghostscript
+        self._is_cancelled = False
+
+    def cancel(self):
+        """取消任务"""
+        self._is_cancelled = True
 
     def run(self):
-        self.renderer.render_all(
-            self.files,
-            self.output_dir,
-            self.dpi,
-            self.output_format,
-            self.page_range,
-            use_ghostscript=self.use_ghostscript
-        )
+        if not self._is_cancelled:
+            self.renderer.render_all(
+                self.files,
+                self.output_dir,
+                self.dpi,
+                self.output_format,
+                self.page_range,
+                use_ghostscript=self.use_ghostscript
+            )
