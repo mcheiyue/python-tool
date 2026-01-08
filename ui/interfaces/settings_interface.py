@@ -3,12 +3,13 @@ import webbrowser
 import subprocess
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 from PyQt6.QtCore import QSettings, Qt, QTimer
-from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget, 
+from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
                             ComboBox, Theme, setTheme, FluentIcon as FIF,
                             PushButton, ToolButton, CaptionLabel)
 from app.container import AppContainer
 from core.external_tools.base import ExternalTool
 from config.loader import ConfigLoader
+from ui.design_system import Margins, Spacing
 
 class SettingsInterface(QWidget):
     def __init__(self, parent=None):
@@ -16,8 +17,8 @@ class SettingsInterface(QWidget):
         self.setObjectName("settings_interface")
         
         self.vbox = QVBoxLayout(self)
-        self.vbox.setContentsMargins(30, 30, 30, 30)
-        self.vbox.setSpacing(20)
+        self.vbox.setContentsMargins(*Margins.PAGE)
+        self.vbox.setSpacing(Spacing.LG)
 
         self.title = SubtitleLabel("设置", self)
         self.vbox.addWidget(self.title)

@@ -1,7 +1,8 @@
 import os
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QListWidgetItem
 from PyQt6.QtGui import QFont
-from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget, 
+from PyQt6.QtCore import Qt
+from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
                             PrimaryPushButton, PushButton, TextEdit,
                             InfoBar, FluentIcon as FIF)
 
@@ -81,7 +82,7 @@ class PPTInterface(QWidget):
         
         self.vbox.addLayout(self.bottom_layout)
 
-        self.files = []
+        # 不再使用 self.files 列表，改用单一数据源模式
         self.converter = AppContainer().ppt_engine
         self.thread = None
 
@@ -89,25 +90,38 @@ class PPTInterface(QWidget):
         self.converter.progress.connect(self.update_progress)
         self.converter.finished.connect(self.on_finished)
 
+    def _get_all_paths(self) -> list:
+        """从列表控件获取所有文件路径（单一数据源）"""
+        paths = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            path = item.data(Qt.ItemDataRole.UserRole)
+            if path:
+                paths.append(path)
+        return paths
+
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "选文件", "", "PPT (*.ppt *.pptx)")
         if paths: self.on_files_dropped(paths)
 
     def on_files_dropped(self, paths):
+        current_paths = self._get_all_paths()
         count = 0
         for p in paths:
-            if p not in self.files:
+            if p not in current_paths:
                 ext = os.path.splitext(p)[1].lower()
                 if ext in ['.ppt', '.pptx']:
-                    self.files.append(p)
-                    self.list_widget.addItem(os.path.basename(p))
+                    # 使用 UserRole 存储完整路径
+                    item = QListWidgetItem(os.path.basename(p))
+                    item.setData(Qt.ItemDataRole.UserRole, p)
+                    self.list_widget.addItem(item)
                     count += 1
         if count > 0:
-            self.tip.setText(f"已选 {len(self.files)} 个文件")
+            total = self.list_widget.count()
+            self.tip.setText(f"已选 {total} 个文件")
             self.start_btn.setEnabled(True)
 
     def clear_files(self):
-        self.files = []
         self.list_widget.clear()
         self.tip.setText("请添加文件 (支持拖拽)...")
         self.start_btn.setEnabled(False)
@@ -123,13 +137,16 @@ class PPTInterface(QWidget):
         self.start_btn.setText(f"处理中... ({curr}/{total})")
 
     def start_conversion(self):
-        if not self.files: return
+        files = self._get_all_paths()
+        if not files: return
         self.start_btn.setEnabled(False)
         self.add_btn.setEnabled(False)
         self.clear_btn.setEnabled(False)
         self.list_widget.setEnabled(False)
         self.log_text.clear()
-        self.thread = ConversionThread(self.converter, self.files)
+        self.progress.start(len(files))
+        self.progress.show()
+        self.thread = ConversionThread(self.converter, files)
         self.thread.start()
 
     def on_finished(self, success, fail):
