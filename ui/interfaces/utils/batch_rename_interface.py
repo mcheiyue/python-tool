@@ -36,6 +36,9 @@ class BatchRenameInterface(QWidget):
         ("{name}_{datetime}", "原名_日期时间"),
     ]
     
+    MAX_FILES = 10000      # 最大文件数
+    MAX_DEPTH = 10         # 最大递归深度
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("batch_rename_interface")
@@ -170,16 +173,51 @@ class BatchRenameInterface(QWidget):
     def add_folder(self):
         """添加文件夹中的所有文件"""
         folder = QFileDialog.getExistingDirectory(self, "选择文件夹")
-        if folder:
-            files = []
-            for root, dirs, filenames in os.walk(folder):
-                for filename in filenames:
-                    files.append(os.path.join(root, filename))
+        if not folder:
+            return
+
+        files = []
+        depth_exceeded = False
+        max_exceeded = False
+        
+        for root, dirs, filenames in os.walk(folder, followlinks=False):  # 不跟随符号链接
+            # 计算当前深度
+            depth = root.replace(folder, '').count(os.sep)
             
-            if files:
-                self.on_files_added(files)
-            else:
-                InfoBar.warning("提示", "该文件夹中没有文件", parent=self)
+            if depth >= self.MAX_DEPTH:
+                depth_exceeded = True
+                dirs.clear()  # 阻止继续深入
+                continue
+            
+            for filename in filenames:
+                if len(files) >= self.MAX_FILES:
+                    max_exceeded = True
+                    break
+                files.append(os.path.join(root, filename))
+            
+            if max_exceeded:
+                break
+        
+        if files:
+            self.on_files_added(files)
+            
+            # 显示警告信息
+            if max_exceeded:
+                InfoBar.warning(
+                    "文件数量限制",
+                    f"已达到最大文件数限制 ({self.MAX_FILES})，部分文件未添加",
+                    duration=5000,
+                    parent=self
+                )
+            elif depth_exceeded:
+                InfoBar.info(
+                    "深度限制",
+                    f"已达到最大递归深度 ({self.MAX_DEPTH} 层)，更深层级的文件未添加",
+                    duration=3000,
+                    parent=self
+                )
+        else:
+            InfoBar.warning("提示", "该文件夹中没有文件", parent=self)
     
     def on_files_added(self, paths):
         """处理添加的文件"""

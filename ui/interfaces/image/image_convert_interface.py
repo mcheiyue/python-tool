@@ -1,15 +1,47 @@
 import os
 import subprocess
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QListWidgetItem
 from PyQt6.QtGui import QFont, QAction, QKeySequence
-from PyQt6.QtCore import Qt, QTimer
-from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slider, 
-                            PushButton, PrimaryPushButton, TextEdit, InfoBar, 
+from PyQt6.QtCore import Qt, QTimer, QThreadPool, QRunnable, QObject, pyqtSignal
+from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slider,
+                            PushButton, PrimaryPushButton, TextEdit, InfoBar,
                             FluentIcon as FIF)
 
 from core.features.image.image_converter import ImageConverter
 from ui.widgets import DragDropListWidget
-from ui.threads import ImageConvertThread
+
+class ConvertTaskSignals(QObject):
+    """任务信号类"""
+    finished = pyqtSignal(str, bool, str)  # input_path, success, message
+    error = pyqtSignal(str, str)  # input_path, error_message
+
+class ConvertTask(QRunnable):
+    """单个转换任务"""
+    
+    def __init__(self, converter, input_path, output_path, target_format, quality, rotate_angle, flip_mode):
+        super().__init__()
+        self.converter = converter
+        self.input_path = input_path
+        self.output_path = output_path
+        self.target_format = target_format
+        self.quality = quality
+        self.rotate_angle = rotate_angle
+        self.flip_mode = flip_mode
+        self.signals = ConvertTaskSignals()
+    
+    def run(self):
+        try:
+            success = self.converter.convert(
+                self.input_path,
+                self.output_path,
+                self.target_format,
+                self.quality,
+                self.rotate_angle,
+                self.flip_mode
+            )
+            self.signals.finished.emit(self.input_path, success, "")
+        except Exception as e:
+            self.signals.error.emit(self.input_path, str(e))
 
 class ImageConvertInterface(QWidget):
     def __init__(self, parent=None):
@@ -123,20 +155,33 @@ class ImageConvertInterface(QWidget):
         self.del_action.triggered.connect(self.remove_selection)
         self.addAction(self.del_action)
 
-        self.files = []
-        self.threads = [] # Keep references
+        self.thread_pool = QThreadPool()
+        self.thread_pool.setMaxThreadCount(4)  # 限制最大并发数为 4
+        
+        self.finished_count = 0
+        self.total = 0
+        self.success_count = 0
+        self.error_count = 0
         
         # 连接日志信号
         self.converter.log.connect(self.log_text.append)
+
+    def _get_all_paths(self) -> list:
+        """从列表控件获取所有文件路径"""
+        paths = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            path = item.data(Qt.ItemDataRole.UserRole)
+            if path:
+                paths.append(path)
+        return paths
 
     def remove_selection(self):
         # 从后往前删
         rows = sorted([item.row() for item in self.list_widget.selectedIndexes()], reverse=True)
         for row in rows:
-            if row < len(self.files):
-                self.files.pop(row)
-                self.list_widget.takeItem(row)
-        if not self.files:
+            self.list_widget.takeItem(row)
+        if self.list_widget.count() == 0:
             self.start_btn.setEnabled(False)
 
     def add_files(self):
@@ -144,22 +189,27 @@ class ImageConvertInterface(QWidget):
         if paths: self.on_files_dropped(paths)
 
     def on_files_dropped(self, paths):
+        current_paths = self._get_all_paths()
         for p in paths:
-            if p not in self.files:
-                self.files.append(p)
-                self.list_widget.addItem(os.path.basename(p))
-        if self.files: self.start_btn.setEnabled(True)
+            if p not in current_paths:
+                item = QListWidgetItem(os.path.basename(p))
+                item.setData(Qt.ItemDataRole.UserRole, p)
+                self.list_widget.addItem(item)
+        if self.list_widget.count() > 0:
+            self.start_btn.setEnabled(True)
 
     def clear_files(self):
-        self.files = []
         self.list_widget.clear()
         self.log_text.clear()
         self.start_btn.setEnabled(False)
 
     def start_conversion(self):
-        if not self.files: return
+        files = self._get_all_paths()
+        if not files: return
+        
         self.start_btn.setEnabled(False)
-        self.log_text.append("开始转换任务...")
+        self.log_text.clear()
+        self.log_text.append(f"开始转换任务... (最大并发: {self.thread_pool.maxThreadCount()})")
         
         target_format = self.format_combo.currentText()
         quality = self.quality_slider.value()
@@ -177,10 +227,12 @@ class ImageConvertInterface(QWidget):
         if flip_idx == 1: flip_mode = 'H'
         elif flip_idx == 2: flip_mode = 'V'
 
-        self.total = len(self.files)
+        self.total = len(files)
         self.finished_count = 0
+        self.success_count = 0
+        self.error_count = 0
         
-        for input_path in self.files:
+        for input_path in files:
             # 构建输出路径
             dir_name = os.path.dirname(input_path)
             base_name = os.path.splitext(os.path.basename(input_path))[0]
@@ -188,28 +240,49 @@ class ImageConvertInterface(QWidget):
             if ext == 'jpeg': ext = 'jpg'
             output_path = os.path.join(dir_name, f"{base_name}.{ext}")
             
-            thread = ImageConvertThread(self.converter, input_path, output_path, target_format, quality, rotate_angle, flip_mode)
-            thread.finished.connect(lambda: self.on_one_finished())
-            thread.start()
-            self.threads.append(thread) # 防止被垃圾回收
+            # 创建任务
+            task = ConvertTask(
+                self.converter, input_path, output_path,
+                target_format, quality, rotate_angle, flip_mode
+            )
+            task.signals.finished.connect(self.on_task_finished)
+            task.signals.error.connect(self.on_task_error)
+            
+            # 提交到线程池
+            self.thread_pool.start(task)
 
-    def on_one_finished(self):
+    def on_task_finished(self, input_path, success, message):
         self.finished_count += 1
+        if success:
+            self.success_count += 1
+            self.log_text.append(f"✅ {os.path.basename(input_path)}")
+        else:
+            self.error_count += 1
+            self.log_text.append(f"❌ {os.path.basename(input_path)}: {message}")
+        
+        self._check_all_done()
+
+    def on_task_error(self, input_path, error_message):
+        self.finished_count += 1
+        self.error_count += 1
+        self.log_text.append(f"❌ {os.path.basename(input_path)}: {error_message}")
+        self._check_all_done()
+
+    def _check_all_done(self):
         if self.finished_count >= self.total:
             self.start_btn.setEnabled(True)
-            self.log_text.append("所有任务已完成！")
+            self.log_text.append(f"\n任务完成: 成功 {self.success_count}, 失败 {self.error_count}")
             
-            # 创建带有操作按钮的 InfoBar
-            bar = InfoBar.success(
-                title="转换完成",
-                content=f"成功处理 {self.total} 个文件",
-                duration=5000,
-                parent=self
-            )
-            
+            # InfoBar 通知
+            if self.error_count == 0:
+                InfoBar.success("转换完成", f"成功处理 {self.total} 个文件", duration=5000, parent=self)
+            else:
+                InfoBar.warning("转换完成", f"成功 {self.success_count}, 失败 {self.error_count}", duration=5000, parent=self)
+                
             # 由于可能包含多个输出目录，这里打开第一个文件的目录
-            if self.files:
-                first_dir = os.path.dirname(self.files[0])
+            files = self._get_all_paths()
+            if files:
+                first_dir = os.path.dirname(files[0])
                 open_folder_btn = PushButton("打开所在文件夹")
                 def open_folder():
                     def do_open():
@@ -221,7 +294,3 @@ class ImageConvertInterface(QWidget):
                             QDesktopServices.openUrl(QUrl.fromLocalFile(first_dir))
                     QTimer.singleShot(300, do_open)
                 open_folder_btn.clicked.connect(open_folder)
-                bar.addWidget(open_folder_btn)
-            
-            bar.show()
-            self.threads.clear()

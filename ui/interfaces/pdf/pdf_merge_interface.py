@@ -1,8 +1,8 @@
 import os
 import subprocess
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QListWidgetItem
 from PyQt6.QtGui import QFont, QAction, QKeySequence
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, Qt
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton, 
                             ToolButton, TextEdit, LineEdit, ProgressBar, InfoBar, 
                             CardWidget, FluentIcon as FIF)
@@ -142,7 +142,6 @@ class PDFMergeInterface(QWidget):
         self.addAction(self.down_action)
 
         # 逻辑初始化
-        self.files = [] # 存储完整路径
         self.merger = PDFMerger()
         self.thread = None
 
@@ -154,17 +153,28 @@ class PDFMergeInterface(QWidget):
         paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF 文件", "", "PDF (*.pdf)")
         if paths: self.on_files_dropped(paths)
 
+    def _get_all_paths(self) -> list:
+        """从列表控件获取所有文件路径"""
+        paths = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            path = item.data(Qt.ItemDataRole.UserRole)
+            if path:
+                paths.append(path)
+        return paths
+
     def on_files_dropped(self, paths):
+        current_paths = self._get_all_paths()
         for p in paths:
-            if p not in self.files:
+            if p not in current_paths:
                 ext = os.path.splitext(p)[1].lower()
                 if ext == '.pdf':
-                    self.files.append(p)
-                    self.list_widget.addItem(os.path.basename(p))
+                    item = QListWidgetItem(os.path.basename(p))
+                    item.setData(Qt.ItemDataRole.UserRole, p)
+                    self.list_widget.addItem(item)
         self.check_state()
 
     def clear_files(self):
-        self.files = []
         self.list_widget.clear()
         self.log_text.clear()
         self.progress.hide()
@@ -174,24 +184,20 @@ class PDFMergeInterface(QWidget):
         # 从后往前删，避免索引偏移
         rows = sorted([item.row() for item in self.list_widget.selectedIndexes()], reverse=True)
         for row in rows:
-            self.files.pop(row)
             self.list_widget.takeItem(row)
         self.check_state()
 
     def move_up(self):
         row = self.list_widget.currentRow()
         if row > 0:
-            # 数据交换
-            self.files[row], self.files[row-1] = self.files[row-1], self.files[row]
-            # 列表项交换
             item = self.list_widget.takeItem(row)
             self.list_widget.insertItem(row-1, item)
             self.list_widget.setCurrentRow(row-1)
 
     def move_down(self):
         row = self.list_widget.currentRow()
-        if row < len(self.files) - 1 and row != -1:
-            self.files[row], self.files[row+1] = self.files[row+1], self.files[row]
+        count = self.list_widget.count()
+        if row < count - 1 and row != -1:
             item = self.list_widget.takeItem(row)
             self.list_widget.insertItem(row+1, item)
             self.list_widget.setCurrentRow(row+1)
@@ -203,15 +209,17 @@ class PDFMergeInterface(QWidget):
             self.check_state()
 
     def check_state(self):
-        has_files = len(self.files) > 0
+        has_files = self.list_widget.count() > 0
         has_out = bool(self.out_edit.text().strip())
         self.start_btn.setEnabled(has_files and has_out)
         
         if has_files and not has_out and not self.out_edit.text():
             # 自动生成一个默认路径
-            dir_name = os.path.dirname(self.files[0])
-            self.out_edit.setText(os.path.join(dir_name, "merged_output.pdf"))
-            self.start_btn.setEnabled(True)
+            first_path = self.list_widget.item(0).data(Qt.ItemDataRole.UserRole)
+            if first_path:
+                dir_name = os.path.dirname(first_path)
+                self.out_edit.setText(os.path.join(dir_name, "merged_output.pdf"))
+                self.start_btn.setEnabled(True)
 
     def append_log(self, text):
         self.log_text.append(text)
@@ -225,7 +233,8 @@ class PDFMergeInterface(QWidget):
 
     def start_merge(self):
         output_path = self.out_edit.text().strip()
-        if not output_path or not self.files: return
+        files = self._get_all_paths()
+        if not output_path or not files: return
         
         self.start_btn.setEnabled(False)
         self.list_widget.setEnabled(False)
@@ -233,7 +242,7 @@ class PDFMergeInterface(QWidget):
         self.clear_btn.setEnabled(False)
         self.log_text.clear()
         
-        self.thread = MergeThread(self.merger, self.files, output_path)
+        self.thread = MergeThread(self.merger, files, output_path)
         self.thread.start()
 
     def on_finished(self, success, msg):

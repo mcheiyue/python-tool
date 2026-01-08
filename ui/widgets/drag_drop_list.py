@@ -11,8 +11,9 @@ class DragDropListWidget(QListWidget):
         super().__init__(parent)
         self.placeholder_text = placeholder_text
         self.setAcceptDrops(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.setFont(QFont("Microsoft YaHei UI", 10))
         
         # 应用初始样式
@@ -91,19 +92,32 @@ class DragDropListWidget(QListWidget):
         """)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasUrls(): event.accept()
-        else: event.ignore()
+        if event.mimeData().hasUrls():
+            event.accept()
+        elif event.source() == self:
+            event.accept()
+            super().dragEnterEvent(event)
+        else:
+            event.ignore()
 
     def dragMoveEvent(self, event):
-        if event.mimeData().hasUrls(): event.accept()
-        else: event.ignore()
+        if event.mimeData().hasUrls():
+            event.accept()
+        elif event.source() == self:
+            event.accept()
+            super().dragMoveEvent(event)
+        else:
+            event.ignore()
 
     def dropEvent(self, event: QDropEvent):
-        files = []
-        for url in event.mimeData().urls():
-            path = url.toLocalFile()
-            if os.path.isfile(path): files.append(path)
-        if files: self.files_dropped.emit(files)
+        if event.mimeData().hasUrls():
+            files = []
+            for url in event.mimeData().urls():
+                path = url.toLocalFile()
+                if os.path.isfile(path): files.append(path)
+            if files: self.files_dropped.emit(files)
+        elif event.source() == self:
+            super().dropEvent(event)
 
     def add_files(self, files: list):
         """添加文件列表"""

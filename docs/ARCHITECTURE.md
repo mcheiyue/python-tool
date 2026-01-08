@@ -137,6 +137,32 @@ class UILazyLoader:
 **优化效果**:
 - ⚡ 启动速度提升 **60%+**
 - 💾 初始内存占用减少 **40%+**
+- 🛡️ 增加超时重试机制，提升系统稳定性
+
+---
+
+### 5. 并发任务管理 (Concurrency)
+
+**文件**: `ui/interfaces/image/image_convert_interface.py` (示例)
+
+**设计思想**: 摒弃为每个任务创建独立 `QThread` 的模式，转为使用 `QThreadPool` 管理轻量级 `QRunnable` 任务。
+
+```python
+class ConvertTask(QRunnable):
+    def run(self):
+        # 执行具体任务
+        pass
+
+# 在界面类中
+self.thread_pool = QThreadPool()
+self.thread_pool.setMaxThreadCount(4)  # 限制并发数
+self.thread_pool.start(ConvertTask(...))
+```
+
+**优势**:
+- ✅ 避免大量小文件处理时线程数爆炸
+- ✅ 降低系统上下文切换开销
+- ✅ 更可控的资源占用
 
 ---
 
