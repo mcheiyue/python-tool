@@ -64,3 +64,35 @@ class TestPluginLoader:
         
         # 验证 extractall 被调用
         mock_tar.extractall.assert_called_once_with(path=str(target_dir))
+
+    def test_safe_extract_rejects_symlink(self, loader, tmp_path):
+        """测试拒绝符号链接成员"""
+        target_dir = tmp_path / "plugins"
+        target_dir.mkdir()
+        
+        member = tarfile.TarInfo(name="evil_link")
+        member.type = tarfile.SYMTYPE
+        member.linkname = "../../outside"
+        
+        mock_tar = MagicMock(spec=tarfile.TarFile)
+        mock_tar.getmembers.return_value = [member]
+        
+        with pytest.raises(SecurityError) as excinfo:
+            loader._safe_extract(mock_tar, str(target_dir))
+        assert "被拒绝" in str(excinfo.value)
+
+    def test_safe_extract_rejects_hardlink(self, loader, tmp_path):
+        """测试拒绝硬链接成员"""
+        target_dir = tmp_path / "plugins"
+        target_dir.mkdir()
+        
+        member = tarfile.TarInfo(name="evil_hard")
+        member.type = tarfile.LNKTYPE
+        member.linkname = "../../outside"
+        
+        mock_tar = MagicMock(spec=tarfile.TarFile)
+        mock_tar.getmembers.return_value = [member]
+        
+        with pytest.raises(SecurityError) as excinfo:
+            loader._safe_extract(mock_tar, str(target_dir))
+        assert "被拒绝" in str(excinfo.value)

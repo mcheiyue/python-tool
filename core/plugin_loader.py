@@ -86,6 +86,8 @@ class PluginLoader:
         target_base_abs = os.path.abspath(target_base)
         
         for member in tar.getmembers():
+            if member.issym() or member.islnk():
+                raise SecurityError(f"符号链接/硬链接成员被拒绝: {member.name}")
             # 计算成员的绝对路径
             member_path = os.path.join(target_base, member.name)
             member_path_abs = os.path.abspath(member_path)
