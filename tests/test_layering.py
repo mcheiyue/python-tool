@@ -34,7 +34,7 @@ QT_EXEMPT_FILES = {
     "image/image_converter.py",            # R7 移除
     "image/image_vectorizer.py",           # R7 移除
     "image/color_extractor.py",            # R7 移除
-    "image/clipboard_handler.py",          # R1 标 PERMANENT，永留
+    "image/clipboard_handler.py",          # PERMANENT: QMimeData/QApplication 剪贴板桥即功能本体
 }
 
 

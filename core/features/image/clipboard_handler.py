@@ -1,3 +1,4 @@
+# 分层豁免（PERMANENT，见 tests/test_layering.py）：QMimeData/QApplication 剪贴板桥即功能本体，剥离 Qt 需引入无收益抽象
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QBuffer, QIODevice, QMimeData, QUrl
