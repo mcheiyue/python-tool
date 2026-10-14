@@ -5,19 +5,22 @@ except ImportError:
     VTRACER_AVAILABLE = False
     vtracer = None
 
-from PyQt6.QtCore import QObject, pyqtSignal
+class ImageVectorizer:
+    def convert(self, input_path, output_path, colormode='color', hierarchical='stacked', mode='spline', filter_speckle=4, corner_threshold=60, length_threshold=2, max_iterations=10, splice_threshold=45, path_precision=3, *, on_log=None, on_finished=None):
+        def log(msg):
+            if on_log:
+                on_log(msg)
 
-class ImageVectorizer(QObject):
-    finished = pyqtSignal(bool, str) # success, msg
-    log = pyqtSignal(str)
+        def finished(ok, msg):
+            if on_finished:
+                on_finished(ok, msg)
 
-    def convert(self, input_path, output_path, colormode='color', hierarchical='stacked', mode='spline', filter_speckle=4, corner_threshold=60, length_threshold=2, max_iterations=10, splice_threshold=45, path_precision=3):
         if not VTRACER_AVAILABLE:
-            self.finished.emit(False, "错误: vtracer 模块未安装，无法进行转换")
+            finished(False, "错误: vtracer 模块未安装，无法进行转换")
             return
 
         try:
-            self.log.emit(f"开始转换: {input_path}")
+            log(f"开始转换: {input_path}")
             # vtracer 核心转换
             vtracer.convert_image_to_svg_py(
                 input_path,
@@ -32,8 +35,8 @@ class ImageVectorizer(QObject):
                 splice_threshold=splice_threshold,
                 path_precision=path_precision
             )
-            self.log.emit(f"转换成功: {output_path}")
-            self.finished.emit(True, output_path)
+            log(f"转换成功: {output_path}")
+            finished(True, output_path)
         except Exception as e:
-            self.log.emit(f"错误: {str(e)}")
-            self.finished.emit(False, str(e))
+            log(f"错误: {str(e)}")
+            finished(False, str(e))

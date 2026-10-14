@@ -15,9 +15,6 @@ FEATURES_DIR = PROJECT_ROOT / "core" / "features"
 
 # 规则 A 豁免清单（随迁移逐行收缩，R10 收官时应仅剩 PERMANENT 一项）
 QT_EXEMPT_FILES = {
-    "image/image_converter.py",            # R7 移除
-    "image/image_vectorizer.py",           # R7 移除
-    "image/color_extractor.py",            # R7 移除
     "image/clipboard_handler.py",          # PERMANENT: QMimeData/QApplication 剪贴板桥即功能本体
 }
 

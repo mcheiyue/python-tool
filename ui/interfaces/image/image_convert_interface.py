@@ -32,15 +32,21 @@ class ConvertTask(QRunnable):
     
     def run(self):
         try:
-            success = self.converter.convert(
+            outcome = {"success": False}
+
+            def on_finished(ok, msg):
+                outcome["success"] = ok
+
+            self.converter.convert(
                 self.input_path,
                 self.output_path,
                 self.target_format,
                 self.quality,
                 self.rotate_angle,
-                self.flip_mode
+                self.flip_mode,
+                on_finished=on_finished,
             )
-            self.signals.finished.emit(self.input_path, success, "")
+            self.signals.finished.emit(self.input_path, outcome["success"], "")
         except Exception as e:
             self.signals.error.emit(self.input_path, str(e))
 
@@ -170,10 +176,7 @@ class ImageConvertInterface(QWidget):
         self.success_count = 0
         self.error_count = 0
         self._is_cancelling = False  # 取消标志
-        
-        # 连接日志信号
-        self.converter.log.connect(self.log_text.append)
-    
+
     def on_cancel_task(self):
         """处理取消任务请求"""
         if self.finished_count < self.total:

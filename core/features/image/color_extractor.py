@@ -1,20 +1,24 @@
 from PIL import Image
-from PyQt6.QtCore import QObject, pyqtSignal
 
-class ColorExtractor(QObject):
-    finished = pyqtSignal(list, str) # result_list, error_msg
-    log = pyqtSignal(str)
+class ColorExtractor:
+    def extract(self, image_path, n_colors=8, *, on_log=None, on_finished=None):
+        def log(msg):
+            if on_log:
+                on_log(msg)
 
-    def extract(self, image_path, n_colors=8):
+        def finished(results, error_msg):
+            if on_finished:
+                on_finished(results, error_msg)
+
         try:
-            self.log.emit(f"正在加载图片: {image_path}")
+            log(f"正在加载图片: {image_path}")
             with Image.open(image_path) as img:
                 # 缩放以加快计算
                 img_resized = img.resize((150, 150))
                 # 转换为 RGB 模式
                 img_rgb = img_resized.convert('RGB')
 
-                self.log.emit(f"正在分析颜色 ({n_colors} 色)...")
+                log(f"正在分析颜色 ({n_colors} 色)...")
                 
                 # 使用 Pillow 自带的量化方法 (MEDIANCUT) 提取主色调
                 # quantize 会返回一个 P 模式图像，其调色板即为主色调
@@ -56,9 +60,9 @@ class ColorExtractor(QObject):
                         'proportion': float(prop)
                     })
 
-                self.log.emit("提取完成")
-                self.finished.emit(results, "")
+                log("提取完成")
+                finished(results, "")
 
         except Exception as e:
-            self.log.emit(f"错误: {str(e)}")
-            self.finished.emit([], str(e))
+            log(f"错误: {str(e)}")
+            finished([], str(e))

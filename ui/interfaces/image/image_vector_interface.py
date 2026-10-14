@@ -1,17 +1,20 @@
 import os
 import subprocess
+from functools import partial
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog
 from PyQt6.QtGui import QFont, QAction, QKeySequence
-from PyQt6.QtCore import Qt, QTimer
-from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slider, 
-                            CheckBox, PushButton, PrimaryPushButton, TextEdit, InfoBar, 
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slider,
+                            CheckBox, PushButton, PrimaryPushButton, TextEdit, InfoBar,
                             FluentIcon as FIF)
 
 from core.features.image.image_vectorizer import ImageVectorizer
 from ui.widgets import DragDropListWidget
-from ui.threads import ImageVectorThread
+from ui.threads import WorkerThread
 
 class ImageVectorInterface(QWidget):
+    _log_bridged = pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("image_vector_interface")
@@ -138,6 +141,7 @@ class ImageVectorInterface(QWidget):
 
         self.files = []
         self.threads = [] # Keep references
+        self._log_bridged.connect(self.log_text.append)
 
     def remove_selection(self):
         # 从后往前删
@@ -185,7 +189,10 @@ class ImageVectorInterface(QWidget):
         
         for input_path in self.files:
             output_path = os.path.splitext(input_path)[0] + ".svg"
-            thread = ImageVectorThread(self.vectorizer, input_path, output_path, **kwargs)
+            thread = WorkerThread(
+                partial(self.vectorizer.convert, input_path, output_path, **kwargs),
+                on_log=self._log_bridged.emit,
+            )
             thread.finished.connect(lambda p=output_path: self.on_one_finished(p))
             thread.start()
             self.threads.append(thread) # 防止被垃圾回收

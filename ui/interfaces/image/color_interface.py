@@ -1,12 +1,16 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QGridLayout, QFileDialog
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from qfluentwidgets import SubtitleLabel, BodyLabel, Slider, InfoBar, PushButton, CardWidget
 
 from core.features.image.color_extractor import ColorExtractor
 from ui.widgets import DropImageWidget, ColorCard, ColorBar
-from ui.threads import ExtractionThread
+from ui.threads import WorkerThread
+from functools import partial
 
 class ColorInterface(QWidget):
+    _log_bridged = pyqtSignal(str)
+    _finished_bridged = pyqtSignal(list, str)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("color_interface")
@@ -71,21 +75,25 @@ class ColorInterface(QWidget):
         # 逻辑
         self.extractor = ColorExtractor()
         self.thread = None
-        self.extractor.finished.connect(self.on_finished)
-        self.extractor.log.connect(self.show_loading) # 简单用log显示状态
+        self._log_bridged.connect(self.show_loading)
+        self._finished_bridged.connect(self.on_finished)
 
     def start_extraction(self, path):
         n_colors = self.slider.value()
         self.drop_area.setEnabled(False)
         self.clear_results()
         self.export_btn.hide()
-        
+
         # 显示加载状态
         self.loading_label = BodyLabel("正在分析图片颜色...", self)
         self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.grid_layout.addWidget(self.loading_label, 0, 0)
-        
-        self.thread = ExtractionThread(self.extractor, path, n_colors)
+
+        self.thread = WorkerThread(
+            partial(self.extractor.extract, path, n_colors),
+            on_log=self._log_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+        )
         self.thread.start()
 
     def show_loading(self, msg):
