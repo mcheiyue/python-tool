@@ -22,15 +22,7 @@ class BasePdfCompressor(QObject):
         :param kwargs: 其他引擎特定参数
         """
         pass
-        
-    @abstractmethod
-    def check_dependency(self) -> dict:
-        """
-        检查引擎依赖是否满足
-        :return: {"available": bool, "message": str, "path": str}
-        """
-        pass
-        
+
     def stop(self):
         """停止任务"""
         self._is_running = False

@@ -1,41 +1,23 @@
 import os
 import subprocess
 from .base import BasePdfCompressor
-from app.container import AppContainer
+
+def _decode_stderr(data: bytes) -> str:
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("gbk", errors="replace")
 
 class GhostscriptCompressor(BasePdfCompressor):
     """基于 Ghostscript 的 PDF 压缩实现"""
-    
-    def check_dependency(self) -> dict:
-        """检查 Ghostscript 是否可用"""
-        manager = AppContainer().external_tool_manager
-        tool = manager.get_tool("ghostscript")
-        
-        is_available = tool.is_available()
-        # 获取路径（如果可用）
-        path = tool.get_executable_path() if is_available else ""
-        
-        return {
-            "available": is_available,
-            "message": f"Ghostscript {tool.get_version()}" if is_available else "未找到 Ghostscript",
-            "path": path
-        }
 
     def compress(self, files: list, quality: str, **kwargs):
         """
         :param files: 文件列表
         :param quality: 压缩质量 (/screen, /ebook 等)
         """
-        # 尝试从 ExternalToolManager 获取 Ghostscript 路径
-        manager = AppContainer().external_tool_manager
-        tool = manager.get_tool("ghostscript")
-        
-        gs_path = tool.get_executable_path()
-        
-        # 如果 Manager 没找到，尝试从 kwargs 获取（向后兼容）
-        if not gs_path:
-            gs_path = kwargs.get('gs_path')
-            
+        gs_path = kwargs.get('gs_path')
+
         if not gs_path or not os.path.exists(gs_path):
             self.log.emit(f"❌ 未找到 Ghostscript 路径: {gs_path}")
             self.finished.emit(0, len(files))
@@ -106,7 +88,7 @@ class GhostscriptCompressor(BasePdfCompressor):
                     self.log.emit(f"✅ 成功: {os.path.basename(output_path)}")
                 else:
                     fail += 1
-                    err_msg = stderr.decode('gbk', errors='ignore') if stderr else "未知错误"
+                    err_msg = _decode_stderr(stderr) if stderr else "未知错误"
                     self.log.emit(f"❌ 失败 {name}: {err_msg}")
 
             except Exception as e:
