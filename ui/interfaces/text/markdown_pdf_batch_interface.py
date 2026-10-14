@@ -5,7 +5,7 @@ Markdown 批量转 PDF 界面
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QGridLayout, QCheckBox
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import QThread, Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PrimaryPushButton,
                             PushButton, TextEdit, InfoBar, InfoBarPosition,
                             LineEdit, ComboBox, IconWidget, FluentIcon as FIF)
@@ -14,34 +14,17 @@ from core.features.text.markdown_pdf_pandoc import PandocMarkdownToPdf
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.widgets.enhanced_progress import EnhancedProgressBar
+from ui.threads import WorkerThread
 from ui.design_system import Margins, Spacing
-
-
-class MarkdownPdfBatchThread(QThread):
-    """Markdown 转 PDF 批量处理线程"""
-    
-    def __init__(self, converter, files, output_dir, enable_math, enable_highlight, pdf_engine):
-        super().__init__()
-        self.converter = converter
-        self.files = files
-        self.output_dir = output_dir
-        self.enable_math = enable_math
-        self.enable_highlight = enable_highlight
-        self.pdf_engine = pdf_engine
-    
-    def run(self):
-        self.converter.convert_batch(
-            files=self.files,
-            output_dir=self.output_dir,
-            enable_math=self.enable_math,
-            enable_highlight=self.enable_highlight,
-            pdf_engine=self.pdf_engine
-        )
 
 
 class MarkdownPdfBatchInterface(QWidget):
     """Markdown 批量转 PDF 界面"""
-    
+    # 桥接信号：WorkerThread 回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
+
     def __init__(self, parent=None, container=None):
         super().__init__(parent=parent)
         self.container = container
@@ -166,9 +149,9 @@ class MarkdownPdfBatchInterface(QWidget):
         self.thread = None
         self._has_pdf_engine = False  # 标记是否存在可用的 PDF 引擎
         
-        self.converter.log.connect(self.append_log)
-        self.converter.progress.connect(self.update_progress)
-        self.converter.finished.connect(self.on_finished)
+        self._log_bridged.connect(self.append_log)
+        self._progress_bridged.connect(self.update_progress)
+        self._finished_bridged.connect(self.on_finished)
         
         # 初始检查
         self.check_pandoc_status()
@@ -292,14 +275,18 @@ class MarkdownPdfBatchInterface(QWidget):
         self.log_text.clear()
         
         # 创建并启动线程
-        self.thread = MarkdownPdfBatchThread(
-            self.converter,
-            self.files,
-            out_dir,
-            enable_math,
-            enable_highlight,
-            pdf_engine
+        self.thread = WorkerThread(
+            self.converter.convert_batch,
+            files=self.files,
+            output_dir=out_dir,
+            enable_math=enable_math,
+            enable_highlight=enable_highlight,
+            pdf_engine=pdf_engine,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
         )
+        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
         self.thread.start()
         
     def showEvent(self, event):
