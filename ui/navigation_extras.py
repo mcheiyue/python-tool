@@ -1,5 +1,5 @@
 from PyQt6.QtCore import Qt, pyqtSignal
-from qfluentwidgets import SearchLineEdit
+from qfluentwidgets import SearchLineEdit, NavigationDisplayMode
 
 from core.utils.resource_path import get_resource_path
 from ui.widgets.search_popup import SearchResultPopup
@@ -45,8 +45,11 @@ class SearchController:
 
     def activate(self):
         """激活搜索框 (Ctrl+K)"""
-        if not self.window.navigationInterface.isExpanded:
-            self.window.navigationInterface.panel.expand()
+        # NavigationInterface 无 isExpanded；展开态由 panel.displayMode 表达
+        if self.window.navigationInterface.panel.displayMode not in (
+            NavigationDisplayMode.EXPAND, NavigationDisplayMode.MENU
+        ):
+            self.window.navigationInterface.expand()
 
         self.search_box.setFocus()
         self.search_box.selectAll()
