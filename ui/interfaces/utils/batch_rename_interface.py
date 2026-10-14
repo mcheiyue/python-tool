@@ -4,31 +4,23 @@ import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, 
                              QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView)
 from PyQt6.QtGui import QFont, QColor
-from PyQt6.QtCore import Qt, QThread
+from PyQt6.QtCore import Qt, pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PrimaryPushButton,
                             PushButton, TextEdit, InfoBar, LineEdit,
                             FluentIcon as FIF)
 
 from core.features.utils import BatchRenamer
+from ui.threads import WorkerThread
 from ui.widgets.enhanced_progress import EnhancedProgressBar
 from ui.design_system import Margins, Spacing
 
 
-class RenameThread(QThread):
-    """重命名执行线程"""
-    
-    def __init__(self, renamer, rename_plan):
-        super().__init__()
-        self.renamer = renamer
-        self.rename_plan = rename_plan
-    
-    def run(self):
-        self.renamer.execute(self.rename_plan)
-
-
 class BatchRenameInterface(QWidget):
     """批量文件重命名界面"""
-    
+
+    # 桥接信号：WorkerThread 的进度回调在工作线程触发，经此排队回主线程
+    _progress_bridged = pyqtSignal(int, int, str)
+
     # 预设模板
     PRESET_TEMPLATES = [
         ("{name}_{index}", "原名_序号"),
@@ -160,10 +152,8 @@ class BatchRenameInterface(QWidget):
         self.rename_plan = []
         self.renamer = BatchRenamer()
         self.thread = None
-        
-        # 连接信号
-        self.renamer.log.connect(self.append_log)
-        self.renamer.progress.connect(self.update_progress)
+
+        self._progress_bridged.connect(self.update_progress)
     
     def add_files(self):
         """添加文件"""
@@ -330,23 +320,23 @@ class BatchRenameInterface(QWidget):
         self.add_folder_btn.setEnabled(False)
         self.clear_btn.setEnabled(False)
         
-        # 创建并启动线程
-        self.thread = RenameThread(self.renamer, self.rename_plan)
+        # 创建并启动线程（进度回调经桥接信号回主线程）
+        self.thread = WorkerThread(
+            self.renamer.execute,
+            self.rename_plan,
+            on_progress=self._progress_bridged.emit,
+        )
         self.thread.finished.connect(self.on_rename_finished)
+        self.thread.error.connect(self.on_rename_error)
         self.thread.start()
-    
-    def append_log(self, text):
-        """追加日志（通过表格状态显示）"""
-        # 这里可以扩展为独立的日志区域
-        pass
     
     def update_progress(self, curr, total, msg):
         """更新进度"""
         self.progress.update_progress(curr, total, msg)
         self.execute_btn.setText(f"重命名中... ({curr}/{total})")
-    
-    def on_rename_finished(self):
-        """重命名完成"""
+
+    def _restore_ui(self):
+        """恢复按钮状态并收起进度条"""
         self.execute_btn.setEnabled(True)
         self.execute_btn.setText("执行重命名")
         self.preview_btn.setEnabled(True)
@@ -355,8 +345,16 @@ class BatchRenameInterface(QWidget):
         self.clear_btn.setEnabled(True)
         self.progress.stop()
         self.progress.hide()
-        
+
+    def on_rename_finished(self, result=None):
+        """重命名完成"""
+        self._restore_ui()
         InfoBar.success("完成", "批量重命名已完成", duration=3000, parent=self)
-        
+
         # 清空列表，重新开始
         self.clear_files()
+
+    def on_rename_error(self, message: str):
+        """重命名执行失败（WorkerThread.error）"""
+        self._restore_ui()
+        InfoBar.error("失败", f"重命名出错: {message}", duration=5000, parent=self)

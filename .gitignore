@@ -67,6 +67,9 @@ logs/
 temp_output/
 assets/processed_icons/
 
+# 本地工作计划与执行记录（不跟踪）
+.omo/
+
 # Build outputs
 release/
 dabao.md

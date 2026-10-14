@@ -6,10 +6,9 @@ import os
 import re
 from datetime import datetime
 from typing import List, Dict, Tuple
-from PyQt6.QtCore import QObject, pyqtSignal
 
 
-class BatchRenamer(QObject):
+class BatchRenamer:
     """
     批量文件重命名引擎
     
@@ -22,13 +21,6 @@ class BatchRenamer(QObject):
     - {time}: 时间 (HHMMSS)
     - {datetime}: 日期时间 (YYYYMMDD_HHMMSS)
     """
-    
-    # 信号
-    log = pyqtSignal(str)
-    progress = pyqtSignal(int, int, str)  # current, total, message
-    
-    def __init__(self):
-        super().__init__()
     
     def preview(self, files: List[str], template: str, start_index: int = 1) -> List[Dict]:
         """
@@ -78,11 +70,19 @@ class BatchRenamer(QObject):
         
         return results
     
-    def execute(self, rename_plan: List[Dict]) -> Tuple[int, int]:
+    def execute(
+        self,
+        rename_plan: List[Dict],
+        *,
+        on_log=None,
+        on_progress=None,
+    ) -> Tuple[int, int]:
         """
         执行重命名
         
         :param rename_plan: 由 preview() 生成的重命名计划
+        :param on_log: 日志回调 (msg)，可选
+        :param on_progress: 进度回调 (current, total, message)，可选
         :return: (成功数, 失败数)
         """
         success, fail = 0, 0
@@ -92,20 +92,26 @@ class BatchRenamer(QObject):
             try:
                 # 跳过有冲突的项
                 if item.get('conflict', False):
-                    self.log.emit(f"⏭️ 跳过: {item['original_name']} ({item['conflict_msg']})")
-                    self.progress.emit(i + 1, total, f"跳过: {item['original_name']}")
+                    if on_log:
+                        on_log(f"⏭️ 跳过: {item['original_name']} ({item['conflict_msg']})")
+                    if on_progress:
+                        on_progress(i + 1, total, f"跳过: {item['original_name']}")
                     fail += 1
                     continue
                 
                 # 执行重命名
                 os.rename(item['original'], item['new_path'])
-                self.log.emit(f"✅ {item['original_name']} → {item['new_name']}")
-                self.progress.emit(i + 1, total, f"已重命名: {item['new_name']}")
+                if on_log:
+                    on_log(f"✅ {item['original_name']} → {item['new_name']}")
+                if on_progress:
+                    on_progress(i + 1, total, f"已重命名: {item['new_name']}")
                 success += 1
                 
             except Exception as e:
-                self.log.emit(f"❌ 失败: {item['original_name']} - {str(e)}")
-                self.progress.emit(i + 1, total, f"失败: {item['original_name']}")
+                if on_log:
+                    on_log(f"❌ 失败: {item['original_name']} - {str(e)}")
+                if on_progress:
+                    on_progress(i + 1, total, f"失败: {item['original_name']}")
                 fail += 1
         
         return success, fail
