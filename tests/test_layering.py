@@ -15,10 +15,6 @@ FEATURES_DIR = PROJECT_ROOT / "core" / "features"
 
 # 规则 A 豁免清单（随迁移逐行收缩，R10 收官时应仅剩 PERMANENT 一项）
 QT_EXEMPT_FILES = {
-    "text/markdown_converter.py",          # R6 移除
-    "text/markdown_pdf_pandoc.py",         # R6 移除
-    "text/code_extractor.py",              # R6 移除
-    "text/txt_converter.py",               # R6 移除
     "image/image_converter.py",            # R7 移除
     "image/image_vectorizer.py",           # R7 移除
     "image/color_extractor.py",            # R7 移除

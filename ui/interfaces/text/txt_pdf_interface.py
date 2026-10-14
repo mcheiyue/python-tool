@@ -1,18 +1,23 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
+from PyQt6.QtCore import pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
                             TextEdit, LineEdit, InfoBar, FluentIcon as FIF)
 
 from core.features.text.txt_converter import TxtConverter
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import TxtPdfThread
+from ui.threads import WorkerThread
 
 class TxtPdfInterface(QWidget):
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("txt_pdf_interface")
         self.converter = TxtConverter()
-        
+
         self.vbox = QVBoxLayout(self)
         self.vbox.setContentsMargins(30, 30, 30, 30)
         self.vbox.setSpacing(20)
@@ -68,8 +73,9 @@ class TxtPdfInterface(QWidget):
 
         self.files = []
         self.thread = None
-        self.converter.log.connect(self.log_text.append)
-        self.converter.finished.connect(self.on_finished)
+        self._log_bridged.connect(self.log_text.append)
+        self._progress_bridged.connect(self.update_progress)
+        self._finished_bridged.connect(self.on_finished)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "选择 TXT", "", "Text (*.txt *.md *.py *.log)")
@@ -104,7 +110,7 @@ class TxtPdfInterface(QWidget):
         """处理取消任务请求"""
         if self.thread and self.thread.isRunning():
             self.log_text.append("用户请求取消任务...")
-            self.thread.cancel()
+            self.converter.stop()
 
     def start_conversion(self):
         out_dir = self.out_edit.text()
@@ -115,8 +121,16 @@ class TxtPdfInterface(QWidget):
         self.progress.start(len(self.files))
         self.progress.show()
         
-        self.thread = TxtPdfThread(self.converter, self.files, out_dir)
+        self.thread = WorkerThread(
+            self.converter.convert, self.files, out_dir,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+        )
         self.thread.start()
+
+    def update_progress(self, curr, total, msg):
+        self.progress.update_progress(curr, total, msg)
 
     def on_finished(self, success, fail):
         self.start_btn.setEnabled(True)

@@ -61,8 +61,9 @@ class MarkdownInterface(QWidget):
         self.engine_status_label.setTextColor("#808080", "#a0a0a0")
         
         # 检查能力插件 (使用新的能力注册机制)
-        self.docx_converter = self.plugin_manager.get_preferred_plugin("markdown_to_docx", self.config)
-        self.pdf_converter = self.plugin_manager.get_preferred_plugin("markdown_to_pdf", self.config)
+        self.docx_converter = None
+        self.pdf_converter = None
+        self.refresh_capabilities()
         
         self.export_btn = PrimaryPushButton(FIF.SAVE, "导出文件", self)
         self.export_btn.setToolTip("导出为选中格式 (Ctrl+S)")
@@ -521,11 +522,14 @@ class MarkdownInterface(QWidget):
         else:
             InfoBar.error("导出失败", message, parent=self)
 
-    def on_tool_status_changed(self, name):
-        """工具/插件状态变更时刷新能力"""
-        # 重新获取首选插件
+    def refresh_capabilities(self):
+        """重新获取首选插件（单一赋值源）"""
         self.docx_converter = self.plugin_manager.get_preferred_plugin("markdown_to_docx", self.config)
         self.pdf_converter = self.plugin_manager.get_preferred_plugin("markdown_to_pdf", self.config)
+
+    def on_tool_status_changed(self, name):
+        """工具/插件状态变更时刷新能力"""
+        self.refresh_capabilities()
         
         # 刷新 UI 状态提示
         self.update_ui_state()

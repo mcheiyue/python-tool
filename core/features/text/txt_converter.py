@@ -1,32 +1,49 @@
 from fpdf import FPDF
 import os
-from PyQt6.QtCore import QObject, pyqtSignal
 from core.features.text.font_finder import FontFinder
 
-class TxtConverter(QObject):
-    finished = pyqtSignal(int, int) # success, fail
-    progress = pyqtSignal(int, int, str)
-    log = pyqtSignal(str)
+class TxtConverter:
+    def __init__(self):
+        self._is_running = True
 
-    def convert(self, files, output_dir=None):
+    def stop(self):
+        self._is_running = False
+
+    def convert(self, files, output_dir=None, *, on_log=None, on_progress=None, on_finished=None):
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def progress(curr, total, message):
+            if on_progress:
+                on_progress(curr, total, message)
+
+        def finished(ok, fail):
+            if on_finished:
+                on_finished(ok, fail)
+
+        self._is_running = True
         success = 0
         fail = 0
         total = len(files)
-        
+
         # 尝试使用系统 CJK 字体
         font_info = FontFinder.find_cjk_font()
         font_path = None
-        font_name = "Arial" # 默认回退
-        
+        font_name = "Arial"  # 默认回退
+
         if font_info:
             font_path, font_name = font_info
-            self.log.emit(f"✅ 使用字体: {font_name}")
+            log(f"✅ 使用字体: {font_name}")
         else:
-            self.log.emit("⚠️ 未找到中文字体，中文可能会显示为乱码。")
+            log("⚠️ 未找到中文字体，中文可能会显示为乱码。")
 
         for i, file_path in enumerate(files):
+            if not self._is_running:
+                log("任务已停止")
+                break
             try:
-                self.progress.emit(i, total, os.path.basename(file_path))
+                progress(i, total, os.path.basename(file_path))
                 
                 pdf = FPDF()
                 pdf.add_page()
@@ -36,7 +53,7 @@ class TxtConverter(QObject):
                         pdf.add_font(font_name, "", font_path)
                         pdf.set_font(font_name, size=12)
                     except Exception as e:
-                        self.log.emit(f"字体加载失败: {e}")
+                        log(f"字体加载失败: {e}")
                         pdf.set_font("Arial", size=12)
                 else:
                     pdf.set_font("Arial", size=12)
@@ -63,11 +80,11 @@ class TxtConverter(QObject):
                     out_name = os.path.splitext(file_path)[0] + ".pdf"
                     
                 pdf.output(out_name)
-                self.log.emit(f"成功: {out_name}")
+                log(f"成功: {out_name}")
                 success += 1
             except Exception as e:
-                self.log.emit(f"失败 {os.path.basename(file_path)}: {str(e)}")
+                log(f"失败 {os.path.basename(file_path)}: {str(e)}")
                 fail += 1
-                
-        self.progress.emit(total, total, "完成")
-        self.finished.emit(success, fail)
+
+        progress(total, total, "完成")
+        finished(success, fail)

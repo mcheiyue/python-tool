@@ -1,4 +1,5 @@
 import os
+from functools import partial
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                            QPushButton, QFileDialog, QCheckBox)
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -8,10 +9,15 @@ from qfluentwidgets import (CardWidget, PushButton, PrimaryPushButton,
 from core.features.text.markdown_converter import MarkdownConverter
 from ui.widgets.drag_drop_list import DragDropListWidget
 from core.external_tools.manager import ExternalToolManager
+from ui.threads import WorkerThread
 
 class MarkdownHtmlInterface(QWidget):
     """Markdown ↔ HTML 转换界面"""
-    
+
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
+    _log_bridged = pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.converter = MarkdownConverter()
@@ -103,9 +109,9 @@ class MarkdownHtmlInterface(QWidget):
         self.clear_btn.clicked.connect(self.file_list.clear)
         self.convert_btn.clicked.connect(self.start_convert)
         
-        self.converter.progress.connect(self.on_progress)
-        self.converter.finished.connect(self.on_finished)
-        self.converter.log.connect(self.on_log)
+        self._progress_bridged.connect(self.on_progress)
+        self._finished_bridged.connect(self.on_finished)
+        self._log_bridged.connect(self.on_log)
         
         # 拖拽文件支持
         self.file_list.files_dropped.connect(self.add_dropped_files)
@@ -181,15 +187,25 @@ class MarkdownHtmlInterface(QWidget):
         output_dir = os.path.dirname(files[0])
         
         is_md_to_html = self.mode_combo.currentIndex() == 0
-        
+
         if is_md_to_html:
-            self.converter.convert_markdown_to_html(
+            convert = partial(
+                self.converter.convert_markdown_to_html,
                 files, output_dir=output_dir, use_pandoc=use_pandoc, include_css=include_css
             )
         else:
-            self.converter.convert_html_to_markdown(
+            convert = partial(
+                self.converter.convert_html_to_markdown,
                 files, output_dir=output_dir, use_pandoc=use_pandoc
             )
+
+        self.worker = WorkerThread(
+            convert,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+            on_log=self._log_bridged.emit,
+        )
+        self.worker.start()
             
     def on_progress(self, current, total, msg):
         self.status_label.setText(f"[{current}/{total}] {msg}")

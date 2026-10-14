@@ -6,22 +6,15 @@ import os
 import subprocess
 import platform
 from typing import List, Optional
-from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.external_tools.manager import ExternalToolManager
 from core.utils.logger import AppLogger, timed_operation
 
 
-class PandocMarkdownToPdf(QObject):
+class PandocMarkdownToPdf:
     """使用 Pandoc 将 Markdown 转换为 PDF"""
-    
-    # 信号定义
-    progress = pyqtSignal(int, int, str)  # current, total, message
-    log = pyqtSignal(str)                 # log message
-    finished = pyqtSignal(int, int)       # success_count, fail_count
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
+
+    def __init__(self):
         self._is_running = False
         self.pandoc_tool = ExternalToolManager().get_tool("pandoc")
         self.logger = AppLogger()
@@ -42,7 +35,11 @@ class PandocMarkdownToPdf(QObject):
         enable_math: bool = True,
         enable_highlight: bool = True,
         pdf_engine: str = "xelatex",
-        template: Optional[str] = None
+        template: Optional[str] = None,
+        *,
+        on_log=None,
+        on_progress=None,
+        on_finished=None
     ):
         """
         批量将 Markdown 转换为 PDF
@@ -55,9 +52,22 @@ class PandocMarkdownToPdf(QObject):
             pdf_engine: PDF 引擎（xelatex/pdflatex/lualatex/wkhtmltopdf）
             template: 自定义模板文件路径
         """
+
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def progress(curr, total, message):
+            if on_progress:
+                on_progress(curr, total, message)
+
+        def finished(ok, fail):
+            if on_finished:
+                on_finished(ok, fail)
+
         if not self.is_available():
-            self.log.emit("❌ Pandoc 未安装或已禁用")
-            self.finished.emit(0, len(files))
+            log("❌ Pandoc 未安装或已禁用")
+            finished(0, len(files))
             return
         
         self._is_running = True
@@ -65,17 +75,17 @@ class PandocMarkdownToPdf(QObject):
         fail_count = 0
         total = len(files)
         
-        self.log.emit(f"开始 Markdown → PDF 转换任务，共 {total} 个文件")
-        self.log.emit(f"PDF 引擎: {pdf_engine}")
+        log(f"开始 Markdown → PDF 转换任务，共 {total} 个文件")
+        log(f"PDF 引擎: {pdf_engine}")
         self.logger.info(f"Pandoc MD→PDF: {total} files, engine={pdf_engine}")
         
         for i, file_path in enumerate(files):
             if not self._is_running:
-                self.log.emit("任务已停止")
+                log("任务已停止")
                 break
             
             file_name = os.path.basename(file_path)
-            self.progress.emit(i, total, f"正在处理: {file_name}")
+            progress(i, total, f"正在处理: {file_name}")
             
             try:
                 # 确定输出路径
@@ -91,24 +101,25 @@ class PandocMarkdownToPdf(QObject):
                     enable_math,
                     enable_highlight,
                     pdf_engine,
-                    template
+                    template,
+                    log
                 )
                 
                 if success:
                     success_count += 1
-                    self.log.emit(f"✅ 成功: {file_name} → {os.path.basename(out_path)}")
+                    log(f"✅ 成功: {file_name} → {os.path.basename(out_path)}")
                     self.logger.info(f"Converted: {file_name}")
                 else:
                     fail_count += 1
                     
             except Exception as e:
                 fail_count += 1
-                self.log.emit(f"❌ 失败 {file_name}: {str(e)}")
+                log(f"❌ 失败 {file_name}: {str(e)}")
                 self.logger.error(f"Failed to convert {file_name}: {e}")
         
         self._is_running = False
-        self.progress.emit(total, total, "完成")
-        self.finished.emit(success_count, fail_count)
+        progress(total, total, "完成")
+        finished(success_count, fail_count)
         self.logger.info(f"Pandoc MD→PDF completed: {success_count} success, {fail_count} failed")
     
     def _convert_single(
@@ -118,17 +129,18 @@ class PandocMarkdownToPdf(QObject):
         enable_math: bool,
         enable_highlight: bool,
         pdf_engine: str,
-        template: Optional[str]
+        template: Optional[str],
+        log
     ) -> bool:
         """转换单个文件"""
         pandoc_path = self.pandoc_tool.get_path()
         if not pandoc_path:
-            self.log.emit("错误: 无法获取 Pandoc 路径")
+            log("错误: 无法获取 Pandoc 路径")
             return False
             
         # 检查 PDF 引擎是否存在
         if not self._check_pdf_engine(pdf_engine):
-            self.log.emit(f"错误: 找不到 PDF 引擎 '{pdf_engine}'。请安装 TeX Live (包含 xelatex) 或 wkhtmltopdf，或者在设置中选择已安装的引擎。")
+            log(f"错误: 找不到 PDF 引擎 '{pdf_engine}'。请安装 TeX Live (包含 xelatex) 或 wkhtmltopdf，或者在设置中选择已安装的引擎。")
             return False
         
         # 构建命令
@@ -198,18 +210,18 @@ class PandocMarkdownToPdf(QObject):
             
             if result.returncode != 0:
                 error_msg = result.stderr.decode('utf-8', errors='ignore')
-                self.log.emit(f"Pandoc 错误: {error_msg}")
+                log(f"Pandoc 错误: {error_msg}")
                 self.logger.error(f"Pandoc error: {error_msg}")
                 return False
             
             return True
             
         except subprocess.TimeoutExpired:
-            self.log.emit("错误: 转换超时（超过 2 分钟）")
+            log("错误: 转换超时（超过 2 分钟）")
             self.logger.error("Pandoc conversion timeout")
             return False
         except Exception as e:
-            self.log.emit(f"执行异常: {str(e)}")
+            log(f"执行异常: {str(e)}")
             self.logger.error(f"Pandoc execution error: {e}")
             return False
 

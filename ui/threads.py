@@ -85,22 +85,6 @@ class ImageVectorThread(QThread):
     def run(self):
         self.vectorizer.convert(self.input_path, self.output_path, **self.kwargs)
 
-class TxtPdfThread(QThread):
-    def __init__(self, converter, files, output_dir):
-        super().__init__()
-        self.converter = converter
-        self.files = files
-        self.output_dir = output_dir
-        self._is_cancelled = False
-
-    def cancel(self):
-        """取消任务"""
-        self._is_cancelled = True
-
-    def run(self):
-        if not self._is_cancelled:
-            self.converter.convert(self.files, self.output_dir)
-
 class CodeExtractThread(QThread):
     def __init__(self, extractor, root_dir, extensions, output_path):
         super().__init__()

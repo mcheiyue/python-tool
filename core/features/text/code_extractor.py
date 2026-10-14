@@ -1,11 +1,15 @@
 import os
-from PyQt6.QtCore import QObject, pyqtSignal
 
-class CodeExtractor(QObject):
-    finished = pyqtSignal(bool, str)
-    log = pyqtSignal(str)
-    
-    def extract(self, root_dir, extensions, output_path):
+class CodeExtractor:
+    def extract(self, root_dir, extensions, output_path, *, on_log=None, on_finished=None):
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def finished(ok, msg):
+            if on_finished:
+                on_finished(ok, msg)
+
         try:
             total_files = 0
             # extensions example: ['.c', '.h', '.py']
@@ -15,7 +19,7 @@ class CodeExtractor(QObject):
                     for file in files:
                         if any(file.lower().endswith(ext.lower()) for ext in extensions):
                             file_path = os.path.join(root, file)
-                            self.log.emit(f"处理: {file_path}")
+                            log(f"处理: {file_path}")
                             
                             # 写入分隔符和文件名
                             out.write(f"\n{'='*50}\n")
@@ -32,6 +36,6 @@ class CodeExtractor(QObject):
                             out.write("\n\n")
                             total_files += 1
                             
-            self.finished.emit(True, f"已合并 {total_files} 个文件到 {output_path}")
+            finished(True, f"已合并 {total_files} 个文件到 {output_path}")
         except Exception as e:
-            self.finished.emit(False, str(e))
+            finished(False, str(e))
