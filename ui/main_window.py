@@ -1,26 +1,13 @@
-from PyQt6.QtCore import Qt, QSize, QTimer, QRectF, QByteArray
+from PyQt6.QtCore import QSize, QTimer, QRectF, QByteArray
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QIconEngine, QShortcut, QKeySequence
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QCompleter
-from PyQt6.QtCore import pyqtSignal
-from qfluentwidgets import (FluentWindow, NavigationItemPosition, SearchLineEdit,
+from qfluentwidgets import (FluentWindow, NavigationItemPosition,
                           isDarkTheme, TitleLabel, qconfig, NavigationAvatarWidget,
                           NavigationDisplayMode)
 
 from core.utils.fuzzy_search import FuzzySearchEngine
-from ui.widgets.search_popup import SearchResultPopup
-
-class NavigationSearchLineEdit(SearchLineEdit):
-    """支持在导航栏中使用的搜索框"""
-    clicked = pyqtSignal()
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        # 搜索框不需要被选中样式，但需要满足接口要求
-
-    def setSelected(self, isSelected):
-        # 必须实现此方法以满足 NavigationInterface 接口
-        pass
+from ui.navigation_extras import NavigationSearchLineEdit, SearchController, refresh_navigation_icons
 
 from core.utils.lazy_loader import UILazyLoader
 from core.utils.resource_path import get_resource_path
@@ -45,31 +32,12 @@ class MainWindow(FluentWindow):
         
         # 初始化模糊搜索引擎
         self.search_engine = FuzzySearchEngine(self.feature_descriptions)
-        self.search_popup = None
-        
+
         # 监听主题变化
-        qconfig.themeChanged.connect(self.updateNavigationIcons)
+        qconfig.themeChanged.connect(lambda _: refresh_navigation_icons(self))
         
         # 延迟初始化导航，确保主题已正确加载
         QTimer.singleShot(50, self.initDelayed)
-
-    def updateNavigationIcons(self):
-        """主题切换时刷新导航栏，重新设置所有图标"""
-        # QIcon 会缓存 pixmap，所以需要为每个导航项创建全新的 QIcon 实例
-        nav_panel = getattr(self.navigationInterface, 'panel', self.navigationInterface)
-        items_dict = getattr(nav_panel, '_items', {})
-        
-        for object_name, icon_path in self.icon_mapping.items():
-            if object_name in items_dict:
-                item = items_dict[object_name]
-                if hasattr(item, 'setIcon'):
-                    # 创建全新的图标实例
-                    new_icon = self.get_icon(icon_path)
-                    item.setIcon(new_icon)
-        
-        # 强制重绘整个导航栏
-        self.navigationInterface.update()
-        self.navigationInterface.repaint()
 
     def initDelayed(self):
         self.initNavigation()
@@ -176,11 +144,11 @@ class MainWindow(FluentWindow):
         self.search_box.setFixedWidth(180) # 设置宽度以适应展开状态
         
         # 初始化搜索功能
-        self.initSearch()
-        
+        self.search_controller = SearchController(self, self.search_box)
+
         # 初始化全局快捷键
         self.search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
-        self.search_shortcut.activated.connect(self.activate_search)
+        self.search_shortcut.activated.connect(self.search_controller.activate)
         
         # 将搜索框添加到导航栏
         # 注意：SearchLineEdit 默认会根据导航栏展开状态调整显示
@@ -188,7 +156,7 @@ class MainWindow(FluentWindow):
         self.navigationInterface.addWidget(
             routeKey="search_box",
             widget=self.search_box,
-            onClick=self.on_search_clicked,
+            onClick=self.search_controller.on_clicked,
             position=NavigationItemPosition.TOP
         )
         
@@ -356,75 +324,6 @@ class MainWindow(FluentWindow):
         
         # 隐藏导航栏左上角的返回按钮
         self.navigationInterface.setReturnButtonVisible(False)
-
-    def initSearch(self):
-        """初始化搜索功能"""
-        # 初始化搜索弹窗
-        self.search_popup = SearchResultPopup(self)
-        self.search_popup.itemClicked.connect(self.on_search_result_clicked)
-        
-        # 监听输入变化
-        self.search_box.textChanged.connect(self.on_search_text_changed)
-        self.search_box.returnPressed.connect(self.on_search_return_pressed)
-        
-    def activate_search(self):
-        """激活搜索框 (Ctrl+K)"""
-        if not self.navigationInterface.isExpanded:
-            self.navigationInterface.panel.expand()
-        
-        self.search_box.setFocus()
-        self.search_box.selectAll()
-
-    def on_search_text_changed(self, text):
-        """搜索文本变化处理"""
-        if not text:
-            self.search_popup.hide()
-            return
-            
-        # 执行模糊搜索
-        results = self.search_engine.search(text)
-        
-        if results:
-            # 准备图标
-            icons = {}
-            for res in results:
-                icon_file = self.icon_name_map.get(res.name, "magic.svg")
-                icons[res.name] = self.get_icon(get_resource_path(f"assets/icons/{icon_file}"))
-                
-            # 显示弹窗
-            # 计算位置：在搜索框下方
-            pos = self.search_box.mapToGlobal(self.search_box.rect().bottomLeft())
-            pos = self.mapFromGlobal(pos)
-            
-            self.search_popup.move(pos.x(), pos.y() + 5)
-            self.search_popup.show_results(results, icons, self.search_box.width())
-        else:
-            self.search_popup.hide()
-
-    def on_search_return_pressed(self):
-        """回车键处理"""
-        if self.search_popup.isVisible() and self.search_popup.count() > 0:
-            # 如果弹窗显示且有结果，选择第一项
-            item = self.search_popup.item(0)
-            feature_name = item.data(Qt.ItemDataRole.UserRole)
-            self.on_search_result_clicked(feature_name)
-
-    def on_search_clicked(self):
-        # 搜索框点击时不进行页面切换，仅保持焦点
-        self.search_box.setFocus()
-        # 如果有文本，重新触发搜索以显示弹窗
-        if self.search_box.text():
-            self.on_search_text_changed(self.search_box.text())
-
-    def on_search_result_clicked(self, feature_name):
-        """搜索结果点击处理"""
-        if feature_name in self.interfaces:
-            self.switchTo(self.interfaces[feature_name])
-            # 清空搜索框并隐藏弹窗
-            self.search_box.clear()
-            self.search_popup.hide()
-            # 自动收起侧边栏（使用 panel.collapse() 方法）
-            self.navigationInterface.panel.collapse()
 
     def createCategoryInterface(self, text, objectName):
         """创建分类界面的辅助函数（返回卡片首页）"""
