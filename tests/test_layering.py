@@ -15,8 +15,6 @@ FEATURES_DIR = PROJECT_ROOT / "core" / "features"
 
 # 规则 A 豁免清单（随迁移逐行收缩，R10 收官时应仅剩 PERMANENT 一项）
 QT_EXEMPT_FILES = {
-    "pdf/pdf_page_renderer.py",            # R3/R4 移除
-    "pdf/image_to_pdf_converter.py",       # R3/R4 移除
     "office/word_converter.py",            # R5 移除
     "office/libreoffice_converter.py",     # R5 移除
     "office/doc_to_docx_converter.py",     # R5 移除

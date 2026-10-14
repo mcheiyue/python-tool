@@ -1,42 +1,55 @@
-from PyQt6.QtCore import QObject, pyqtSignal
 from PIL import Image
 import os
 
-class ImageToPdfConverter(QObject):
-    finished = pyqtSignal(bool, str)  # success, msg
-    log = pyqtSignal(str)
-
-    def convert(self, image_paths, output_path, merge=True):
+class ImageToPdfConverter:
+    def convert(self, image_paths, output_path, merge=True, *, on_log=None, on_finished=None):
         """
         将图片转换为 PDF
         :param image_paths: 图片路径列表
         :param output_path: 输出路径（如果是合并模式则是文件路径，否则是目录路径）
         :param merge: 是否合并为一个 PDF
         """
+
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def finished(ok, msg):
+            if on_finished:
+                on_finished(ok, msg)
+
         try:
             if not image_paths:
-                self.finished.emit(False, "没有输入文件")
+                finished(False, "没有输入文件")
                 return
 
             if merge:
-                self._convert_merge(image_paths, output_path)
+                self._convert_merge(image_paths, output_path, on_log, on_finished)
             else:
-                self._convert_single(image_paths, output_path)
+                self._convert_single(image_paths, output_path, on_log, on_finished)
 
         except Exception as e:
             error_msg = f"转换失败: {str(e)}"
-            self.log.emit(error_msg)
-            self.finished.emit(False, str(e))
+            log(error_msg)
+            finished(False, str(e))
 
-    def _convert_merge(self, image_paths, output_file):
+    def _convert_merge(self, image_paths, output_file, on_log, on_finished):
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def finished(ok, msg):
+            if on_finished:
+                on_finished(ok, msg)
+
         try:
             images = []
             first_image = None
 
-            self.log.emit(f"正在准备合并 {len(image_paths)} 张图片...")
+            log(f"正在准备合并 {len(image_paths)} 张图片...")
 
             for path in image_paths:
-                self.log.emit(f"处理图片: {os.path.basename(path)}")
+                log(f"处理图片: {os.path.basename(path)}")
                 with Image.open(path) as img:
                     # 转换颜色模式，PDF 不支持 RGBA
                     if img.mode == 'RGBA':
@@ -59,7 +72,7 @@ class ImageToPdfConverter(QObject):
                 if output_dir and not os.path.exists(output_dir):
                     os.makedirs(output_dir)
 
-                self.log.emit("正在生成 PDF 文件...")
+                log("正在生成 PDF 文件...")
                 first_image.save(output_file, "PDF", resolution=100.0, save_all=True, append_images=images)
                 
                 # 关闭所有 Image 对象
@@ -67,15 +80,23 @@ class ImageToPdfConverter(QObject):
                 for img in images:
                     img.close()
                 
-                self.log.emit(f"成功生成: {os.path.basename(output_file)}")
-                self.finished.emit(True, output_file)
+                log(f"成功生成: {os.path.basename(output_file)}")
+                finished(True, output_file)
             else:
-                self.finished.emit(False, "无法加载任何图片")
+                finished(False, "无法加载任何图片")
 
         except Exception as e:
             raise e
 
-    def _convert_single(self, image_paths, output_dir):
+    def _convert_single(self, image_paths, output_dir, on_log, on_finished):
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def finished(ok, msg):
+            if on_finished:
+                on_finished(ok, msg)
+
         try:
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
@@ -83,7 +104,7 @@ class ImageToPdfConverter(QObject):
             success_count = 0
             for path in image_paths:
                 try:
-                    self.log.emit(f"处理图片: {os.path.basename(path)}")
+                    log(f"处理图片: {os.path.basename(path)}")
                     with Image.open(path) as img:
                         if img.mode == 'RGBA':
                             background = Image.new('RGB', img.size, (255, 255, 255))
@@ -102,13 +123,13 @@ class ImageToPdfConverter(QObject):
                         success_count += 1
                     
                 except Exception as e:
-                    self.log.emit(f"转换 {os.path.basename(path)} 失败: {str(e)}")
+                    log(f"转换 {os.path.basename(path)} 失败: {str(e)}")
 
             if success_count > 0:
-                self.log.emit(f"完成转换: 成功 {success_count}/{len(image_paths)}")
-                self.finished.emit(True, f"成功转换 {success_count} 个文件")
+                log(f"完成转换: 成功 {success_count}/{len(image_paths)}")
+                finished(True, f"成功转换 {success_count} 个文件")
             else:
-                self.finished.emit(False, "所有文件转换失败")
+                finished(False, "所有文件转换失败")
 
         except Exception as e:
             raise e

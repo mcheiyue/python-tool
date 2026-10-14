@@ -1,18 +1,24 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QGridLayout, QCheckBox
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
                             TextEdit, LineEdit, InfoBar, FluentIcon as FIF,
                             ComboBox, SpinBox)
 
 from core.features.pdf.pdf_page_renderer import PDFPageRenderer
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import PDFRenderThread
+from ui.threads import WorkerThread
 from core.external_tools.manager import ExternalToolManager
 
 class PDFRenderInterface(QWidget):
     """PDF 页面渲染界面"""
-    
+
+    # 桥接信号：渲染回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("pdf_render_interface")
@@ -149,9 +155,9 @@ class PDFRenderInterface(QWidget):
         # 初始化状态
         self.files = []
         self.thread = None
-        self.renderer.log.connect(self.log_text.append)
-        self.renderer.finished.connect(self.on_finished)
-        self.renderer.progress.connect(self.update_progress)
+        self._log_bridged.connect(self.log_text.append)
+        self._finished_bridged.connect(self.on_finished)
+        self._progress_bridged.connect(self.update_progress)
 
     def _show_unavailable_ui(self):
         """显示不可用提示"""
@@ -244,15 +250,14 @@ class PDFRenderInterface(QWidget):
         # 创建并启动线程
         use_gs = self.gs_check.isChecked() if self.gs_check else False
 
-        self.thread = PDFRenderThread(
-            self.renderer,
-            self.files,
-            out_dir,
-            dpi,
-            output_format,
-            page_range,
-            use_ghostscript=use_gs
+        self.thread = WorkerThread(
+            self.renderer.render_all, self.files, out_dir, dpi, output_format, page_range,
+            use_ghostscript=use_gs,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
         )
+        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
         self.thread.start()
 
     def update_progress(self, curr, total, msg):

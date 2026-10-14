@@ -163,17 +163,6 @@ class ImageConvertThread(QThread):
     def run(self):
         self.converter.convert(self.input_path, self.output_path, self.output_format, self.quality, self.rotate_angle, self.flip_mode)
 
-class ImageToPdfThread(QThread):
-    def __init__(self, converter, image_paths, output_path, merge):
-        super().__init__()
-        self.converter = converter
-        self.image_paths = image_paths
-        self.output_path = output_path
-        self.merge = merge
-
-    def run(self):
-        self.converter.convert(self.image_paths, self.output_path, self.merge)
-
 class PPTImageExportThread(QThread):
     def __init__(self, exporter, files, output_dir, format):
         super().__init__()
@@ -195,30 +184,4 @@ class DocToDocxThread(QThread):
     def run(self):
         self.converter.convert(self.files, self.output_dir)
 
-class PDFRenderThread(QThread):
-    """PDF 页面渲染线程"""
-    def __init__(self, renderer, files, output_dir, dpi, output_format, page_range=None, use_ghostscript=False):
-        super().__init__()
-        self.renderer = renderer
-        self.files = files
-        self.output_dir = output_dir
-        self.dpi = dpi
-        self.output_format = output_format
-        self.page_range = page_range
-        self.use_ghostscript = use_ghostscript
-        self._is_cancelled = False
 
-    def cancel(self):
-        """取消任务"""
-        self._is_cancelled = True
-
-    def run(self):
-        if not self._is_cancelled:
-            self.renderer.render_all(
-                self.files,
-                self.output_dir,
-                self.dpi,
-                self.output_format,
-                self.page_range,
-                use_ghostscript=self.use_ghostscript
-            )

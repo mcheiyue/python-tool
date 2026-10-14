@@ -1,16 +1,19 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QButtonGroup
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, RadioButton,
                             PushButton, PrimaryPushButton, TextEdit, InfoBar, 
                             FluentIcon as FIF)
 
 from core.features.pdf.image_to_pdf_converter import ImageToPdfConverter
 from ui.widgets import DragDropListWidget
-from ui.threads import ImageToPdfThread
+from ui.threads import WorkerThread
 
 class ImagePdfInterface(QWidget):
+    # 桥接信号：转换回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("image_pdf_interface")
@@ -82,7 +85,7 @@ class ImagePdfInterface(QWidget):
         self.thread = None
         
         # 连接日志信号
-        self.converter.log.connect(self.log_text.append)
+        self._log_bridged.connect(self.log_text.append)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
@@ -128,11 +131,15 @@ class ImagePdfInterface(QWidget):
         self.start_btn.setEnabled(False)
         self.log_text.append("开始转换任务...")
         
-        self.thread = ImageToPdfThread(self.converter, self.files, output_path, merge_mode)
+        self.thread = WorkerThread(
+            self.converter.convert, self.files, output_path, merge_mode,
+            on_log=self._log_bridged.emit,
+        )
         self.thread.finished.connect(self.on_finished)
+        self.thread.error.connect(self.on_finished)
         self.thread.start()
 
-    def on_finished(self):
+    def on_finished(self, result=None):
         self.start_btn.setEnabled(True)
         self.thread = None
         # 注意：成功提示已在 converter 的 finished 信号中处理（如果有连接的话），
