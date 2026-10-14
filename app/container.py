@@ -1,4 +1,5 @@
 from config import ConfigLoader
+from core.engines.office.selector import create_office_engine
 from core.plugins import PluginManager
 from core.external_tools import ExternalToolManager
 
@@ -37,26 +38,22 @@ class AppContainer:
             self._doc_to_docx_converter = DocToDocxConverter()
         return self._doc_to_docx_converter
 
-    def _create_office_engine(self, engine_type: str):
-        from core.engines.office.selector import create_office_engine
-        return create_office_engine(engine_type, self.external_tool_manager)
-
     @property
     def word_engine(self):
         if self._word_engine is None:
-            self._word_engine = self._create_office_engine('word')
+            self._word_engine = create_office_engine('word', self.external_tool_manager)
         return self._word_engine
 
     @property
     def ppt_engine(self):
         if self._ppt_engine is None:
-            self._ppt_engine = self._create_office_engine('powerpoint')
+            self._ppt_engine = create_office_engine('powerpoint', self.external_tool_manager)
         return self._ppt_engine
 
     @property
     def excel_engine(self):
         if self._excel_engine is None:
-            self._excel_engine = self._create_office_engine('excel')
+            self._excel_engine = create_office_engine('excel', self.external_tool_manager)
         return self._excel_engine
 
     @property
