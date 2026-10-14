@@ -2,17 +2,22 @@ import os
 import subprocess
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QListWidgetItem
 from PyQt6.QtGui import QFont, QAction, QKeySequence
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
                             ToolButton, TextEdit, LineEdit, ProgressBar, InfoBar,
                             CardWidget, FluentIcon as FIF)
 
 from core.features.pdf.pdf_merger import PDFMerger
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import MergeThread
+from ui.threads import WorkerThread
 from ui.design_system import Margins, Spacing
 
 class PDFMergeInterface(QWidget):
+    # 桥接信号：合并回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(bool, str)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("pdf_merge_interface")
@@ -146,9 +151,9 @@ class PDFMergeInterface(QWidget):
         self.merger = PDFMerger()
         self.thread = None
 
-        self.merger.log.connect(self.append_log)
-        self.merger.progress.connect(self.update_progress)
-        self.merger.finished.connect(self.on_finished)
+        self._log_bridged.connect(self.append_log)
+        self._progress_bridged.connect(self.update_progress)
+        self._finished_bridged.connect(self.on_finished)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF 文件", "", "PDF (*.pdf)")
@@ -250,7 +255,13 @@ class PDFMergeInterface(QWidget):
         self.progress.start(len(files))
         self.progress.show()
         
-        self.thread = MergeThread(self.merger, files, output_path)
+        self.thread = WorkerThread(
+            self.merger.merge, files, output_path,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+        )
+        self.thread.error.connect(lambda msg: self.on_finished(False, msg))
         self.thread.start()
 
     def on_finished(self, success, msg):

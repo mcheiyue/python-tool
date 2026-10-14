@@ -24,8 +24,10 @@ class TestPDFMergerCharacterization:
 
         events = []
         merger = PDFMerger()
-        merger.finished.connect(lambda ok, msg: events.append((ok, msg)))
-        merger.merge([str(f1), str(f2)], str(out))
+        merger.merge(
+            [str(f1), str(f2)], str(out),
+            on_finished=lambda ok, msg: events.append((ok, msg)),
+        )
 
         assert events == [(True, "成功合并 2 个文件")]
         assert len(PdfReader(str(out)).pages) == 5
@@ -33,8 +35,10 @@ class TestPDFMergerCharacterization:
     def test_merge_empty_list(self, tmp_path):
         events = []
         merger = PDFMerger()
-        merger.finished.connect(lambda ok, msg: events.append((ok, msg)))
-        merger.merge([], str(tmp_path / "out.pdf"))
+        merger.merge(
+            [], str(tmp_path / "out.pdf"),
+            on_finished=lambda ok, msg: events.append((ok, msg)),
+        )
 
         assert events == [(False, "文件列表为空")]
         assert not (tmp_path / "out.pdf").exists()
@@ -48,8 +52,10 @@ class TestPDFMergerCharacterization:
 
         events = []
         merger = PDFMerger()
-        merger.finished.connect(lambda ok, msg: events.append((ok, msg)))
-        merger.merge([str(good), str(bad)], str(out))
+        merger.merge(
+            [str(good), str(bad)], str(out),
+            on_finished=lambda ok, msg: events.append((ok, msg)),
+        )
 
         assert len(events) == 1
         ok, msg = events[0]
@@ -65,8 +71,10 @@ class TestPDFSplitterCharacterization:
 
         events = []
         splitter = PDFSplitter()
-        splitter.finished.connect(lambda ok, msg: events.append((ok, msg)))
-        splitter.split(str(src), "1-2, 4", str(tmp_path))
+        splitter.split(
+            str(src), "1-2, 4", str(tmp_path),
+            on_finished=lambda ok, msg: events.append((ok, msg)),
+        )
 
         assert events == [(True, "拆分完成")]
         parts = list(tmp_path.glob("doc_part*"))
@@ -81,8 +89,10 @@ class TestPDFSplitterCharacterization:
 
         events = []
         splitter = PDFSplitter()
-        splitter.finished.connect(lambda ok, msg: events.append((ok, msg)))
-        splitter.split(str(src), "abc", str(tmp_path))
+        splitter.split(
+            str(src), "abc", str(tmp_path),
+            on_finished=lambda ok, msg: events.append((ok, msg)),
+        )
 
         assert events == [(False, "无效的页码范围")]
 
@@ -100,8 +110,7 @@ class TestPDFImageExtractorCharacterization:
     def test_extract_empty_list(self, tmp_path):
         events = []
         extractor = PDFImageExtractor()
-        extractor.finished.connect(lambda a, b: events.append((a, b)))
-        extractor.extract([], str(tmp_path))
+        extractor.extract([], str(tmp_path), on_finished=lambda a, b: events.append((a, b)))
 
         assert events == [(0, 0)]
 
@@ -111,8 +120,7 @@ class TestPDFImageExtractorCharacterization:
 
         events = []
         extractor = PDFImageExtractor()
-        extractor.finished.connect(lambda a, b: events.append((a, b)))
-        extractor.extract([str(txt)], str(tmp_path))
+        extractor.extract([str(txt)], str(tmp_path), on_finished=lambda a, b: events.append((a, b)))
 
         assert events == [(0, 1)]
 
@@ -122,8 +130,7 @@ class TestPDFImageExtractorCharacterization:
 
         events = []
         extractor = PDFImageExtractor()
-        extractor.finished.connect(lambda a, b: events.append((a, b)))
-        extractor.extract([str(src)], str(tmp_path))
+        extractor.extract([str(src)], str(tmp_path), on_finished=lambda a, b: events.append((a, b)))
 
         assert events == [(1, 0)]
         assert not (tmp_path / "plain_images").exists()

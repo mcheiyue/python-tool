@@ -1,17 +1,22 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QFileDialog
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
                             PrimaryPushButton, TextEdit, LineEdit, InfoBar,
                             FluentIcon as FIF)
 
 from core.features.pdf.pdf_splitter import PDFSplitter
-from ui.threads import PDFSplitThread
+from ui.threads import WorkerThread
 from ui.widgets import CancellableProgressWidget
 from ui.design_system import Margins, Spacing
 
 class PDFSplitInterface(QWidget):
+    # 桥接信号：拆分回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(bool, str)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("pdf_split_interface")
@@ -80,9 +85,9 @@ class PDFSplitInterface(QWidget):
         self.vbox.addWidget(self.start_btn, 0, Qt.AlignmentFlag.AlignRight)
 
         self.thread = None
-        self.splitter.log.connect(self.log_text.append)
-        self.splitter.finished.connect(self.on_finished)
-        self.splitter.progress.connect(self.update_progress)
+        self._log_bridged.connect(self.log_text.append)
+        self._finished_bridged.connect(self.on_finished)
+        self._progress_bridged.connect(self.update_progress)
 
     def browse_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择 PDF", "", "PDF (*.pdf)")
@@ -124,7 +129,13 @@ class PDFSplitInterface(QWidget):
         self.progress.start(100)  # 拆分任务数量未知，使用默认值
         self.progress.show()
         
-        self.thread = PDFSplitThread(self.splitter, file_path, ranges, output_dir)
+        self.thread = WorkerThread(
+            self.splitter.split, file_path, ranges, output_dir,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+        )
+        self.thread.error.connect(lambda msg: self.on_finished(False, msg))
         self.thread.start()
 
     def update_progress(self, curr, total, msg):

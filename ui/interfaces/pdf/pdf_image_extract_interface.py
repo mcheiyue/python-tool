@@ -1,14 +1,20 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
                             TextEdit, LineEdit, InfoBar, FluentIcon as FIF)
 
 from core.features.pdf.pdf_image_extractor import PDFImageExtractor
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import PDFImageExtractThread
+from ui.threads import WorkerThread
 
 class PDFImageExtractInterface(QWidget):
+    # 桥接信号：提取回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("pdf_img_extract_interface")
@@ -71,9 +77,9 @@ class PDFImageExtractInterface(QWidget):
 
         self.files = []
         self.thread = None
-        self.extractor.log.connect(self.log_text.append)
-        self.extractor.finished.connect(self.on_finished)
-        self.extractor.progress.connect(self.update_progress)
+        self._log_bridged.connect(self.log_text.append)
+        self._finished_bridged.connect(self.on_finished)
+        self._progress_bridged.connect(self.update_progress)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
@@ -119,7 +125,13 @@ class PDFImageExtractInterface(QWidget):
         self.progress.start(len(self.files))
         self.progress.show()
         
-        self.thread = PDFImageExtractThread(self.extractor, self.files, out_dir)
+        self.thread = WorkerThread(
+            self.extractor.extract, self.files, out_dir,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+        )
+        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
         self.thread.start()
 
     def update_progress(self, curr, total, msg):

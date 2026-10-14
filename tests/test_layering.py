@@ -15,9 +15,6 @@ FEATURES_DIR = PROJECT_ROOT / "core" / "features"
 
 # 规则 A 豁免基线（21 文件，随迁移任务逐行删除）
 QT_EXEMPT_FILES = {
-    "pdf/pdf_merger.py",                   # R3/R4 移除
-    "pdf/pdf_splitter.py",                 # R3/R4 移除
-    "pdf/pdf_image_extractor.py",          # R3/R4 移除
     "pdf/pdf_metadata.py",                 # R3/R4 移除
     "pdf/pdf_security.py",                 # R3/R4 移除
     "pdf/pdf_page_renderer.py",            # R3/R4 移除

@@ -72,9 +72,6 @@ class WorkerThread(QThread):
 #
 # 这些类保留是为了向后兼容。新代码应该使用 WorkerThread 代替。
 #
-# 迁移示例:
-#   旧代码: thread = MergeThread(self.merger, files, output_path)
-#   新代码: thread = WorkerThread(self.merger.merge, files, output_path)
 # ============================================================================
 
 class ImageVectorThread(QThread):
@@ -134,22 +131,6 @@ class ConversionThread(QThread):
     def run(self):
         self.converter.convert(self.files)
 
-class MergeThread(QThread):
-    def __init__(self, merger, files, output_path):
-        super().__init__()
-        self.merger = merger
-        self.files = files
-        self.output_path = output_path
-        self._is_cancelled = False
-
-    def cancel(self):
-        """取消任务"""
-        self._is_cancelled = True
-
-    def run(self):
-        if not self._is_cancelled:
-            self.merger.merge(self.files, self.output_path)
-
 class CompressThread(QThread):
     def __init__(self, compressor, files, quality, gs_path):
         super().__init__()
@@ -167,39 +148,6 @@ class CompressThread(QThread):
         # 使用关键字参数传递 gs_path，适配新的引擎接口
         if not self._is_cancelled:
             self.compressor.compress(self.files, self.quality, gs_path=self.gs_path)
-
-class PDFSplitThread(QThread):
-    def __init__(self, splitter, file_path, ranges, output_dir):
-        super().__init__()
-        self.splitter = splitter
-        self.file_path = file_path
-        self.ranges = ranges
-        self.output_dir = output_dir
-        self._is_cancelled = False
-
-    def cancel(self):
-        """取消任务"""
-        self._is_cancelled = True
-
-    def run(self):
-        if not self._is_cancelled:
-            self.splitter.split(self.file_path, self.ranges, self.output_dir)
-
-class PDFImageExtractThread(QThread):
-    def __init__(self, extractor, files, output_dir):
-        super().__init__()
-        self.extractor = extractor
-        self.files = files
-        self.output_dir = output_dir
-        self._is_cancelled = False
-
-    def cancel(self):
-        """取消任务"""
-        self._is_cancelled = True
-
-    def run(self):
-        if not self._is_cancelled:
-            self.extractor.extract(self.files, self.output_dir)
 
 class ImageConvertThread(QThread):
     def __init__(self, converter, input_path, output_path, output_format, quality, rotate_angle=0, flip_mode=None):
