@@ -13,7 +13,7 @@ class CodeExtractInterface(QWidget):
         super().__init__(parent=parent)
         self.setObjectName("code_extract_interface")
         self.extractor = CodeExtractor()
-        
+
         self.vbox = QVBoxLayout(self)
         self.vbox.setContentsMargins(30, 30, 30, 30)
         self.vbox.setSpacing(20)
@@ -71,8 +71,6 @@ class CodeExtractInterface(QWidget):
         self.vbox.addWidget(self.start_btn, 0, Qt.AlignmentFlag.AlignRight)
 
         self.thread = None
-        self.extractor.log.connect(self.log_text.append)
-        self.extractor.finished.connect(self.on_finished)
 
     def browse_dir(self):
         path = QFileDialog.getExistingDirectory(self, "选择项目根目录")
