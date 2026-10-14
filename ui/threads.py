@@ -74,17 +74,6 @@ class WorkerThread(QThread):
 #
 # ============================================================================
 
-class CodeExtractThread(QThread):
-    def __init__(self, extractor, root_dir, extensions, output_path):
-        super().__init__()
-        self.extractor = extractor
-        self.root_dir = root_dir
-        self.extensions = extensions
-        self.output_path = output_path
-
-    def run(self):
-        self.extractor.extract(self.root_dir, self.extensions, self.output_path)
-
 class ConversionThread(QThread):
     def __init__(self, converter, files):
         super().__init__()

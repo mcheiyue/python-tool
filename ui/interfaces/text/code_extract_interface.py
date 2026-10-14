@@ -1,14 +1,18 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QFileDialog
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton, 
                             PrimaryPushButton, TextEdit, LineEdit, InfoBar, 
                             FluentIcon as FIF)
 
 from core.features.text.code_extractor import CodeExtractor
-from ui.threads import CodeExtractThread
+from ui.threads import WorkerThread
 
 class CodeExtractInterface(QWidget):
+    # 桥接信号：WorkerThread 回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _finished_bridged = pyqtSignal(bool, str)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("code_extract_interface")
@@ -65,6 +69,9 @@ class CodeExtractInterface(QWidget):
         self.log_text.setReadOnly(True)
         self.vbox.addWidget(self.log_text)
 
+        self._log_bridged.connect(self.log_text.append)
+        self._finished_bridged.connect(self.on_finished)
+
         # 按钮
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始提取", self)
         self.start_btn.clicked.connect(self.start_extract)
@@ -101,7 +108,12 @@ class CodeExtractInterface(QWidget):
         
         self.start_btn.setEnabled(False)
         self.log_text.clear()
-        self.thread = CodeExtractThread(self.extractor, root, exts, out)
+        self.thread = WorkerThread(
+            self.extractor.extract, root, exts, out,
+            on_log=self._log_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+        )
+        self.thread.error.connect(lambda msg: self.on_finished(False, msg))
         self.thread.start()
 
     def on_finished(self, success, msg):
