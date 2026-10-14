@@ -201,7 +201,7 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.office_home, self.get_icon(get_resource_path("assets/icons/presentation.svg")), "Office 转换")
 
         # 1.1 PPT 转 PDF（添加到stackedWidget但不在导航栏显示）
-        self.ppt_interface = UILazyLoader("ui.interfaces.office.ppt_interface", "PPTInterface", self)
+        self.ppt_interface = UILazyLoader("ui.interfaces.office.office_convert_interface", "PPTInterface", self)
         self.stackedWidget.addWidget(self.ppt_interface)
         self.interfaces["PPT 转 PDF"] = self.ppt_interface
 
@@ -211,7 +211,7 @@ class MainWindow(FluentWindow):
         self.interfaces["PPT 转图片"] = self.ppt_img_interface
 
         # 1.3 Word 转 PDF
-        self.word_interface = UILazyLoader("ui.interfaces.office.word_interface", "WordInterface", self)
+        self.word_interface = UILazyLoader("ui.interfaces.office.office_convert_interface", "WordInterface", self)
         self.stackedWidget.addWidget(self.word_interface)
         self.interfaces["Word 转 PDF"] = self.word_interface
 
@@ -221,7 +221,7 @@ class MainWindow(FluentWindow):
         self.interfaces["Doc 转 Docx"] = self.doc_to_docx_interface
 
         # 1.5 Excel 转 PDF
-        self.excel_interface = UILazyLoader("ui.interfaces.office.excel_interface", "ExcelInterface", self)
+        self.excel_interface = UILazyLoader("ui.interfaces.office.office_convert_interface", "ExcelInterface", self)
         self.stackedWidget.addWidget(self.excel_interface)
         self.interfaces["Excel 转 PDF"] = self.excel_interface
 

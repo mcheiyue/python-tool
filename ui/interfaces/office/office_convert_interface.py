@@ -9,20 +9,29 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.widgets.enhanced_progress import EnhancedProgressBar
-from ui.threads import ConversionThread
+from ui.threads import WorkerThread
 from ui.design_system import Margins, Spacing
 
-class ExcelInterface(QWidget):
+
+class OfficeConvertInterface(QWidget):
+    """Word/Excel/PPT 转 PDF 三合一页面；子类用类属性参数化差异项。"""
+    object_name = ""
+    page_title = ""
+    page_desc = ""
+    file_filter = ""
+    allowed_exts = ()
+    engine_attr = ""
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.setObjectName("excel_interface")
-        
+        self.setObjectName(self.object_name)
+
         self.vbox = QVBoxLayout(self)
         self.vbox.setContentsMargins(*Margins.PAGE)
         self.vbox.setSpacing(Spacing.LG)
 
-        self.title = SubtitleLabel("Excel 转 PDF", self)
-        self.desc = BodyLabel("批量转换 Excel 文件 (支持 MS Excel 或 LibreOffice)", self)
+        self.title = SubtitleLabel(self.page_title, self)
+        self.desc = BodyLabel(self.page_desc, self)
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)
@@ -38,7 +47,7 @@ class ExcelInterface(QWidget):
 
         self.add_btn = PrimaryPushButton(FIF.ADD, "添加文件", self)
         self.add_btn.clicked.connect(self.add_files)
-        
+
         self.clear_btn = PushButton(FIF.DELETE, "清空", self)
         self.clear_btn.clicked.connect(self.clear_files)
 
@@ -56,10 +65,10 @@ class ExcelInterface(QWidget):
         self.content_layout = QHBoxLayout(self.content_card)
         self.content_layout.setContentsMargins(*Margins.CARD)
         self.content_layout.setSpacing(Spacing.MD)
-        
+
         self.list_widget = DragDropListWidget(self)
         self.list_widget.files_dropped.connect(self.on_files_dropped)
-        
+
         self.log_text = TextEdit(self)
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 10))
@@ -70,17 +79,17 @@ class ExcelInterface(QWidget):
                 border-radius: 6px;
             }
         """)
-        
+
         self.content_layout.addWidget(self.list_widget, 6)
         self.content_layout.addWidget(self.log_text, 4)
-        
-        self.vbox.addWidget(self.content_card, 1) # stretch=1 使其占据主要空间
+
+        self.vbox.addWidget(self.content_card, 1)  # stretch=1 使其占据主要空间
 
         self.bottom_layout = QHBoxLayout()
-        
+
         self.progress = EnhancedProgressBar(self)
         self.progress.hide()
-        
+
         self.start_btn = PrimaryPushButton(FIF.PLAY, "开始转换", self)
         self.start_btn.setFixedWidth(200)
         self.start_btn.clicked.connect(self.start_conversion)
@@ -89,11 +98,10 @@ class ExcelInterface(QWidget):
         self.bottom_layout.addWidget(self.progress)
         self.bottom_layout.addSpacing(20)
         self.bottom_layout.addWidget(self.start_btn)
-        
+
         self.vbox.addLayout(self.bottom_layout)
 
-        # 不再使用 self.files 列表，改用单一数据源模式
-        self.converter = AppContainer().excel_engine
+        self.converter = getattr(AppContainer(), self.engine_attr)
         self.thread = None
 
         self.converter.log.connect(self.append_log)
@@ -111,7 +119,7 @@ class ExcelInterface(QWidget):
         return paths
 
     def add_files(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, "选文件", "", "Excel (*.xls *.xlsx)")
+        paths, _ = QFileDialog.getOpenFileNames(self, "选文件", "", self.file_filter)
         if paths: self.on_files_dropped(paths)
 
     def on_files_dropped(self, paths):
@@ -120,8 +128,7 @@ class ExcelInterface(QWidget):
         for p in paths:
             if p not in current_paths:
                 ext = os.path.splitext(p)[1].lower()
-                if ext in ['.xls', '.xlsx']:
-                    # 使用 UserRole 存储完整路径
+                if ext in self.allowed_exts:
                     item = QListWidgetItem(os.path.basename(p))
                     item.setData(Qt.ItemDataRole.UserRole, p)
                     self.list_widget.addItem(item)
@@ -156,7 +163,7 @@ class ExcelInterface(QWidget):
         self.log_text.clear()
         self.progress.start(len(files))
         self.progress.show()
-        self.thread = ConversionThread(self.converter, files)
+        self.thread = WorkerThread(self.converter.convert, files)
         self.thread.start()
 
     def on_finished(self, success, fail):
@@ -169,3 +176,30 @@ class ExcelInterface(QWidget):
         self.progress.hide()
         if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
         else: InfoBar.success("完成", f"成功 {success}", duration=3000, parent=self)
+
+
+class WordInterface(OfficeConvertInterface):
+    object_name = "word_interface"
+    page_title = "Word 转 PDF"
+    page_desc = "批量转换 Word 文件 (支持 MS Word 或 LibreOffice)"
+    file_filter = "Word (*.doc *.docx)"
+    allowed_exts = (".doc", ".docx")
+    engine_attr = "word_engine"
+
+
+class ExcelInterface(OfficeConvertInterface):
+    object_name = "excel_interface"
+    page_title = "Excel 转 PDF"
+    page_desc = "批量转换 Excel 文件 (支持 MS Excel 或 LibreOffice)"
+    file_filter = "Excel (*.xls *.xlsx)"
+    allowed_exts = (".xls", ".xlsx")
+    engine_attr = "excel_engine"
+
+
+class PPTInterface(OfficeConvertInterface):
+    object_name = "ppt_interface"
+    page_title = "PowerPoint 转 PDF"
+    page_desc = "批量转换 PPT 文件 (支持 MS PowerPoint 或 LibreOffice)"
+    file_filter = "PPT (*.ppt *.pptx)"
+    allowed_exts = (".ppt", ".pptx")
+    engine_attr = "ppt_engine"

@@ -66,21 +66,3 @@ class WorkerThread(QThread):
         """
         self._is_cancelled = True
 
-
-# ============================================================================
-# 以下是遗留的专用线程类
-#
-# 这些类保留是为了向后兼容。新代码应该使用 WorkerThread 代替。
-#
-# ============================================================================
-
-class ConversionThread(QThread):
-    def __init__(self, converter, files):
-        super().__init__()
-        self.converter = converter
-        self.files = files
-
-    def run(self):
-        self.converter.convert(self.files)
-
-
