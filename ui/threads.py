@@ -83,22 +83,4 @@ class ConversionThread(QThread):
     def run(self):
         self.converter.convert(self.files)
 
-class CompressThread(QThread):
-    def __init__(self, compressor, files, quality, gs_path):
-        super().__init__()
-        self.compressor = compressor
-        self.files = files
-        self.quality = quality
-        self.gs_path = gs_path
-        self._is_cancelled = False
-
-    def cancel(self):
-        """取消任务"""
-        self._is_cancelled = True
-
-    def run(self):
-        # 使用关键字参数传递 gs_path，适配新的引擎接口
-        if not self._is_cancelled:
-            self.compressor.compress(self.files, self.quality, gs_path=self.gs_path)
-
 

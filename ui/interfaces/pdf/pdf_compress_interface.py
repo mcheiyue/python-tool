@@ -9,7 +9,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
 from core.engines.pdf.ghostscript import GhostscriptCompressor
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import CompressThread
+from ui.threads import WorkerThread
 from ui.design_system import Margins, Spacing
 
 class PDFCompressInterface(QWidget):
@@ -220,7 +220,9 @@ class PDFCompressInterface(QWidget):
         self.progress.start(len(self.files))
         self.progress.show()
         
-        self.thread = CompressThread(self.compressor, self.files, quality, gs_path)
+        self.thread = WorkerThread(
+            self.compressor.compress, self.files, quality, gs_path=gs_path
+        )
         self.thread.start()
         
     def showEvent(self, event):
