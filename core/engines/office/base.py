@@ -3,6 +3,8 @@ import comtypes.client
 from abc import abstractmethod
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from core.batch import run as batch_run
+
 class BaseOfficeConverter(QObject):
     """Office 文档转换器基类 (Template Method Pattern)"""
     
@@ -29,16 +31,10 @@ class BaseOfficeConverter(QObject):
             
             # 2. 创建应用实例
             self._app = self._create_app()
-            
-            for idx, path in enumerate(file_paths):
-                if not self._is_running:
-                    self.log.emit("任务已停止")
-                    break
 
+            def worker(path):
                 file_name = os.path.basename(path)
-                self.progress.emit(idx + 1, total, file_name)
-                self.log.emit(f"正在转换 ({idx + 1}/{total}): {file_name}")
-
+                self.log.emit(f"正在转换: {file_name}")
                 doc = None
                 try:
                     abs_path = os.path.abspath(path)
@@ -50,13 +46,7 @@ class BaseOfficeConverter(QObject):
                     # 4. 另存为 PDF
                     self._save_as_pdf(doc, pdf_path)
                     
-                    success += 1
                     self.log.emit(f"✅ 成功: {file_name}")
-                
-                except Exception as e:
-                    fail += 1
-                    self.log.emit(f"❌ 失败 {file_name}: {str(e)}")
-                
                 finally:
                     # 5. 关闭文档
                     if doc:
@@ -64,6 +54,14 @@ class BaseOfficeConverter(QObject):
                             self._close_document(doc)
                         except Exception as e:
                             self.log.emit(f"⚠️ 关闭文档失败: {str(e)}")
+
+            success, fail = batch_run(
+                file_paths,
+                worker,
+                on_progress=lambda c, t, p: self.progress.emit(c, t, os.path.basename(p)),
+                on_log=self.log.emit,
+                should_stop=lambda: not self._is_running,
+            )
 
         except Exception as e:
             self.log.emit(f"🔥 严重错误: {str(e)}")
