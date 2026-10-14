@@ -15,7 +15,6 @@ FEATURES_DIR = PROJECT_ROOT / "core" / "features"
 
 # 规则 A 豁免基线（21 文件，随迁移任务逐行删除）
 QT_EXEMPT_FILES = {
-    "utils/batch_rename.py",              # S3 移除
     "image/gemini_watermark_remover.py",   # R2 移除
     "pdf/pdf_merger.py",                   # R3/R4 移除
     "pdf/pdf_splitter.py",                 # R3/R4 移除
