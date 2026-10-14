@@ -28,19 +28,20 @@
 
 ```
 引擎选择流程:
-┌─────────────────┐
-│ AppContainer    │
-│ _create_office_ │
-│ engine()        │
-└────────┬────────┘
-         │
-         ├─> 尝试 MS Office (COM)
-         │   └─> 成功 → 返回 WordEngine
-         │
-         ├─> 检查 LibreOffice
-         │   └─> 可用 → 返回 LibreOfficeWordEngine
-         │
-         └─> 降级到 MS Office (错误提示)
+┌───────────────────────┐
+│ EngineSelector        │
+│ core/engines/office/  │
+│ selector.py           │
+│ create_office_engine  │
+└──────────┬────────────┘
+           │
+           ├─> 尝试 MS Office (COM)
+           │   └─> 成功 → 返回 WordEngine
+           │
+           ├─> 检查 LibreOffice
+           │   └─> 可用 → 返回 LibreOfficeEngine
+           │
+           └─> 降级到 MS Office (错误提示)
 ```
 
 ### 新增文件
@@ -63,11 +64,8 @@ def _find(self) -> dict:
 ```
 
 #### 2. `core/engines/office/libreoffice.py`
-LibreOffice CLI 转换引擎，包含：
-- `LibreOfficeEngine` - 基础引擎类
-- `LibreOfficeWordEngine` - Word 专用引擎
-- `LibreOfficeExcelEngine` - Excel 专用引擎
-- `LibreOfficePowerPointEngine` - PowerPoint 专用引擎
+LibreOffice CLI 转换引擎：
+- `LibreOfficeEngine` - 统一转换引擎（Word/Excel/PowerPoint 通用，经 selector 按 engine_type 返回）
 
 **转换命令**:
 ```bash
@@ -76,24 +74,14 @@ soffice --headless --convert-to pdf --outdir <output_dir> <input_file>
 
 ### 修改文件
 
-#### 1. `app/container.py`
-添加 `_create_office_engine()` 工厂方法实现智能选择：
+#### 1. `core/engines/office/selector.py` + `app/container.py`
+工厂函数 `create_office_engine()` 实现智能选择（优先 MS Office COM，构造失败降级 `LibreOfficeEngine`，再不可用回退 MS Office 引擎在使用时报错），container 装配时直接调用：
 
 ```python
-def _create_office_engine(self, engine_type: str):
-    # 1. 优先尝试 MS Office
-    try:
-        import comtypes.client
-        return WordEngine()  # 成功
-    except:
-        pass
-    
-    # 2. 降级到 LibreOffice
-    if libreoffice_available:
-        return LibreOfficeWordEngine()
-    
-    # 3. 返回 MS Office (会报错)
-    return WordEngine()
+# app/container.py
+from core.engines.office.selector import create_office_engine
+
+self._word_engine = create_office_engine('word', self.external_tool_manager)
 ```
 
 #### 2. `core/external_tools/manager.py`
@@ -147,9 +135,9 @@ print(f"路径: {tool.get_path()}")
 
 #### 测试转换功能
 ```python
-from core.engines.office.libreoffice import LibreOfficeWordEngine
+from core.engines.office.libreoffice import LibreOfficeEngine
 
-engine = LibreOfficeWordEngine()
+engine = LibreOfficeEngine()
 if engine.is_available():
     engine.convert(["test.docx"])
 ```

@@ -61,28 +61,28 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### 插件安装（可选）
+### Tool Bundle 安装（可选）
 
-下载 `.mcy` 插件文件并放入 `plugins/` 目录：
+下载 `.mcy` Tool Bundle 文件并放入 `plugins/` 目录：
 - **ghostscript.mcy** - PDF 压缩引擎（约 40MB）
 - **pandoc.mcy** - Markdown 增强转换（约 80MB）
 
-程序启动时会自动加载插件，可在"设置"中管理。
+程序启动时会自动加载，可在"设置"中管理。
 
 ---
 
-## 🔌 插件系统
+## 🔌 Tool Bundle 系统
 
-### 什么是 .mcy 插件？
-- **加密打包**: AES-256-CBC 加密 + LZMA 压缩
+### 什么是 .mcy Tool Bundle？
+- **签名打包**: Ed25519 签名防伪造 + LZMA 压缩（v2，见 ADR-0003）
 - **按需加载**: 仅在使用时解压，降低内存占用
 - **便携部署**: 无需系统安装，放入 `plugins/` 即可
 
-### 插件模式
+### 运行模式
 - **临时模式（推荐）**: 程序退出后自动清理，节省空间
 - **持久模式**: 解压到 `libs/` 目录，提升启动速度
 
-详细说明请查看 [插件开发指南](docs/PLUGIN_GUIDE.md)
+详细说明请查看 [Tool Bundle 开发指南](docs/PLUGIN_GUIDE.md)
 
 ---
 
