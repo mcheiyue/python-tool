@@ -122,27 +122,3 @@ class LibreOfficeEngine(QObject):
     def stop(self):
         """停止当前任务"""
         self._is_running = False
-
-
-class LibreOfficeWordEngine(LibreOfficeEngine):
-    """LibreOffice Word 转 PDF 引擎"""
-    
-    def convert(self, file_paths: List[str]):
-        """转换 Word 文档为 PDF"""
-        super().convert(file_paths, output_format="pdf")
-
-
-class LibreOfficeExcelEngine(LibreOfficeEngine):
-    """LibreOffice Excel 转 PDF 引擎"""
-    
-    def convert(self, file_paths: List[str]):
-        """转换 Excel 文档为 PDF"""
-        super().convert(file_paths, output_format="pdf")
-
-
-class LibreOfficePowerPointEngine(LibreOfficeEngine):
-    """LibreOffice PowerPoint 转 PDF 引擎"""
-    
-    def convert(self, file_paths: List[str]):
-        """转换 PowerPoint 文档为 PDF"""
-        super().convert(file_paths, output_format="pdf")
