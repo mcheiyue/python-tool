@@ -1,19 +1,13 @@
 import os
 from typing import Optional
-from PyQt6.QtCore import QObject, pyqtSignal
 from pypdf import PdfReader, PdfWriter
 from core.utils.logger import AppLogger, timed_operation
 
 
-class PDFSecurity(QObject):
+class PDFSecurity:
     """PDF 加密/解密工具"""
-    
-    finished = pyqtSignal(bool, str)  # success, message
-    progress = pyqtSignal(int, int, str)  # current, total, filename
-    log = pyqtSignal(str)
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
+
+    def __init__(self):
         self.logger = AppLogger()
     
     @timed_operation("PDF 加密")
@@ -32,7 +26,6 @@ class PDFSecurity(QObject):
         :return: 是否成功
         """
         try:
-            self.log.emit(f"正在加密: {os.path.basename(pdf_path)}")
             self.logger.info(f"加密 PDF: {pdf_path} -> {output_path}")
             
             # 读取源 PDF
@@ -76,15 +69,11 @@ class PDFSecurity(QObject):
             
             success_msg = f"加密成功: {os.path.basename(output_path)}"
             self.logger.info(success_msg)
-            self.log.emit(f"✅ {success_msg}")
-            self.finished.emit(True, output_path)
             return True
             
         except Exception as e:
             error_msg = f"加密失败: {str(e)}"
             self.logger.error(error_msg)
-            self.log.emit(f"❌ {error_msg}")
-            self.finished.emit(False, str(e))
             return False
     
     @timed_operation("PDF 解密")
@@ -98,7 +87,6 @@ class PDFSecurity(QObject):
         :return: 是否成功
         """
         try:
-            self.log.emit(f"正在解密: {os.path.basename(pdf_path)}")
             self.logger.info(f"解密 PDF: {pdf_path} -> {output_path}")
             
             # 读取加密的 PDF
@@ -106,20 +94,16 @@ class PDFSecurity(QObject):
             
             # 检查是否加密
             if not reader.is_encrypted:
-                self.log.emit(f"⚠️ 文件未加密: {os.path.basename(pdf_path)}")
                 self.logger.warning(f"PDF 文件未加密: {pdf_path}")
                 # 直接复制文件
                 import shutil
                 shutil.copy2(pdf_path, output_path)
-                self.finished.emit(True, output_path)
                 return True
             
             # 解密
             if not reader.decrypt(password):
                 error_msg = "密码错误"
                 self.logger.error(f"解密失败: {error_msg}")
-                self.log.emit(f"❌ {error_msg}")
-                self.finished.emit(False, error_msg)
                 return False
             
             # 创建新的 PDF（不加密）
@@ -138,15 +122,11 @@ class PDFSecurity(QObject):
             
             success_msg = f"解密成功: {os.path.basename(output_path)}"
             self.logger.info(success_msg)
-            self.log.emit(f"✅ {success_msg}")
-            self.finished.emit(True, output_path)
             return True
             
         except Exception as e:
             error_msg = f"解密失败: {str(e)}"
             self.logger.error(error_msg)
-            self.log.emit(f"❌ {error_msg}")
-            self.finished.emit(False, str(e))
             return False
     
     def batch_encrypt(self, files: list, password: str, output_dir: Optional[str] = None,
@@ -164,12 +144,10 @@ class PDFSecurity(QObject):
         success = 0
         fail = 0
         
-        self.log.emit(f"开始批量加密 {total} 个文件")
+        self.logger.info(f"开始批量加密 {total} 个文件")
         
         for i, file_path in enumerate(files):
             file_name = os.path.basename(file_path)
-            self.progress.emit(i + 1, total, file_name)
-            self.log.emit(f"[{i+1}/{total}] 处理: {file_name}")
             
             # 确定输出路径
             if output_dir:
@@ -189,8 +167,8 @@ class PDFSecurity(QObject):
             else:
                 fail += 1
         
-        self.log.emit(f"批量加密完成: 成功 {success} 个，失败 {fail} 个")
-        self.finished.emit(success > 0, f"完成 {success}/{total}")
+        self.logger.info(f"批量加密完成: 成功 {success} 个，失败 {fail} 个")
+        return success, fail
     
     def batch_decrypt(self, files: list, password: str, output_dir: Optional[str] = None):
         """
@@ -204,12 +182,10 @@ class PDFSecurity(QObject):
         success = 0
         fail = 0
         
-        self.log.emit(f"开始批量解密 {total} 个文件")
+        self.logger.info(f"开始批量解密 {total} 个文件")
         
         for i, file_path in enumerate(files):
             file_name = os.path.basename(file_path)
-            self.progress.emit(i + 1, total, file_name)
-            self.log.emit(f"[{i+1}/{total}] 处理: {file_name}")
             
             # 确定输出路径
             if output_dir:
@@ -227,5 +203,5 @@ class PDFSecurity(QObject):
             else:
                 fail += 1
         
-        self.log.emit(f"批量解密完成: 成功 {success} 个，失败 {fail} 个")
-        self.finished.emit(success > 0, f"完成 {success}/{total}")
+        self.logger.info(f"批量解密完成: 成功 {success} 个，失败 {fail} 个")
+        return success, fail

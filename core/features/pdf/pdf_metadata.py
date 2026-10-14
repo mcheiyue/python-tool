@@ -1,18 +1,13 @@
 import os
 from typing import Optional, Dict
-from PyQt6.QtCore import QObject, pyqtSignal
 from pypdf import PdfReader, PdfWriter
 from core.utils.logger import AppLogger, timed_operation
 
 
-class PDFMetadataEditor(QObject):
+class PDFMetadataEditor:
     """PDF 元数据编辑器"""
-    
-    finished = pyqtSignal(bool, str)  # success, message
-    log = pyqtSignal(str)
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
+
+    def __init__(self):
         self.logger = AppLogger()
     
     def read_metadata(self, pdf_path: str) -> Dict[str, str]:
@@ -43,7 +38,6 @@ class PDFMetadataEditor(QObject):
         except Exception as e:
             error_msg = f"读取元数据失败: {str(e)}"
             self.logger.error(error_msg)
-            self.log.emit(f"❌ {error_msg}")
             return {}
     
     @timed_operation("PDF 元数据写入")
@@ -57,7 +51,6 @@ class PDFMetadataEditor(QObject):
         :return: 是否成功
         """
         try:
-            self.log.emit(f"正在处理: {os.path.basename(pdf_path)}")
             self.logger.info(f"写入 PDF 元数据: {pdf_path} -> {output_path}")
             
             # 读取源 PDF
@@ -99,15 +92,11 @@ class PDFMetadataEditor(QObject):
             
             success_msg = f"元数据写入成功: {os.path.basename(output_path)}"
             self.logger.info(success_msg)
-            self.log.emit(f"✅ {success_msg}")
-            self.finished.emit(True, output_path)
             return True
             
         except Exception as e:
             error_msg = f"写入元数据失败: {str(e)}"
             self.logger.error(error_msg)
-            self.log.emit(f"❌ {error_msg}")
-            self.finished.emit(False, str(e))
             return False
     
     def batch_write_metadata(self, files: list, metadata: Dict[str, str], output_dir: Optional[str] = None):
@@ -122,11 +111,10 @@ class PDFMetadataEditor(QObject):
         success = 0
         fail = 0
         
-        self.log.emit(f"开始批量处理 {total} 个文件")
+        self.logger.info(f"开始批量处理 {total} 个文件")
         
         for i, file_path in enumerate(files):
             file_name = os.path.basename(file_path)
-            self.log.emit(f"[{i+1}/{total}] 处理: {file_name}")
             
             # 确定输出路径
             if output_dir:
@@ -142,5 +130,5 @@ class PDFMetadataEditor(QObject):
             else:
                 fail += 1
         
-        self.log.emit(f"批量处理完成: 成功 {success} 个，失败 {fail} 个")
-        self.finished.emit(success > 0, f"完成 {success}/{total}")
+        self.logger.info(f"批量处理完成: 成功 {success} 个，失败 {fail} 个")
+        return success, fail

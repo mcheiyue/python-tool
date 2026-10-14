@@ -13,10 +13,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FEATURES_DIR = PROJECT_ROOT / "core" / "features"
 
-# 规则 A 豁免基线（21 文件，随迁移任务逐行删除）
+# 规则 A 豁免清单（随迁移逐行收缩，R10 收官时应仅剩 PERMANENT 一项）
 QT_EXEMPT_FILES = {
-    "pdf/pdf_metadata.py",                 # R3/R4 移除
-    "pdf/pdf_security.py",                 # R3/R4 移除
     "pdf/pdf_page_renderer.py",            # R3/R4 移除
     "pdf/image_to_pdf_converter.py",       # R3/R4 移除
     "office/word_converter.py",            # R5 移除
