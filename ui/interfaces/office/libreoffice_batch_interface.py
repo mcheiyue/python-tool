@@ -3,7 +3,7 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import QThread
+from PyQt6.QtCore import pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton, 
                             PrimaryPushButton, TextEdit, InfoBar,
                             ComboBox, IconWidget, FluentIcon as FIF)
@@ -13,24 +13,16 @@ from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.widgets.enhanced_progress import EnhancedProgressBar
 from ui.design_system import Margins, Spacing
-
-
-class LibreOfficeConvertThread(QThread):
-    """LibreOffice 转换线程"""
-    
-    def __init__(self, converter, files, output_format, output_dir=None):
-        super().__init__()
-        self.converter = converter
-        self.files = files
-        self.output_format = output_format
-        self.output_dir = output_dir
-    
-    def run(self):
-        self.converter.convert_batch(self.files, self.output_format, self.output_dir)
+from ui.threads import WorkerThread
 
 
 class LibreOfficeBatchInterface(QWidget):
     """LibreOffice 批量格式转换界面"""
+
+    # 桥接信号：转换回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
     
     # 格式分组显示
     FORMAT_GROUPS = {
@@ -155,9 +147,9 @@ class LibreOfficeBatchInterface(QWidget):
         self.thread = None
         
         # 连接信号
-        self.converter.log.connect(self.append_log)
-        self.converter.progress.connect(self.update_progress)
-        self.converter.finished.connect(self.on_finished)
+        self._log_bridged.connect(self.append_log)
+        self._progress_bridged.connect(self.update_progress)
+        self._finished_bridged.connect(self.on_finished)
         
         # 初始检查
         self.check_lo_status()
@@ -314,9 +306,13 @@ class LibreOfficeBatchInterface(QWidget):
         self.add_btn.setEnabled(False)
         self.clear_btn.setEnabled(False)
         
-        self.thread = LibreOfficeConvertThread(
-            self.converter, self.files, output_format
+        self.thread = WorkerThread(
+            self.converter.convert_batch, self.files, output_format,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
         )
+        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
         self.thread.start()
     
     def on_finished(self, success, fail):

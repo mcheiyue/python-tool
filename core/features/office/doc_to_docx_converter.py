@@ -1,29 +1,36 @@
 import os
 import comtypes.client
-from PyQt6.QtCore import QObject, pyqtSignal
 
-class DocToDocxConverter(QObject):
+class DocToDocxConverter:
     """Doc 转 Docx 转换器"""
-    
-    progress = pyqtSignal(int, int, str)
-    finished = pyqtSignal(int, int)
-    log = pyqtSignal(str)
-    
+
     # wdFormatXMLDocument = 12 (.docx)
     # wdFormatDocumentDefault = 16 (.docx default)
     WD_FORMAT_DOCX = 16
 
     def __init__(self):
-        super().__init__()
         self._is_running = False
         self._app = None
 
-    def convert(self, file_paths, output_dir=None):
+    def convert(self, file_paths, output_dir=None, *, on_log=None, on_progress=None, on_finished=None):
         """
         执行转换任务
         :param file_paths: 文件路径列表
         :param output_dir: 输出目录，如果为 None 则输出到源文件同目录
         """
+
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def progress(curr, total, message):
+            if on_progress:
+                on_progress(curr, total, message)
+
+        def finished(ok, fail):
+            if on_finished:
+                on_finished(ok, fail)
+
         self._is_running = True
         total = len(file_paths)
         success = 0
@@ -32,7 +39,7 @@ class DocToDocxConverter(QObject):
         try:
             # 1. 初始化 COM 环境
             comtypes.CoInitialize()
-            self.log.emit("正在启动 Microsoft Word...")
+            log("正在启动 Microsoft Word...")
             
             # 2. 创建应用实例
             self._app = comtypes.client.CreateObject("Word.Application", dynamic=True)
@@ -40,16 +47,16 @@ class DocToDocxConverter(QObject):
                 self._app.Visible = False
             except Exception as e:
                 # 某些版本的 Word 可能不支持隐藏窗口
-                self.log.emit(f"提示: 无法隐藏 Word 窗口: {str(e)}")
+                log(f"提示: 无法隐藏 Word 窗口: {str(e)}")
             
             for idx, path in enumerate(file_paths):
                 if not self._is_running:
-                    self.log.emit("任务已停止")
+                    log("任务已停止")
                     break
 
                 file_name = os.path.basename(path)
-                self.progress.emit(idx + 1, total, file_name)
-                self.log.emit(f"正在转换 ({idx + 1}/{total}): {file_name}")
+                progress(idx + 1, total, file_name)
+                log(f"正在转换 ({idx + 1}/{total}): {file_name}")
 
                 doc = None
                 try:
@@ -75,11 +82,11 @@ class DocToDocxConverter(QObject):
                     doc.SaveAs2(docx_path, self.WD_FORMAT_DOCX)
                     
                     success += 1
-                    self.log.emit(f"✅ 成功: {os.path.basename(docx_path)}")
+                    log(f"✅ 成功: {os.path.basename(docx_path)}")
                 
                 except Exception as e:
                     fail += 1
-                    self.log.emit(f"❌ 失败 {file_name}: {str(e)}")
+                    log(f"❌ 失败 {file_name}: {str(e)}")
                 
                 finally:
                     # 5. 关闭文档
@@ -89,10 +96,10 @@ class DocToDocxConverter(QObject):
                             doc.Close(0)
                         except Exception as e:
                             # 文档可能已经被关闭或损坏
-                            self.log.emit(f"提示: 关闭文档时出错: {str(e)}")
+                            log(f"提示: 关闭文档时出错: {str(e)}")
 
         except Exception as e:
-            self.log.emit(f"🔥 严重错误: {str(e)}")
+            log(f"🔥 严重错误: {str(e)}")
         
         finally:
             # 6. 清理应用实例
@@ -101,16 +108,16 @@ class DocToDocxConverter(QObject):
                     self._app.Quit()
                 except Exception as e:
                     # Word 退出失败，可能已经崩溃或被手动关闭
-                    self.log.emit(f"提示: Word 退出异常: {str(e)}")
+                    log(f"提示: Word 退出异常: {str(e)}")
                 self._app = None
             
             try:
                 comtypes.CoUninitialize()
             except Exception as e:
                 # COM 反初始化失败，通常可以忽略
-                self.log.emit(f"提示: COM 反初始化异常: {str(e)}")
+                log(f"提示: COM 反初始化异常: {str(e)}")
             
-            self.finished.emit(success, fail)
+            finished(success, fail)
             self._is_running = False
 
     def stop(self):

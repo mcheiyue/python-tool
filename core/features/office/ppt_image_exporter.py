@@ -1,23 +1,31 @@
 import os
 import comtypes.client
-from PyQt6.QtCore import QObject, pyqtSignal
 
-class PPTImageExporter(QObject):
-    progress = pyqtSignal(int, int, str)  # curr, total, message
-    log = pyqtSignal(str)                 # log message
-    finished = pyqtSignal(int, int)       # success_count, fail_count
+class PPTImageExporter:
 
     def __init__(self):
-        super().__init__()
         self._is_running = False
 
-    def export(self, file_paths, output_dir, format='PNG'):
+    def export(self, file_paths, output_dir, format='PNG', *, on_log=None, on_progress=None, on_finished=None):
         """
         将 PPT 导出为图片
         :param file_paths: PPT 文件列表
         :param output_dir: 输出目录
         :param format: 图片格式 ('PNG', 'JPG', 'BMP')
         """
+
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def progress(curr, total, message):
+            if on_progress:
+                on_progress(curr, total, message)
+
+        def finished(ok, fail):
+            if on_finished:
+                on_finished(ok, fail)
+
         self._is_running = True
         total_files = len(file_paths)
         success_count = 0
@@ -26,7 +34,7 @@ class PPTImageExporter(QObject):
 
         try:
             comtypes.CoInitialize()
-            self.log.emit("正在启动 PowerPoint...")
+            log("正在启动 PowerPoint...")
             
             try:
                 ppt_app = comtypes.client.CreateObject("PowerPoint.Application", dynamic=True)
@@ -36,20 +44,20 @@ class PPTImageExporter(QObject):
                     ppt_app.WindowState = 2  # 最小化窗口，避免干扰用户
                 except Exception as e:
                     # 某些版本的 PowerPoint 可能不支持窗口状态设置
-                    self.log.emit(f"提示: 无法最小化 PowerPoint 窗口: {str(e)}")
+                    log(f"提示: 无法最小化 PowerPoint 窗口: {str(e)}")
             except Exception as e:
-                self.log.emit(f"无法启动 PowerPoint: {str(e)}")
-                self.finished.emit(0, 0)
+                log(f"无法启动 PowerPoint: {str(e)}")
+                finished(0, 0)
                 return
 
             for i, path in enumerate(file_paths):
                 if not self._is_running:
-                    self.log.emit("任务已停止")
+                    log("任务已停止")
                     break
 
                 file_name = os.path.basename(path)
-                self.progress.emit(i + 1, total_files, f"正在处理: {file_name}")
-                self.log.emit(f"\n--- 处理文件 [{i+1}/{total_files}]: {file_name} ---")
+                progress(i + 1, total_files, f"正在处理: {file_name}")
+                log(f"\n--- 处理文件 [{i+1}/{total_files}]: {file_name} ---")
 
                 try:
                     abs_path = os.path.abspath(path)
@@ -86,35 +94,35 @@ class PPTImageExporter(QObject):
                         # 我们指定 file_out_dir 作为目标路径，PowerPoint 可能会在里面再建一个文件夹或者直接保存
                         # 让我们尝试使用 Export 方法，它更灵活
                         
-                        self.log.emit(f"正在导出 {presentation.Slides.Count} 张幻灯片...")
+                        log(f"正在导出 {presentation.Slides.Count} 张幻灯片...")
                         
                         # 方法 2: 遍历每张幻灯片导出
                         for slide in presentation.Slides:
                             slide_path = os.path.join(file_out_dir, f"Slide{slide.SlideIndex}.{ext}")
                             slide.Export(slide_path, fmt_upper)
-                            self.log.emit(f"  已导出: Slide{slide.SlideIndex}.{ext}")
+                            log(f"  已导出: Slide{slide.SlideIndex}.{ext}")
 
                         success_count += 1
-                        self.log.emit(f"✅ 成功完成: {file_name}")
+                        log(f"✅ 成功完成: {file_name}")
                         
                     finally:
                         presentation.Close()
 
                 except Exception as e:
-                    self.log.emit(f"❌ 处理失败 {file_name}: {str(e)}")
+                    log(f"❌ 处理失败 {file_name}: {str(e)}")
                     fail_count += 1
 
         except Exception as e:
-            self.log.emit(f"🔥 系统错误: {str(e)}")
+            log(f"🔥 系统错误: {str(e)}")
         finally:
             if ppt_app:
                 try:
                     ppt_app.Quit()
                 except Exception as e:
                     # PowerPoint 退出失败，可能已经崩溃或被手动关闭
-                    self.log.emit(f"提示: PowerPoint 退出异常: {str(e)}")
+                    log(f"提示: PowerPoint 退出异常: {str(e)}")
             comtypes.CoUninitialize()
-            self.finished.emit(success_count, fail_count)
+            finished(success_count, fail_count)
             self._is_running = False
 
     def stop(self):

@@ -8,10 +8,16 @@ from qfluentwidgets import (CardWidget, PushButton, PrimaryPushButton,
 from core.features.office.word_converter import WordConverter
 from ui.widgets.drag_drop_list import DragDropListWidget
 from core.external_tools.manager import ExternalToolManager
+from ui.threads import WorkerThread
 
 class WordMarkdownInterface(QWidget):
     """Word ↔ Markdown 转换界面"""
-    
+
+    # 桥接信号：转换回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.converter = WordConverter()
@@ -111,9 +117,9 @@ class WordMarkdownInterface(QWidget):
         self.convert_btn.clicked.connect(self.start_convert)
         self.ref_browse_btn.clicked.connect(self.browse_ref_doc)
         
-        self.converter.progress.connect(self.on_progress)
-        self.converter.finished.connect(self.on_finished)
-        self.converter.log.connect(self.on_log)
+        self._progress_bridged.connect(self.on_progress)
+        self._finished_bridged.connect(self.on_finished)
+        self._log_bridged.connect(self.on_log)
         
         # 拖拽文件支持
         self.file_list.files_dropped.connect(self.add_dropped_files)
@@ -196,10 +202,23 @@ class WordMarkdownInterface(QWidget):
         output_dir = os.path.dirname(files[0])
         
         if is_docx_to_md:
-            self.converter.convert_docx_to_markdown(files, output_dir=output_dir)
+            self.thread = WorkerThread(
+                self.converter.convert_docx_to_markdown, files, output_dir=output_dir,
+                on_log=self._log_bridged.emit,
+                on_progress=self._progress_bridged.emit,
+                on_finished=self._finished_bridged.emit,
+            )
         else:
             ref_doc = self.ref_path_edit.text()
-            self.converter.convert_markdown_to_docx(files, output_dir=output_dir, reference_doc=ref_doc)
+            self.thread = WorkerThread(
+                self.converter.convert_markdown_to_docx, files,
+                output_dir=output_dir, reference_doc=ref_doc,
+                on_log=self._log_bridged.emit,
+                on_progress=self._progress_bridged.emit,
+                on_finished=self._finished_bridged.emit,
+            )
+        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
+        self.thread.start()
             
     def on_progress(self, current, total, msg):
         self.status_label.setText(f"[{current}/{total}] {msg}")

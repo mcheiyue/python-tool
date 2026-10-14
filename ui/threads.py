@@ -163,25 +163,5 @@ class ImageConvertThread(QThread):
     def run(self):
         self.converter.convert(self.input_path, self.output_path, self.output_format, self.quality, self.rotate_angle, self.flip_mode)
 
-class PPTImageExportThread(QThread):
-    def __init__(self, exporter, files, output_dir, format):
-        super().__init__()
-        self.exporter = exporter
-        self.files = files
-        self.output_dir = output_dir
-        self.format = format
-
-    def run(self):
-        self.exporter.export(self.files, self.output_dir, self.format)
-
-class DocToDocxThread(QThread):
-    def __init__(self, converter, files, output_dir):
-        super().__init__()
-        self.converter = converter
-        self.files = files
-        self.output_dir = output_dir
-
-    def run(self):
-        self.converter.convert(self.files, self.output_dir)
 
 

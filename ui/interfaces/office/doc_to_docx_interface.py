@@ -1,6 +1,7 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget, 
                             PrimaryPushButton, PushButton, TextEdit,
                             InfoBar, FluentIcon as FIF, CheckBox, LineEdit, MessageDialog)
@@ -8,10 +9,15 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.widgets.enhanced_progress import EnhancedProgressBar
-from ui.threads import DocToDocxThread
+from ui.threads import WorkerThread
 from ui.design_system import Margins, Spacing
 
 class DocToDocxInterface(QWidget):
+    # 桥接信号：转换回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("doc_to_docx_interface")
@@ -120,9 +126,9 @@ class DocToDocxInterface(QWidget):
         self.converter = AppContainer().doc_to_docx_converter
         self.thread = None
 
-        self.converter.log.connect(self.append_log)
-        self.converter.progress.connect(self.update_progress)
-        self.converter.finished.connect(self.on_finished)
+        self._log_bridged.connect(self.append_log)
+        self._progress_bridged.connect(self.update_progress)
+        self._finished_bridged.connect(self.on_finished)
 
     def toggle_output_dir(self, state):
         enabled = not self.same_dir_cb.isChecked()
@@ -215,7 +221,13 @@ class DocToDocxInterface(QWidget):
         self.settings_card.setEnabled(False)
         self.log_text.clear()
         
-        self.thread = DocToDocxThread(self.converter, self.files, output_dir)
+        self.thread = WorkerThread(
+            self.converter.convert, self.files, output_dir,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+        )
+        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
         self.thread.start()
 
     def on_finished(self, success, fail):

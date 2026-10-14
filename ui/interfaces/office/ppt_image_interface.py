@@ -1,15 +1,21 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox,
                             PushButton, PrimaryPushButton, TextEdit, LineEdit, InfoBar, 
                             FluentIcon as FIF)
 
 from core.features.office.ppt_image_exporter import PPTImageExporter
 from ui.widgets import DragDropListWidget
-from ui.threads import PPTImageExportThread
+from ui.threads import WorkerThread
 
 class PPTImageInterface(QWidget):
+    # 桥接信号：导出回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _progress_bridged = pyqtSignal(int, int, str)
+    _finished_bridged = pyqtSignal(int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("ppt_image_interface")
@@ -87,9 +93,9 @@ class PPTImageInterface(QWidget):
         self.thread = None
         
         # 连接信号
-        self.exporter.log.connect(self.log_text.append)
-        self.exporter.finished.connect(self.on_finished)
-        self.exporter.progress.connect(self.update_progress)
+        self._log_bridged.connect(self.log_text.append)
+        self._finished_bridged.connect(self.on_finished)
+        self._progress_bridged.connect(self.update_progress)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
@@ -134,7 +140,13 @@ class PPTImageInterface(QWidget):
         
         fmt = self.format_combo.currentText()
         
-        self.thread = PPTImageExportThread(self.exporter, self.files, out_dir, fmt)
+        self.thread = WorkerThread(
+            self.exporter.export, self.files, out_dir, fmt,
+            on_log=self._log_bridged.emit,
+            on_progress=self._progress_bridged.emit,
+            on_finished=self._finished_bridged.emit,
+        )
+        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
         self.thread.start()
 
     def update_progress(self, curr, total, msg):

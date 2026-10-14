@@ -1,7 +1,6 @@
 import os
 import shutil
 from typing import Optional
-from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.external_tools.manager import ExternalToolManager
 # 注意: core/engines/office/word.py 可能已经有部分功能，这里主要通过 Pandoc 实现双向转换
@@ -12,18 +11,13 @@ try:
 except ImportError:
     DOCX_AVAILABLE = False
 
-class WordConverter(QObject):
+class WordConverter:
     """
     DOCX ↔ Markdown 转换器
     主要依赖 Pandoc 进行转换，因 python-docx 仅适合简单文本操作
     """
-    
-    finished = pyqtSignal(int, int)  # success_count, fail_count
-    progress = pyqtSignal(int, int, str) # current, total, message
-    log = pyqtSignal(str) # log message
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
+
+    def __init__(self):
         self._is_running = False
         self.pandoc_tool = ExternalToolManager().get_tool("pandoc")
         
@@ -38,14 +32,31 @@ class WordConverter(QObject):
     def convert_docx_to_markdown(
         self, 
         files: list[str], 
-        output_dir: Optional[str] = None
+        output_dir: Optional[str] = None,
+        *,
+        on_log=None,
+        on_progress=None,
+        on_finished=None,
     ):
         """
         批量将 DOCX 转换为 Markdown
         """
+
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def progress(curr, total, message):
+            if on_progress:
+                on_progress(curr, total, message)
+
+        def finished(ok, fail):
+            if on_finished:
+                on_finished(ok, fail)
+
         if not self.is_pandoc_available():
-            self.log.emit("错误: 需要安装 Pandoc 才能进行 DOCX 转 Markdown")
-            self.finished.emit(0, len(files))
+            log("错误: 需要安装 Pandoc 才能进行 DOCX 转 Markdown")
+            finished(0, len(files))
             return
 
         self._is_running = True
@@ -53,14 +64,14 @@ class WordConverter(QObject):
         fail_count = 0
         total = len(files)
         
-        self.log.emit(f"开始 DOCX -> Markdown 转换任务，共 {total} 个文件")
+        log(f"开始 DOCX -> Markdown 转换任务，共 {total} 个文件")
         
         for i, file_path in enumerate(files):
             if not self._is_running:
                 break
                 
             file_name = os.path.basename(file_path)
-            self.progress.emit(i, total, f"正在处理: {file_name}")
+            progress(i, total, f"正在处理: {file_name}")
             
             try:
                 # 确定输出路径
@@ -70,32 +81,49 @@ class WordConverter(QObject):
                     out_path = os.path.splitext(file_path)[0] + ".md"
                 
                 # 使用 Pandoc 转换
-                if self._docx_to_md_pandoc(file_path, out_path):
+                if self._docx_to_md_pandoc(file_path, out_path, on_log=on_log):
                     success_count += 1
-                    self.log.emit(f"✅ 成功: {file_name} -> {os.path.basename(out_path)}")
+                    log(f"✅ 成功: {file_name} -> {os.path.basename(out_path)}")
                 else:
                     fail_count += 1
                     
             except Exception as e:
                 fail_count += 1
-                self.log.emit(f"❌ 失败 {file_name}: {str(e)}")
+                log(f"❌ 失败 {file_name}: {str(e)}")
                 
-        self.progress.emit(total, total, "完成")
-        self.finished.emit(success_count, fail_count)
+        progress(total, total, "完成")
+        finished(success_count, fail_count)
         self._is_running = False
 
     def convert_markdown_to_docx(
         self,
         files: list[str],
         output_dir: Optional[str] = None,
-        reference_doc: Optional[str] = None
+        reference_doc: Optional[str] = None,
+        *,
+        on_log=None,
+        on_progress=None,
+        on_finished=None,
     ):
         """
         批量将 Markdown 转换为 DOCX
         """
+
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
+        def progress(curr, total, message):
+            if on_progress:
+                on_progress(curr, total, message)
+
+        def finished(ok, fail):
+            if on_finished:
+                on_finished(ok, fail)
+
         if not self.is_pandoc_available():
-            self.log.emit("错误: 需要安装 Pandoc 才能进行 Markdown 转 DOCX")
-            self.finished.emit(0, len(files))
+            log("错误: 需要安装 Pandoc 才能进行 Markdown 转 DOCX")
+            finished(0, len(files))
             return
 
         self._is_running = True
@@ -103,14 +131,14 @@ class WordConverter(QObject):
         fail_count = 0
         total = len(files)
         
-        self.log.emit(f"开始 Markdown -> DOCX 转换任务，共 {total} 个文件")
+        log(f"开始 Markdown -> DOCX 转换任务，共 {total} 个文件")
         
         for i, file_path in enumerate(files):
             if not self._is_running:
                 break
             
             file_name = os.path.basename(file_path)
-            self.progress.emit(i, total, f"正在处理: {file_name}")
+            progress(i, total, f"正在处理: {file_name}")
             
             try:
                 # 确定输出路径
@@ -120,22 +148,27 @@ class WordConverter(QObject):
                     out_path = os.path.splitext(file_path)[0] + ".docx"
                 
                 # 使用 Pandoc 转换
-                if self._md_to_docx_pandoc(file_path, out_path, reference_doc):
+                if self._md_to_docx_pandoc(file_path, out_path, reference_doc, on_log=on_log):
                     success_count += 1
-                    self.log.emit(f"✅ 成功: {file_name} -> {os.path.basename(out_path)}")
+                    log(f"✅ 成功: {file_name} -> {os.path.basename(out_path)}")
                 else:
                     fail_count += 1
                     
             except Exception as e:
                 fail_count += 1
-                self.log.emit(f"❌ 失败 {file_name}: {str(e)}")
+                log(f"❌ 失败 {file_name}: {str(e)}")
         
-        self.progress.emit(total, total, "完成")
-        self.finished.emit(success_count, fail_count)
+        progress(total, total, "完成")
+        finished(success_count, fail_count)
         self._is_running = False
 
-    def _docx_to_md_pandoc(self, input_path: str, output_path: str) -> bool:
+    def _docx_to_md_pandoc(self, input_path: str, output_path: str, on_log=None) -> bool:
         """使用 Pandoc 转换 DOCX -> MD"""
+
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
         pandoc_path = self.pandoc_tool.get_path()
         if not pandoc_path:
             return False
@@ -160,14 +193,19 @@ class WordConverter(QObject):
             subprocess.run(cmd, check=True, capture_output=True)
             return True
         except subprocess.CalledProcessError as e:
-            self.log.emit(f"Pandoc Error: {e.stderr.decode('utf-8', errors='ignore')}")
+            log(f"Pandoc Error: {e.stderr.decode('utf-8', errors='ignore')}")
             return False
         except Exception as e:
-            self.log.emit(f"Pandoc Execution Error: {e}")
+            log(f"Pandoc Execution Error: {e}")
             return False
 
-    def _md_to_docx_pandoc(self, input_path: str, output_path: str, reference_doc: Optional[str] = None) -> bool:
+    def _md_to_docx_pandoc(self, input_path: str, output_path: str, reference_doc: Optional[str] = None, on_log=None) -> bool:
         """使用 Pandoc 转换 MD -> DOCX"""
+
+        def log(msg):
+            if on_log:
+                on_log(msg)
+
         pandoc_path = self.pandoc_tool.get_path()
         if not pandoc_path:
             return False
@@ -189,8 +227,8 @@ class WordConverter(QObject):
             subprocess.run(cmd, check=True, capture_output=True)
             return True
         except subprocess.CalledProcessError as e:
-            self.log.emit(f"Pandoc Error: {e.stderr.decode('utf-8', errors='ignore')}")
+            log(f"Pandoc Error: {e.stderr.decode('utf-8', errors='ignore')}")
             return False
         except Exception as e:
-            self.log.emit(f"Pandoc Execution Error: {e}")
+            log(f"Pandoc Execution Error: {e}")
             return False
