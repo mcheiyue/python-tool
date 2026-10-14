@@ -3,29 +3,20 @@ from PIL import Image
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
                             QFileDialog, QLabel, QScrollArea, QFrame)
 from PyQt6.QtGui import QFont, QAction, QKeySequence, QPixmap, QImage
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, 
                             PushButton, PrimaryPushButton, TextEdit, InfoBar, 
                             FluentIcon as FIF, ImageLabel)
 
 from core.features.image.gemini_watermark_remover import GeminiWatermarkRemover
+from ui.threads import WorkerThread
 from ui.widgets import DragDropListWidget
 
-class WatermarkRemoveThread(QThread):
-    finished_one = pyqtSignal(bool, str) # success, msg/path
-    
-    def __init__(self, remover, input_path):
-        super().__init__()
-        self.remover = remover
-        self.input_path = input_path
-        
-    def run(self):
-        try:
-            self.remover.process_image(self.input_path)
-        except Exception as e:
-            self.remover.finished.emit(False, str(e))
-
 class WatermarkRemoveInterface(QWidget):
+    # 桥接信号：处理回调在工作线程触发，经此排队回主线程
+    _log_bridged = pyqtSignal(str)
+    _finished_bridged = pyqtSignal(bool, str)
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("watermark_remove_interface")
@@ -137,8 +128,8 @@ class WatermarkRemoveInterface(QWidget):
         self.threads = []
         
         # 连接信号
-        self.remover.log.connect(self.log_text.append)
-        self.remover.finished.connect(self.on_one_finished)
+        self._log_bridged.connect(self.log_text.append)
+        self._finished_bridged.connect(self.on_one_finished)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
@@ -214,7 +205,12 @@ class WatermarkRemoveInterface(QWidget):
         
         for path in self.files:
             # 使用 QThread 避免阻塞 UI
-            thread = WatermarkRemoveThread(self.remover, path)
+            thread = WorkerThread(
+                self.remover.process_image, path,
+                on_log=self._log_bridged.emit,
+                on_finished=self._finished_bridged.emit,
+            )
+            thread.error.connect(lambda msg: self.on_one_finished(False, msg))
             thread.start()
             self.threads.append(thread) # 防止垃圾回收
 

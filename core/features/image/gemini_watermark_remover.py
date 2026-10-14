@@ -1,7 +1,6 @@
 import os
 import numpy as np
 from PIL import Image
-from PyQt6.QtCore import QObject, pyqtSignal
 from core.utils.resource_path import get_resource_path
 
 # Constants
@@ -9,12 +8,8 @@ ALPHA_THRESHOLD = 0.002  # Ignore very small alpha values (noise)
 MAX_ALPHA = 0.99         # Avoid division by near-zero values
 LOGO_VALUE = 255.0       # Color value for white watermark
 
-class GeminiWatermarkRemover(QObject):
-    finished = pyqtSignal(bool, str)  # success, message/output_path
-    log = pyqtSignal(str)
-    
+class GeminiWatermarkRemover:
     def __init__(self):
-        super().__init__()
         self.bg48_path = get_resource_path("assets/watermark/bg_48.png")
         self.bg96_path = get_resource_path("assets/watermark/bg_96.png")
         self.alpha_maps = {}  # Cache alpha maps
@@ -145,10 +140,11 @@ class GeminiWatermarkRemover(QObject):
         # Convert back to PIL Image
         return Image.fromarray(processed_data)
 
-    def process_image(self, input_path: str, output_path: str = None) -> bool:
-        """Process image file"""
+    def process_image(self, input_path: str, output_path: str = None, *, on_log=None, on_finished=None) -> bool:
+        """处理图片文件"""
         try:
-            self.log.emit(f"Processing: {os.path.basename(input_path)}")
+            if on_log:
+                on_log(f"Processing: {os.path.basename(input_path)}")
             
             with Image.open(input_path) as img:
                 processed_img = self.process_image_data(img)
@@ -182,12 +178,16 @@ class GeminiWatermarkRemover(QObject):
                         
                 processed_img.save(output_path, format=img.format, **save_kwargs)
                 
-            self.log.emit(f"Successfully processed: {os.path.basename(output_path)}")
-            self.finished.emit(True, output_path)
+            if on_log:
+                on_log(f"Successfully processed: {os.path.basename(output_path)}")
+            if on_finished:
+                on_finished(True, output_path)
             return True
             
         except Exception as e:
             error_msg = f"Failed to process {os.path.basename(input_path)}: {str(e)}"
-            self.log.emit(error_msg)
-            self.finished.emit(False, error_msg)
+            if on_log:
+                on_log(error_msg)
+            if on_finished:
+                on_finished(False, error_msg)
             return False
