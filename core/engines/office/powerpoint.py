@@ -18,7 +18,7 @@ class PowerPointEngine(BaseOfficeConverter):
             app.Visible = 1
             # 最小化窗口
             app.WindowState = 2 
-        except:
+        except Exception:
             pass
         return app
 

@@ -16,7 +16,7 @@ class ExcelEngine(BaseOfficeConverter):
         try:
             app.Visible = False
             app.DisplayAlerts = False
-        except:
+        except Exception:
             pass
         return app
 

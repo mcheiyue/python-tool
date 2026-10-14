@@ -17,7 +17,7 @@ class WordEngine(BaseOfficeConverter):
         try:
             # 保持 Word 不可见可以加快处理速度
             app.Visible = False
-        except:
+        except Exception:
             pass
         return app
 
