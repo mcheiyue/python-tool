@@ -1,269 +1,99 @@
-# 插件开发指南 (Plugin Development Guide)
+# Tool Bundle 开发指南（.mcy v2）
 
-本文档面向插件开发者，详细说明如何创建和打包 `.mcy` 插件。
+本文档描述 `.mcy` Tool Bundle 的**真实格式与工具链**（v2，见 `docs/adr/0003-tool-bundle-v2-signature-trust-model.md`）。
 
----
+## 什么是 Tool Bundle
 
-## 📦 什么是 .mcy 插件？
+`.mcy` 是 Office Toolkit 的外部工具便携分发包（术语见 `GLOSSARY.md`），仅装载外部二进制工具（Ghostscript、Pandoc 等），**不装载 Python 代码**。
 
-`.mcy` 是 Office Toolkit 的私有加密插件格式，具有以下特性：
+v2 特性：
 
-- 🔒 **AES-256-CBC 加密**：保护插件完整性和安全性
-- 📦 **LZMA 高压缩**：体积缩小 60%+ (Preset 9)
-- 🚀 **惰性加载**：按需解压，降低内存占用
-- ✅ **完整性校验**：SHA256 哈希验证
+- **Ed25519 签名**：完整性与来源校验；不再加密（打包对象是开源二进制，保密无意义）
+- **LZMA 高压缩**：preset 9
+- **v1 不再读取**：旧 AES 加密包一律拒绝，需用下方工具重新打包
+- **惰性加载**：使用时解压，支持临时/持久两种模式
 
----
-
-## 🛠️ 创建插件
-
-### 1. 准备插件目录
-
-将要打包的工具放入独立目录，例如：
+## 文件格式（v2）
 
 ```
-ghostscript/
-├── bin/
-│   └── gswin64c.exe
-├── lib/
-│   └── (依赖文件)
-└── README.txt
+偏移    长度      字段
+0        4        Magic: "MCY\x00"
+4        1        Version: 2
+5        1        Tool ID（0=Ghostscript, 1=Pandoc）
+6        8        REST_SIZE（uint64 小端）= 64 + len(压缩数据)
+14       64       Ed25519 签名（对压缩数据）
+78       ...      LZMA 压缩的 TAR（TAR 内为工具目录）
 ```
 
-### 2. 使用打包工具
+读取（`core/bundles/format.py::read_bundle`）：
 
-运行 `tools/pack_plugin.py` 脚本：
+1. 校验 Magic 与 Version（非 v2 直接拒绝）
+2. 按 REST_SIZE 读满「签名 + 载荷」，字节数不符即文件损坏
+3. 内嵌公钥验签，失败抛 `BundleFormatError`
+4. LZMA 解压得到 TAR 字节
 
-```bash
-python tools/pack_plugin.py <源目录> <输出文件> --tool-id <工具ID>
+解压（`core/bundles/loader.py::BundleLoader.extract_bundle`）：
+
+1. 上述读取 + 验签
+2. TAR 安全解包：**拒绝符号链接/硬链接**，**拒绝路径穿越**
+3. 结果按 .mcy 路径缓存；临时模式解压到 `libs/.temp/session_*`（退出清理），持久模式解压到 `libs/`
+
+## 打包（维护者）
+
+验证公钥内嵌 `core/bundles/format.py`（`BUNDLE_PUBLIC_KEY`）；**签名私钥由维护者离线保管，绝不入库**。更换公钥 = 已分发的包全部作废并需重打包。
+
+```powershell
+# 私钥：32 字节 hex（64 个字符），经环境变量传入，不写入任何文件
+$env:MCY_SIGNING_KEY = "<private key hex>"
+python tools\pack_plugin.py <源目录> <输出.mcy> [tool_id]
+# tool_id: 0=Ghostscript（默认）, 1=Pandoc
 ```
 
-**示例**：
+示例：
 
-```bash
-python tools/pack_plugin.py libs/ghostscript plugins/ghostscript.mcy --tool-id ghostscript
+```powershell
+python tools\pack_plugin.py libs\ghostscript plugins\ghostscript.mcy 0
 ```
 
-**参数说明**：
-- `<源目录>`: 要打包的工具目录（如 `libs/ghostscript`）
-- `<输出文件>`: 输出的 `.mcy` 文件路径（如 `plugins/ghostscript.mcy`）
-- `--tool-id`: 工具标识符（如 `ghostscript`、`pandoc`）
-
-### 3. 验证插件
-
-打包完成后，将 `.mcy` 文件放入 `plugins/` 目录，启动程序测试：
-
-```bash
-# 放置插件
-cp ghostscript.mcy plugins/
-
-# 启动程序
-python main.py
-```
-
-在"设置 → 外部工具"中查看插件是否正常加载。
-
----
-
-## 🔐 .mcy 文件结构
-
-```
-.mcy 文件格式
-├─ Header (16 bytes)
-│  └─ Magic Number: "MCY_PLUGIN_PKG\x00"
-│
-├─ Metadata Block (JSON)
-│  ├─ tool_id: "ghostscript"
-│  ├─ version: "10.02.0"
-│  ├─ checksum: "sha256..."
-│  └─ compressed_size: 41943040
-│
-└─ Encrypted Payload
-   ├─ AES-256-CBC 加密
-   ├─ Key: 从密码派生 (PBKDF2)
-   └─ 内容: LZMA 压缩的 tar 包
-```
-
----
-
-## 🔧 配置插件加载
-
-### 在代码中注册插件
-
-如果要添加新的工具支持，需要：
-
-#### 1. 创建工具类
-
-在 `core/external_tools/` 中创建工具类：
+## 加载（运行时）
 
 ```python
-# core/external_tools/your_tool.py
-from .base import BaseExternalTool
+from core.bundles.loader import loader
 
-class YourTool(BaseExternalTool):
-    def __init__(self, config_loader):
-        super().__init__("your_tool", config_loader)
-        self.executable = "your_tool.exe"  # 可执行文件名
-    
-    def get_search_paths(self):
-        # 定义搜索路径
-        return [
-            os.path.join(self.libs_dir, "your_tool", "bin"),
-            "C:/Program Files/YourTool/bin",
-        ]
+path = loader.extract_bundle("plugins/ghostscript.mcy", persistent=False)
 ```
 
-#### 2. 注册到管理器
+- 文件不存在 → 抛 `FileNotFoundError`；验签失败/格式错误/解压失败 → 记录日志并返回 `None`
+- `public_key` 参数（默认内嵌官方公钥）是第三方签名的可插拔留位（b2），未实现多公钥注册
 
-在 `core/external_tools/manager.py` 中注册：
+## 第三方签名（b2 留位）
 
-```python
-from .your_tool import YourTool
+当前**只接受官方公钥签名的包**。b2（多贡献者公钥注册）按 ADR-0003 仅留可插拔接口，出现真实需求前不实现。
 
-class ExternalToolManager:
-    def __init__(self, config_loader):
-        self.tools = {
-            "ghostscript": GhostscriptTool(config_loader),
-            "pandoc": PandocTool(config_loader),
-            "your_tool": YourTool(config_loader),  # 新增
-        }
-```
+第三方贡献方式：提交工具二进制源与目录结构说明的 PR，由维护者用私钥打包分发；或自建包仅限自用（需自行改公钥，不受支持）。
 
----
+## 加载优先级
 
-## 📋 插件模式说明
+1. `plugins/*.mcy`（内置资源或用户放置）
+2. `libs/`（已解压的持久化工具）
+3. 环境变量 PATH
+4. 系统安装路径（如 `C:\Program Files`）
 
-### 临时模式 (Temporary Mode)
+## 新增工具接入
 
-- **特点**: 插件使用时解压到临时目录，程序退出后自动清理
-- **优势**: 节省磁盘空间
-- **适用**: 默认推荐模式
+1. 在 `core/external_tools/` 新建工具类（继承 `ExternalTool`，定义 `get_search_paths` 等）
+2. 在 `core/external_tools/manager.py` 的 `tools` 字典注册
+3. 用上方脚本打包为 `.mcy`，放入 `plugins/`
 
-### 持久模式 (Persistent Mode)
+## 运行模式
 
-- **特点**: 插件解压到 `libs/` 目录并永久保留
-- **优势**: 下次启动无需重复解压，速度更快
-- **适用**: 频繁使用的工具
+- **temporary（默认）**：解压到 `libs/.temp/`，退出清理
+- **persistent**：解压到 `libs/` 常驻，下次启动免解压
 
-用户可在"设置 → 外部工具"中切换模式。
+用户可在「设置 → 外部工具」中切换。
 
----
+## FAQ
 
-## 🔍 插件加载优先级
-
-程序按以下优先级搜索工具：
-
-1. **plugins/ 目录 (.mcy 插件)** - 最高优先级
-2. **libs/ 目录 (已解压的插件)**
-3. **环境变量 (PATH)**
-4. **系统安装路径** (如 `C:\Program Files\...`)
-
----
-
-## 💡 最佳实践
-
-### 1. 目录结构规范
-
-建议插件目录结构：
-
-```
-your_tool/
-├── bin/          # 可执行文件
-├── lib/          # 依赖库
-├── share/        # 共享资源
-└── README.txt    # 说明文档
-```
-
-### 2. 版本管理
-
-在工具目录中添加 `VERSION` 文件：
-
-```
-10.02.0
-```
-
-### 3. 最小化体积
-
-- 移除不必要的文件（文档、示例等）
-- 压缩可执行文件（UPX等工具）
-- 仅包含必要的依赖
-
-### 4. 测试清单
-
-- ✅ 插件能否正常解密和解压
-- ✅ 工具可执行文件能否正常运行
-- ✅ 临时模式和持久模式都能工作
-- ✅ 卸载功能正常
-
----
-
-## 🐛 常见问题
-
-### Q: 插件打包失败？
-
-**A**: 检查以下几点：
-1. 源目录是否存在
-2. 输出目录是否有写入权限
-3. 源目录中是否包含无效字符
-
-### Q: 插件加载失败？
-
-**A**: 可能原因：
-1. `.mcy` 文件已损坏
-2. 解密密钥不匹配
-3. 目标目录权限不足
-
-查看程序日志获取详细错误信息。
-
-### Q: 如何更新插件版本？
-
-**A**: 
-1. 重新打包新版本插件
-2. 在"设置"中卸载旧版本
-3. 放入新的 `.mcy` 文件
-4. 重启程序
-
----
-
-## 📚 参考示例
-
-### 示例：打包 Pandoc 插件
-
-```bash
-# 1. 下载 Pandoc 便携版
-wget https://github.com/jgm/pandoc/releases/download/3.1.8/pandoc-3.1.8-windows-x86_64.zip
-
-# 2. 解压到 libs 目录
-unzip pandoc-3.1.8-windows-x86_64.zip -d libs/pandoc
-
-# 3. 打包为 .mcy 插件
-python tools/pack_plugin.py libs/pandoc plugins/pandoc.mcy --tool-id pandoc
-
-# 4. 验证
-python main.py
-```
-
----
-
-## 🤝 贡献插件
-
-欢迎为项目贡献新的插件！
-
-### 贡献流程
-
-1. Fork 本项目
-2. 创建插件分支：`git checkout -b feature/new-plugin`
-3. 添加工具类和打包脚本
-4. 测试插件功能
-5. 提交 Pull Request
-
-### 插件要求
-
-- ✅ 开源或允许再分发的工具
-- ✅ 提供完整的使用文档
-- ✅ 经过充分测试
-- ✅ 体积合理（建议 < 200MB）
-
----
-
-*最后更新时间：2026-01-06*
+- **打包失败**：检查源目录存在、`MCY_SIGNING_KEY` 为 64 字符 hex、输出目录可写
+- **加载失败（验签）**：文件被篡改、非官方私钥签名、或 v1 旧包（需重打包）
+- **更新版本**：重打包 → 替换 `plugins/*.mcy` → 重启；持久模式需先卸载旧版

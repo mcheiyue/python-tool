@@ -1,89 +1,56 @@
+"""打包 Tool Bundle v2 (.mcy)。
+
+用法（维护者，离线持有私钥）：
+    set MCY_SIGNING_KEY=<Ed25519 私钥 hex（64 字符）>
+    python tools/pack_plugin.py <源目录> <输出文件> [tool_id]
+
+Tool ID: 0=Ghostscript, 1=Pandoc（默认 0）。
+
+私钥绝不入库；验证公钥内嵌 core/bundles/format.py（更换公钥=旧包全部作废）。
+"""
 import os
 import sys
-import struct
-import tarfile
-import lzma
-import hashlib
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.backends import default_backend
 
-# 硬编码的密钥，实际使用中应妥善保管
-# 这里使用 SHA-256 派生一个 32 字节的密钥
-SECRET_KEY_SEED = b"PythonTool-Plugin-Secret-Key-2024"
-SECRET_KEY = hashlib.sha256(SECRET_KEY_SEED).digest()
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-MAGIC_HEADER = b"MCY\x00"
-VERSION = 1
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-def encrypt_data(data):
-    """使用 AES-256-CBC 加密数据"""
-    iv = os.urandom(16)
-    cipher = Cipher(algorithms.AES(SECRET_KEY), modes.CBC(iv), backend=default_backend())
-    encryptor = cipher.encryptor()
-    
-    # PKCS7 填充
-    padder = padding.PKCS7(128).padder()
-    padded_data = padder.update(data) + padder.finalize()
-    
-    encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
-    return iv, encrypted_data
+from core.bundles.format import pack_bundle
 
-def pack_plugin(source_dir, output_file, tool_id):
-    """
-    打包插件
-    :param source_dir: 源目录
-    :param output_file: 输出文件 (.mcy)
-    :param tool_id: 工具ID (0=GS, 1=Pandoc)
-    """
-    print(f"Packing {source_dir} -> {output_file}...")
-    
-    # 1. 创建内存中的 TAR 包
-    import io
-    tar_buffer = io.BytesIO()
-    with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
-    
-    tar_data = tar_buffer.getvalue()
-    original_size = len(tar_data)
-    print(f"  Original TAR size: {original_size / 1024 / 1024:.2f} MB")
-    
-    # 2. LZMA 压缩
-    print("  Compressing with LZMA (preset=9)...")
-    compressed_data = lzma.compress(tar_data, preset=9)
-    print(f"  Compressed size: {len(compressed_data) / 1024 / 1024:.2f} MB")
-    
-    # 3. AES 加密
-    print("  Encrypting...")
-    iv, encrypted_data = encrypt_data(compressed_data)
-    
-    # 4. 写入文件
-    # 确保输出目录存在
-    os.makedirs(os.path.dirname(output_file) or '.', exist_ok=True)
-    
-    with open(output_file, "wb") as f:
-        # Header
-        f.write(MAGIC_HEADER)
-        f.write(struct.pack("B", VERSION))
-        f.write(struct.pack("B", tool_id))
-        f.write(struct.pack("Q", original_size)) # 8 bytes unsigned long long
-        
-        # IV
-        f.write(iv)
-        
-        # Data
-        f.write(encrypted_data)
-        
-    print(f"Done! Created {output_file} ({os.path.getsize(output_file) / 1024 / 1024:.2f} MB)")
 
-if __name__ == "__main__":
+def load_private_key() -> Ed25519PrivateKey:
+    key_hex = os.environ.get("MCY_SIGNING_KEY", "").strip()
+    if not key_hex:
+        raise SystemExit(
+            "缺少环境变量 MCY_SIGNING_KEY（Ed25519 私钥 hex，64 字符）。\n"
+            "私钥由维护者离线保管，绝不提交到仓库。"
+        )
+    try:
+        raw = bytes.fromhex(key_hex)
+    except ValueError as e:
+        raise SystemExit(f"MCY_SIGNING_KEY 不是合法 hex: {e}")
+    if len(raw) != 32:
+        raise SystemExit(f"MCY_SIGNING_KEY 必须为 32 字节（64 个 hex 字符），当前 {len(raw)} 字节")
+    return Ed25519PrivateKey.from_private_bytes(raw)
+
+
+def main():
     if len(sys.argv) < 3:
-        print("Usage: python pack_plugin.py <source_dir> <output_file> [tool_id]")
-        print("Tool IDs: 0=Ghostscript, 1=Pandoc")
+        print(__doc__)
         sys.exit(1)
-        
+
     source = sys.argv[1]
     output = sys.argv[2]
     tid = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-    
-    pack_plugin(source, output, tid)
+
+    if not os.path.isdir(source):
+        raise SystemExit(f"源目录不存在: {source}")
+
+    key = load_private_key()
+    print(f"Packing {source} -> {output} (tool_id={tid})...")
+    pack_bundle(source, output, tid, key)
+    print(f"Done! Created {output} ({os.path.getsize(output) / 1024 / 1024:.2f} MB)")
+
+
+if __name__ == "__main__":
+    main()

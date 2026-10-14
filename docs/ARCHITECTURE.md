@@ -195,30 +195,28 @@ self.thread_pool.start(ConvertTask(...))
 
 ---
 
-## 🔐 .mcy 插件加密系统
+## 🔐 Tool Bundle（.mcy v2）签名系统
 
-**设计思想**: 自定义加密插件格式，实现安全的便携化部署。
+**设计思想**: 外部工具便携分发包，以 Ed25519 签名保证完整性与来源（v2 规格见 ADR-0003）。
 
 ```
-.mcy 文件结构
-├─ Header (16 bytes)
-│  └─ Magic Number: "MCY_PLUGIN_PKG\x00"
-├─ Encrypted Data
-│  ├─ AES-256-CBC 加密
-│  └─ LZMA 压缩 (Preset 9)
-└─ Metadata (JSON)
-   ├─ tool_id
-   ├─ version
-   └─ checksum (SHA256)
+.mcy 文件结构 (v2)
+├─ Header (14 bytes)
+│  ├─ Magic: "MCY\x00"
+│  ├─ Version: 2
+│  ├─ Tool ID (0=Ghostscript, 1=Pandoc)
+│  └─ REST_SIZE (uint64, = 64 + 压缩数据长度)
+├─ Ed25519 签名 (64 bytes, 对压缩数据)
+└─ LZMA 压缩的 TAR (Preset 9)
 ```
 
 **加载流程**:
-1. 验证 Header + 完整性校验
-2. AES解密 → LZMA解压 → 提取到目标目录
+1. 校验 Magic/Version → 读满「签名+载荷」→ 内嵌公钥验签（失败拒绝）
+2. LZMA 解压 → TAR 安全解包（拒符号链接/硬链接、拒路径穿越）→ 提取到目标目录
 3. 根据模式（临时/持久）管理解压文件
 
 **优势**:
-- 🔒 AES-256 加密保护插件完整性
+- 🔏 Ed25519 签名防伪造（私钥离线；v1 硬编码 AES 密钥已废除）
 - 📦 LZMA 压缩率高达 60%+
 - 🚀 惰性解压，按需加载
 

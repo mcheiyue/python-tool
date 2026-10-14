@@ -20,20 +20,20 @@
 - **适配层 (`ui/interfaces/`)**: 连接 UI 与 Core 的中间层，负责数据传递与线程管理。
 
 ### 依赖注入容器
-`app/container.py` 实现了简单的依赖注入容器 `AppContainer`，用于管理全局单例服务（如配置加载器、插件加载器）。
+`app/container.py` 实现了简单的依赖注入容器 `AppContainer`，用于管理全局单例服务（如配置加载器、插件管理器、外部工具管理器）。
 
 ```python
 from app.container import AppContainer
 
 container = AppContainer()
-plugin_loader = container.plugin_loader
+plugin_manager = container.plugin_manager
 ```
 
 ---
 
 ## 插件系统
 
-插件系统允许开发者在不修改核心代码的情况下扩展功能。相关代码位于 `core/plugin_loader.py`。
+插件系统允许开发者在不修改核心代码的情况下扩展功能。Python 能力插件位于 `core/plugins/`；`.mcy` 二进制工具包（Tool Bundle，仅装载外部工具）位于 `core/bundles/`，规格见 `docs/PLUGIN_GUIDE.md`。
 
 ### 插件结构
 一个标准的插件包 (.opk, 本质是 .tar.gz) 结构如下：

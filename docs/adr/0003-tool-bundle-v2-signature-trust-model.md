@@ -18,3 +18,9 @@
 - `docs/PLUGIN_GUIDE.md` 必须随 v2 重写为与实现一致的真实规格（当前文档描述的格式在 v1 中并不存在）。
 - 符号链接/硬链接拒绝（P0 第 2 条）不依赖本 ADR，已在阶段 0 先行加固。
 - 实施时需在 `tests/test_plugin_loader.py` 补：v2 打包/解包往返、篡改签名拒绝、v1 样本拒绝。
+
+## 实施记录（2026-09-24）
+
+- 测试随模块改名落在 `tests/test_bundle_loader.py`（另含验签密钥不匹配、_safe_extract 链接安全），并覆盖上述三条验收项。
+- 「SHA256 清单」未单独实现：Ed25519 签名直接覆盖 LZMA 压缩载荷，完整性由签名承载，独立清单为冗余（YAGNI）。
+- 打包器经 `MCY_SIGNING_KEY` 环境变量接收私钥（32 字节 hex），仓库内无任何密钥；验证公钥内嵌 `core/bundles/format.py`。

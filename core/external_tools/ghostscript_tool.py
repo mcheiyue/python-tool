@@ -5,7 +5,7 @@ import platform
 import subprocess
 from typing import Optional
 from .base import ExternalTool
-from core.plugin_loader import loader as plugin_loader
+from core.bundles.loader import loader as bundle_loader
 from config.loader import ConfigLoader
 from core.utils.resource_path import get_app_root, get_resource_path
 
@@ -72,7 +72,7 @@ class GhostscriptTool(ExternalTool):
                 mode = config.get("app.plugin_mode", "temporary")
                 persistent = (mode == "persistent")
                 
-                extracted_path = plugin_loader.extract_plugin(plugin_path, persistent=persistent)
+                extracted_path = bundle_loader.extract_bundle(plugin_path, persistent=persistent)
                 if extracted_path:
                     portable_gs_dir = extracted_path
 
