@@ -78,12 +78,13 @@ class ExternalTool(ABC):
             self._cache = None
 
     def probe_version(self, exe_path: str) -> Optional[str]:
-        """带缓存的版本探测：按 (路径, mtime, size) 命中则跳过子进程。
+        """带缓存的版本探测：按 (mtime, size) 指纹命中则跳过子进程。
 
         每次 spawn 子进程取版本是可观开销（LibreOffice 达秒级），而进程内
         _find() 已缓存一次，真正的浪费发生在「每次应用启动都重新探测」。
-        缓存写用户配置的 dependencies.tool_version_cache，文件一变即失效。
-        配置不可用（缺 default.json 等）时退回无缓存探测，不影响功能。
+        缓存写用户配置的 dependencies.tool_version_cache，文件一变即失效；
+        不含路径——temporary 模式每次解压到新的 session 目录，按路径匹配
+        将使缓存永不命中。配置不可用（缺 default.json 等）时退回无缓存探测。
         """
         try:
             st = os.stat(exe_path)
@@ -100,8 +101,9 @@ class ExternalTool(ABC):
             config = None
 
         entry = cache.get(self.name) if isinstance(cache, dict) else None
-        if fingerprint and isinstance(entry, dict) \
-                and entry.get("path") == exe_path and entry.get("fp") == fingerprint:
+        # 只按指纹（mtime+size）匹配：temporary 模式每次启动都解压到新的
+        # session_xxxx 目录，按路径匹配会让缓存永远不命中（实测跨启动零命中）。
+        if fingerprint and isinstance(entry, dict) and entry.get("fp") == fingerprint:
             return entry.get("version")
 
         try:

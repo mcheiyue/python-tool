@@ -7,6 +7,7 @@ extract_bundle 本身的行为由 test_bundle_extract_e2e.py 覆盖；
 此处替身化它，专测「发现/装配」逻辑，零网络、零真二进制。
 """
 import os
+import shutil
 import time
 
 import pytest
@@ -304,6 +305,23 @@ class TestVersionProbeCache:
         fresh = _ProbeTool()
         assert fresh.probe_version(str(exe)) == "v1"
         assert fresh.probe_calls == 0
+
+    def test_same_content_at_new_path_hits(self, monkeypatch, tmp_path):
+        """回归：缓存不得把路径计入命中条件。
+
+        temporary 模式每次启动都解压到新的 session_xxxx 目录——路径每变一次，
+        内容却完全相同。按路径匹配会让跨启动缓存永不命中（实测每次启动都重新
+        探测），故命中条件只认 (mtime, size) 指纹。
+        """
+        tool, exe, fake = self._make(monkeypatch, tmp_path)
+        other_dir = tmp_path / "session_other" / "pandoc"
+        other_dir.mkdir(parents=True)
+        other_exe = other_dir / "pandoc.exe"
+        shutil.copy2(exe, other_exe)
+
+        assert tool.probe_version(str(exe)) == "v1"
+        assert tool.probe_version(str(other_exe)) == "v1"
+        assert tool.probe_calls == 1
 
     def test_mtime_change_invalidates(self, monkeypatch, tmp_path):
         tool, exe, fake = self._make(monkeypatch, tmp_path)
