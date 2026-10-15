@@ -174,15 +174,6 @@ class ExternalTool(ABC):
         """子类实现：spawn 一次子进程取版本号。基类返回 None。"""
         return None
 
-    def _locate_bundle(self, filename: str) -> Optional[str]:
-        """载体(.mcy)路径：内部资源优先，外部 plugins 目录兜底；不存在返回 None。"""
-        from core.utils.resource_path import get_app_root, get_resource_path
-        internal = get_resource_path(f"plugins/{filename}")
-        if os.path.exists(internal):
-            return internal
-        external = os.path.join(get_app_root(), "plugins", filename)
-        return external if os.path.exists(external) else None
-
     @staticmethod
     def _exe_in_dirs(base_dir: str, exe_names, subdirs=("",)) -> Optional[str]:
         """在 base_dir 的若干子目录中按序查找可执行文件，返回首个存在的完整路径。"""
@@ -196,7 +187,7 @@ class ExternalTool(ABC):
 
     def _resolve_executable(self, exe_names, which_names=None,
                             portable_subdirs=("",), on_portable=None):
-        """发现链步骤 1-3：便携目录 → 载体(.mcy)惰性解压 → PATH。
+        """发现链步骤 1-3：便携目录 → 上游包装配（预置 zip/manifest）→ PATH。
 
         返回 (路径, source)，source 取值为 "portable"/"env"/None。
         步骤 4（平台系统路径）各工具差异大（gs 版本目录扫描 / LO 固定路径 /
@@ -207,17 +198,6 @@ class ExternalTool(ABC):
         found = self._exe_in_dirs(tool_dir, exe_names, portable_subdirs)
         if not found:
             found = self._install_from_package(exe_names, portable_subdirs)
-        if not found:
-            plugin_path = self._locate_bundle(f"{self.name}.mcy")
-            if plugin_path:
-                from config.loader import ConfigLoader
-                from core.bundles.loader import loader as bundle_loader
-                persistent = ConfigLoader().get(
-                    "app.plugin_mode", "temporary") == "persistent"
-                extracted = bundle_loader.extract_bundle(
-                    plugin_path, persistent=persistent)
-                if extracted:
-                    found = self._exe_in_dirs(extracted, exe_names, portable_subdirs)
         if found:
             if on_portable:
                 on_portable(found)
@@ -233,7 +213,7 @@ class ExternalTool(ABC):
         """从上游官方包装配可执行文件：预置 zip 优先，manifest 下载兜底。
 
         全部失败（无 zip/manifest/网络/校验）静默降级返回 None，由调用方继续
-        回退到 .mcy 与 PATH——网络问题不阻塞发现链。
+        回退到 PATH——网络问题不阻塞发现链。
         """
         from core.tools.package_store import PackageStore
 
@@ -294,10 +274,10 @@ class ExternalTool(ABC):
     def refresh_status_async(self, callback: Callable[[Optional[Dict[str, Any]]], None]):
         """后台刷新工具状态，完成后 callback(status) 在主线程被调用。
 
-        状态解析可能触发 .mcy 惰性解压（秒级），因此不能在 UI 线程同步调用
-        check_installed()/get_path()；本方法是唯一入口。status 形如 get_status_info()。
-        解析进行中再次调用会复用同一次结果（回调排队扇出），线程由工具持有，
-        调用方无需（也不应）保存线程引用。
+        状态解析可能触发上游包的下载与解压（秒级至数十秒），因此不能在 UI 线程
+        同步调用 check_installed()/get_path()；本方法是唯一入口。status 形如
+        get_status_info()。解析进行中再次调用会复用同一次结果（回调排队扇出），
+        线程由工具持有，调用方无需（也不应）保存线程引用。
         """
         resolver = getattr(self, "_resolver", None)
         if resolver is None:

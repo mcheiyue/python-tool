@@ -1,10 +1,9 @@
 """外部工具发现链集成测试（消费者侧）。
 
-CodeGraph 标注 extract_bundle 的消费者无测试覆盖。本文件锁定
-「查 plugins/*.mcy → extract_bundle → 定位 exe → 设 GS_LIB → source="portable」
-这条便携包发现路径（B0 起步骤 1-3 收拢在 base.ExternalTool._resolve_executable）。
-extract_bundle 本身的行为由 test_bundle_extract_e2e.py 覆盖；
-此处替身化它，专测「发现/装配」逻辑，零网络、零真二进制。
+锁定「便携目录 → plugins/<tool>.zip 预置包 → manifest 下载兜底 → PATH」这条
+发现路径（B0 起步骤 1-3 收拢在 base.ExternalTool._resolve_executable）。
+此处对 PackageStore 替身化，专测「发现/装配」逻辑，零网络、零真二进制；
+zip 解压与安全审查本身由 test_bundle_zip_safety.py 覆盖。
 """
 import os
 import shutil
@@ -47,16 +46,27 @@ def _make_extracted_gs(root):
     return gs_dir
 
 
-def test_discovers_bundle_from_plugins_dir(tool_env, monkeypatch):
+def _make_preplaced_zip(path, entries):
+    """构造预置包 plugins/<tool>.zip（条目=发现链第一个真实来源）"""
+    with zipfile.ZipFile(path, "w") as zf:
+        for name, data in entries.items():
+            zf.writestr(name, data)
+    return path
+
+
+def test_discovers_from_plugins_dir(tool_env, monkeypatch):
     tool, tmp_path = tool_env
     plugins = tmp_path / "plugins"
     plugins.mkdir()
-    (plugins / "ghostscript.mcy").write_bytes(b"signed bundle placeholder")
+    _make_preplaced_zip(plugins / "ghostscript.zip", {
+        "ghostscript/gswin64c.exe": b"binary",
+        "ghostscript/lib/gs_init.ps": b"% init",
+    })
 
     extracted = _make_extracted_gs(tmp_path)
     monkeypatch.setattr(
-        "core.bundles.loader.loader.extract_bundle",
-        lambda path, persistent=False: str(extracted),
+        "core.tools.package_store.PackageStore.install",
+        lambda self, name, **kw: str(extracted),
     )
 
     assert tool.check_installed() is True
@@ -67,7 +77,7 @@ def test_discovers_bundle_from_plugins_dir(tool_env, monkeypatch):
 
 def test_bundle_absent_reports_not_found(tool_env, monkeypatch):
     tool, tmp_path = tool_env
-    # 无 plugins/*.mcy、无 PATH、无 Program Files 安装
+    # 无 zip/manifest/PATH/Program Files 安装
     monkeypatch.setattr(
         "core.external_tools.base.shutil.which", lambda name: None
     )
@@ -79,16 +89,16 @@ def test_bundle_absent_reports_not_found(tool_env, monkeypatch):
     assert tool.get_source() is None
 
 
-def test_uses_cached_libs_dir_without_bundle(tool_env, monkeypatch):
+def test_uses_cached_libs_dir_without_install(tool_env, monkeypatch):
     tool, tmp_path = tool_env
-    # libs/ghostscript 已存在 → 不应触碰 plugins/extract
+    # libs/ghostscript 已存在 → 不应触发安装
     _make_extracted_gs(tmp_path)
 
     def _fail(*a, **k):
-        raise AssertionError("已解压的 libs 目录存在时不应再解压 .mcy")
+        raise AssertionError("已解压的 libs 目录存在时不应再触发安装")
 
     monkeypatch.setattr(
-        "core.bundles.loader.loader.extract_bundle", _fail
+        "core.tools.package_store.PackageStore.install", _fail
     )
 
     assert tool.check_installed() is True
@@ -96,7 +106,7 @@ def test_uses_cached_libs_dir_without_bundle(tool_env, monkeypatch):
 
 
 class TestLibreOfficeDiscovery:
-    """LibreOffice 便携/Tool Bundle 发现链（① 新增分支）"""
+    """LibreOffice 发现链（便携目录 → 预置包/上游安装 → PATH → 系统路径）"""
 
     @pytest.fixture
     def lo_env(self, tmp_path, monkeypatch):
@@ -115,36 +125,38 @@ class TestLibreOfficeDiscovery:
         yield tool, tmp_path
         tool.clear_cache()
 
-    def test_discovers_bundle_from_plugins_dir(self, lo_env, monkeypatch):
+    def test_discovers_from_plugins_dir(self, lo_env, monkeypatch):
         tool, tmp_path = lo_env
         plugins = tmp_path / "plugins"
         plugins.mkdir()
-        (plugins / "libreoffice.mcy").write_bytes(b"signed bundle placeholder")
+        _make_preplaced_zip(plugins / "libreoffice.zip", {
+            "libreoffice/program/soffice.exe": b"binary",
+        })
 
         extracted = tmp_path / "libs" / "libreoffice"
         (extracted / "program").mkdir(parents=True)
         (extracted / "program" / "soffice.exe").write_bytes(b"fake")
 
         monkeypatch.setattr(
-            "core.bundles.loader.loader.extract_bundle",
-            lambda path, persistent=False: str(extracted),
+            "core.tools.package_store.PackageStore.install",
+            lambda self, name, **kw: str(extracted),
         )
 
         assert tool.check_installed() is True
         assert os.path.basename(tool.get_path()) == "soffice.exe"
         assert tool.get_source() == "portable"
 
-    def test_uses_existing_libs_dir_without_bundle(self, lo_env, monkeypatch):
+    def test_uses_existing_libs_dir_without_install(self, lo_env, monkeypatch):
         tool, tmp_path = lo_env
         extracted = tmp_path / "libs" / "libreoffice"
         (extracted / "program").mkdir(parents=True)
         (extracted / "program" / "soffice.exe").write_bytes(b"fake")
 
         def _fail(*a, **k):
-            raise AssertionError("libs 目录已存在时不应再解压 .mcy")
+            raise AssertionError("libs 目录已存在时不应再触发安装")
 
         monkeypatch.setattr(
-            "core.bundles.loader.loader.extract_bundle", _fail
+            "core.tools.package_store.PackageStore.install", _fail
         )
 
         assert tool.check_installed() is True
@@ -156,7 +168,7 @@ class TestLibreOfficeDiscovery:
         assert tool.get_source() is None
 
     def test_portable_branch_uses_version_cache(self, lo_env, monkeypatch):
-        """回归：便携/.mcy 分支也必须走 probe_version（曾绕过缓存）。
+        """回归：便携分支也必须走 probe_version（曾绕过缓存）。
 
         该分支的参数名是 portable_exe 而非 path，靠人工逐一比对 _find()
         的调用点时极易漏掉；此用例直接锁死行为。
@@ -369,24 +381,6 @@ def test_discovers_from_preplaced_zip(pandoc_env):
     assert tool.check_installed() is True
     assert tool.get_source() == "portable"
     assert "pandoc.exe" in tool.get_path()
-
-
-def test_zip_takes_precedence_over_mcy(pandoc_env, monkeypatch):
-    """zip 与 .mcy 同在时官方 zip 优先（B 方向以位级对齐的官方字节为准）。"""
-    tool, tmp_path = pandoc_env
-    plugins = tmp_path / "plugins"
-    plugins.mkdir()
-    with zipfile.ZipFile(plugins / "pandoc.zip", "w") as zf:
-        zf.writestr("pandoc/pandoc.exe", b"official-binary")
-    (plugins / "pandoc.mcy").write_bytes(b"signed bundle placeholder")
-
-    def _fail(*a, **k):
-        raise AssertionError("zip 命中时不应再解压 .mcy")
-
-    monkeypatch.setattr("core.bundles.loader.loader.extract_bundle", _fail)
-
-    assert tool.check_installed() is True
-    assert tool.get_source() == "portable"
 
 
 def test_manifest_absent_and_no_zip_falls_back(pandoc_env):

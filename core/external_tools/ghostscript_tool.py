@@ -33,7 +33,7 @@ class GhostscriptTool(ExternalTool):
     def _find(self) -> dict:
         """查找 Ghostscript 安装路径 (带缓存)
 
-        发现链：便携目录 → .mcy 惰性解压 → PATH → Windows 版本目录扫描。
+        发现链：便携目录 → 上游包装配（预置 zip/manifest）→ PATH → Windows 版本目录扫描。
         步骤 1-3 在基类 ExternalTool._resolve_executable；步骤 4 为 gs 特有。
         """
         if self._cache is not None:
@@ -58,7 +58,7 @@ class GhostscriptTool(ExternalTool):
 
         is_windows = platform.system().lower() == "windows"
 
-        # 1-3. 便携目录 / .mcy 惰性解压 / PATH
+        # 1-3. 便携目录 / 上游包装配 / PATH
         path, source = self._resolve_executable(
             ["gswin64c.exe", "gswin32c.exe", "gs"],
             which_names=["gswin64c", "gswin32c"] if is_windows else ["gs"],

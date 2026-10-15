@@ -33,7 +33,7 @@ class LibreOfficeTool(ExternalTool):
     def _find(self) -> dict:
         """查找 LibreOffice 安装路径 (带缓存)
 
-        发现链：便携目录 → .mcy 惰性解压 → PATH → 平台固定路径。
+        发现链：便携目录 → 上游包装配（预置 zip/manifest）→ PATH → 平台固定路径。
         步骤 1-3 在基类 ExternalTool._resolve_executable；步骤 4 为 LO 特有。
         """
         if self._cache is not None:
@@ -53,7 +53,7 @@ class LibreOfficeTool(ExternalTool):
         system = platform.system().lower()
         exe_names = ["soffice.exe", "soffice.com"] if system == 'windows' else ["soffice", "libreoffice"]
 
-        # 1-3. 便携目录（program/ 子目录优先）/ .mcy 惰性解压 / PATH
+        # 1-3. 便携目录（program/ 子目录优先）/ 上游包装配 / PATH
         path, source = self._resolve_executable(
             exe_names, portable_subdirs=("program", "")
         )

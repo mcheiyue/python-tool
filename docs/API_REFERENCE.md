@@ -33,7 +33,10 @@ plugin_manager = container.plugin_manager
 
 ## 插件系统
 
-插件系统允许开发者在不修改核心代码的情况下扩展功能。Python 能力插件位于 `core/plugins/`；`.mcy` 二进制工具包（Tool Bundle，仅装载外部工具）位于 `core/bundles/`，规格见 `docs/PLUGIN_GUIDE.md`。
+插件系统允许开发者在不修改核心代码的情况下扩展功能。Python 能力插件位于 `core/plugins/`；
+外部二进制工具（Ghostscript/Pandoc/LibreOffice）由 `core/tools/package_store.py`
+按 `plugins/manifest.json`（官方 URL + SHA256）供给，安全解压在 `core/bundles/loader.py`，
+规格见 `docs/PLUGIN_GUIDE.md`。
 
 ### 插件结构
 一个标准的插件包 (.opk, 本质是 .tar.gz) 结构如下：

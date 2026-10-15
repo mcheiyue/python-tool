@@ -160,8 +160,8 @@ class MarkdownPdfBatchInterface(QWidget):
     def check_pandoc_status(self):
         """检查 Pandoc 状态和 PDF 引擎状态并更新 UI
 
-        PDF 引擎是 PATH 探测（快），同步完成；Pandoc 可能触发 .mcy 惰性解压（秒级），
-        必须走异步，否则切换页面即冻结。
+        PDF 引擎是 PATH 探测（快），同步完成；Pandoc 可能触发上游包下载解压
+        （秒级至数十秒），必须走异步，否则切换页面即冻结。
         """
         # 1. 检查 PDF 引擎
         self._detect_and_set_default_engine()

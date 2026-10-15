@@ -68,3 +68,21 @@ libs/<tool>/exe → 预置 zip（plugins/<tool>.zip）→ manifest 下载解压 
 **待裁决（B5）**：`.mcy` 最终去留——全删 / 留作预置载体（zip+hash 弃签名）/ 双支持。
 裁决前 loader 保持读取兼容；本修订生效后新工具一律走 manifest。
 
+## 修订记录（2026-10-15）：B5 执行——`.mcy` 全删
+
+**裁决**：全删。理由：双支持是纯技术债（两套信任模型、两条解压路径、两套测试基线，
+却没有任何真实场景需要签名——仓库内从无入库 `.mcy` 实物，唯一本地包已由预置 zip 取代）。
+
+**删除清单**：
+
+- `core/bundles/format.py`（MAGIC/VERSION 头、Ed25519 签名与验签、`pack_bundle`/`read_bundle`/`stream_bundle`）
+- `tools/pack_plugin.py`（打包器，含 `--gen-key`/`--verify` 与 `MCY_SIGNING_KEY` 流程）
+- `core/bundles/loader.py` 的 tar/`.mcy` 读取路径（`_safe_extract`、`extract_bundle`、`_stage_and_verify`、`_remove_staged`、`_extracted_cache`）；只保留 zip 供给链
+- `core/bundles/__init__.py` 的格式层导出
+- `tests/test_bundle_loader.py`、`tests/test_bundle_extract_e2e.py`；zip 安全测试中的 tar 遗留用例
+- `requirements.txt` 与 `build/check_dependencies.py` 中的 `cryptography`（及其传递依赖 `cffi`/`pycparser` 白名单）
+
+**执行结果**：签名密钥 ceremony 随之终结——私钥此后再无用途。`.mcy` 发现分支从
+`_resolve_executable` 移除，发现链回到三步（便携目录 → 上游包装配 → PATH）。
+全量测试 133 → 116 passed（少的 17 个即随模块退役的签名/解包用例）。
+

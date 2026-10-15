@@ -11,7 +11,7 @@ REQUIRED_PACKAGES = {
     "PyQt6", "PyQt6-Qt6", "PyQt6-sip", "PyQt6-Fluent-Widgets", "PyQt6-Frameless-Window",
     "pypdf", "python-docx", "python-pptx",
     "Pillow", "qfluentwidgets", "comtypes",
-    "Markdown", "openpyxl", "cryptography",
+    "Markdown", "openpyxl",
     # 打包工具
     "nuitka", "zstandard", "ordered-set",
     # 系统/环境依赖 (保留以防万一)
@@ -22,12 +22,11 @@ REQUIRED_PACKAGES = {
 ALLOWED_PREFIXES = (
     "PyQt6", "qfluentwidgets", "pypdf", 
     "python-", "Pillow", "comtypes", 
-    "Markdown", "openpyxl", "cryptography",
+    "Markdown", "openpyxl",
     "nuitka", "zstandard", "ordered-set",
     # 标准库依赖/pip工具
     "setuptools", "pip", "wheel", "packaging",
     # 子依赖
-    "cffi", "pycparser",  # cryptography 依赖
     "lxml", "et-xmlfile",  # openpyxl 依赖
     "typing", "annotated", "pydantic", # 新版库常用依赖
     "click", "colorama", # 常规CLI依赖

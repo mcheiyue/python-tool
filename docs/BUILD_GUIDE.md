@@ -64,7 +64,7 @@ C:\Program Files\Office Toolkit\
 │   └── ...
 ├── assets\                    # 内置资源（图标等）
 ├── config\                    # 配置文件
-├── plugins\                   # 插件目录（空，用户可放置 .mcy 文件）
+├── plugins\                   # 外部工具供给目录（manifest.json 入库，zip 预置包随包分发）
 └── libs\                      # 运行时生成（插件解压位置）
 ```
 
@@ -100,7 +100,7 @@ OfficeToolkit\
 
 **特点：**
 - 只有一个 EXE 文件
-- **内置所有插件**（ghostscript.mcy、pandoc.mcy）
+- **内置全部外部工具预置包**（pandoc.zip 等官方 zip）
 - 首次启动会自解压到临时目录（稍慢）
 - 适合快速分享和演示
 
@@ -118,35 +118,34 @@ OfficeToolkit_Single.exe
 ├── _internal\
 ├── assets\
 ├── config\
-└── plugins\（内置的 .mcy 文件）
-    ├── ghostscript.mcy
-    └── pandoc.mcy
+└── plugins\（manifest.json + 内置的预置 zip 包）
+    ├── manifest.json
+    └── pandoc.zip
 ```
 
 **重要说明：**
-- 用户仍可在 EXE 所在目录创建 `plugins` 文件夹，放置额外插件
-- 代码会优先加载内置插件，兜底加载外部插件
+- 用户仍可在 EXE 所在目录放置自己的 `plugins/<tool>.zip` 或编辑 `manifest.json`
+- 代码会优先加载预置 zip（内外兼查），无预置时才按 manifest 下载
 
 ---
 
 ## 技术实现细节
 
-### 插件查找逻辑（内外兼查）
+### 外部工具查找逻辑（内外兼查）
 
-**修改文件：**
-- `core/external_tools/ghostscript_tool.py`
-- `core/external_tools/pandoc_tool.py`
+**涉及文件：**
+- `core/tools/package_store.py`
 
 **逻辑：**
 ```python
-# 优先查找内部资源（单文件版打包进去的）
-internal_plugin = get_resource_path("plugins/ghostscript.mcy")
+# 优先查找内部资源（单文件版打包进去的预置 zip）
+internal_zip = get_resource_path("plugins/pandoc.zip")
 
-# 兜底查找外部目录（用户手动放置的）
-external_plugin = os.path.join(get_app_root(), "plugins", "ghostscript.mcy")
+# 兜底查找外部目录（用户手动放置的 zip）
+external_zip = os.path.join(get_app_root(), "plugins", "pandoc.zip")
 
-# 选择存在的插件路径
-plugin_path = internal_plugin if os.path.exists(internal_plugin) else external_plugin
+# 选择存在的预置包；两侧都没有时读 manifest.json 走官方 URL 下载
+zip_path = internal_zip if os.path.exists(internal_zip) else external_zip
 ```
 
 **关键函数：**
@@ -186,9 +185,12 @@ plugin_path = internal_plugin if os.path.exists(internal_plugin) else external_p
 
 **优化建议：** 如果用户需要长期使用，推荐安装版或绿化版。
 
-### Q3: 插件会重复解压吗？
+### Q3: 外部工具会重复解压吗？
 
-**A:** 不会。插件加载器使用了缓存机制（`_extracted_cache`），同一 `.mcy` 文件只解压一次。
+**A:** 不会无意义地重复。临时模式下每个会话解压一次（退出即清理，`libs/.temp/session_*`）；
+持久模式解压到 `libs/<工具名>/` 后常驻，后续启动直接命中不再解压。
+版本探测另有跨进程缓存（`dependencies.tool_version_cache`，按 exe 指纹命中），
+不会每次启动都 spawn 子进程取版本号。
 
 ### Q4: 如何回滚到旧版本构建方案？
 

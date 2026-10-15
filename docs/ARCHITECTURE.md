@@ -199,7 +199,8 @@ self.thread_pool.start(ConvertTask(...))
 
 **设计思想**: 外部便携依赖以「官方 URL + SHA256」的 manifest 描述获取方式，
 预置 zip 随安装包分发，按需下载/解压（spec: ADR-0003 修订版）。
-旧 `.mcy` 签名载体保留读取兼容，去留待 B5 裁决。
+`.mcy` 签名载体已整体退役（B5 执行）：loader 只负责 zip 安全解压，
+信任锚唯一，是 manifest 中的 sha256。
 
 **发现链**（收拢于 `core/external_tools/base.py::_resolve_executable`）:
 
@@ -207,7 +208,6 @@ self.thread_pool.start(ConvertTask(...))
 libs/<tool>/exe            →  已安装（便携或持久化解压产物）
   → plugins/<tool>.zip     →  预置包：SHA256 校验后安全解压
   → manifest 下载          →  plugins/manifest.json 的 url 下载 + 校验 + 解压
-  → plugins/<tool>.mcy     →  遗留：内嵌公钥验签 + LZMA 流式解压
   → PATH / 系统路径        →  环境安装
 ```
 
@@ -224,14 +224,14 @@ libs/<tool>/exe            →  已安装（便携或持久化解压产物）
 | --- | --- |
 | `core/tools/downloader.py` | `urllib` 分块下载、hash 校验、重试、取消 |
 | `core/tools/package_store.py` | 读 manifest、下载/定位 zip、委托 `BundleLoader.extract_zip` |
-| `core/bundles/loader.py` | 成员路径审查 + tar/zip 安全解压（顶层目录归一化） |
+| `core/bundles/loader.py` | zip 成员路径审查 + 安全解压（顶层目录归一化） |
 | `base.ExternalTool` | 四步发现链、异步状态解析、版本指纹缓存 |
 
 **优势**:
 - 🔗 二进制位级对齐上游（hash 钉住官方产物，而非维护者 repack）
 - 📝 维护动作是编辑 JSON；新增贡献者可对清单提 PR
 - 🧊 离线场景：预置 zip 随包分发，命中后不触网
-- 🚀 惰性安装，按需解压；「按需解压/调用」语义与 `.mcy` 时代一致
+- 🚀 惰性安装，按需解压；「按需解压/调用」语义自初版保持至今
 
 ---
 

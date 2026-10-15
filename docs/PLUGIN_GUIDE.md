@@ -1,8 +1,8 @@
 # 外部工具供给指南（Manifest + 预置包）
 
 本文档描述 Office Toolkit 外部便携依赖的**真实获取机制**：`plugins/manifest.json`
-（官方 URL + SHA256）与预置 zip 分发；`.mcy` 签名载体已降级为遗留选项
-（ADR-0003 修订版），去留待 B5 裁决。
+（官方 URL + SHA256）与预置 zip 分发。第一代 `.mcy` 签名载体已整体退役
+（ADR-0003 修订版 + B5 执行），本文「历史」节有删除清单。
 
 ## 供给方式
 
@@ -15,7 +15,7 @@
 发现顺序（收拢于 `core/external_tools/base.py`）：
 
 ```
-libs/<tool>/exe  →  plugins/<tool>.zip  →  manifest 下载解压  →  plugins/<tool>.mcy（遗留）  →  PATH  →  系统路径
+libs/<tool>/exe  →  plugins/<tool>.zip  →  manifest 下载解压  →  PATH  →  系统路径
 ```
 
 ## 维护 Manifest（维护者/贡献者）
@@ -62,22 +62,13 @@ python -c "from core.tools.downloader import sha256_file; print(sha256_file('plu
 3. 在 `plugins/manifest.json` 登记该工具的 url/sha256
 4. 需要离线分发包时，把官方 zip 拷到 `plugins/<tool>.zip`（gitignored）
 
-## 遗留：.mcy（待裁决）
+## 历史：.mcy 已退役（B5 执行）
 
-ADR-0003 修订版记录了 `.mcy` 降级为遗留的原因与演变。当前实现仍可读取：
-
-```python
-from core.bundles.loader import loader
-path = loader.extract_bundle("plugins/pandoc.mcy", persistent=False)
-```
-
-维护性说明（不再演进）：
-
-- `tools/pack_plugin.py` 的 `MCY_SIGNING_KEY` 私钥流程与 `--gen-key/--verify` 仅用于
-  历史遗留包的再签名与校验；新工具不使用。
-- `plugins/*.mcy` 仍可在发现链中作为回退源，但优先级低于预置 zip。
-- **B5 待裁决**：全删 / 转为预置载体（zip+hash 弃签名）/ 双支持。裁决前代码与本文
-  「遗留」章节保持现状。
+`.mcy` 单文件签名包是外部工具的第一代分发载体。ADR-0003 修订版决定转用
+Manifest + 预置包后，B5 已整体删除：`core/bundles/format.py`（签名/格式）、
+`tools/pack_plugin.py`（打包器）、`core/bundles/loader.py` 的 tar/`.mcy` 读取
+路径、`cryptography` 依赖与相关测试。历史 Git 提交保留了全部代码与决策记录；
+本目录现只服务 zip 供给链。
 
 ## 运行模式
 

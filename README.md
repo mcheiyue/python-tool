@@ -61,28 +61,27 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Tool Bundle 安装（可选）
+### 外部工具安装（可选）
 
-下载 `.mcy` Tool Bundle 文件并放入 `plugins/` 目录：
-- **ghostscript.mcy** - PDF 压缩引擎（约 40MB）
-- **pandoc.mcy** - Markdown 增强转换（约 80MB）
-
-程序启动时会自动加载，可在"设置"中管理。
+外部工具（Ghostscript/Pandoc/LibreOffice）由 `plugins/manifest.json` 驱动按需安装：
+- 程序在首次使用相关功能时自动下载官方包并校验 SHA256，解压到 `libs/`
+- 也可把官方 zip 放入 `plugins/` 作为预置包（离线分发），或装系统版走 PATH
+- 安装进度与管理入口在「设置 → 外部工具」
 
 ---
 
-## 🔌 Tool Bundle 系统
+## 📦 外部工具供给系统
 
-### 什么是 .mcy Tool Bundle？
-- **签名打包**: Ed25519 签名防伪造 + LZMA 压缩（v2，见 ADR-0003）
-- **按需加载**: 仅在使用时解压，降低内存占用
-- **便携部署**: 无需系统安装，放入 `plugins/` 即可
+### 获取方式
+- **Manifest 项**: `plugins/manifest.json` 登记官方 URL + SHA256 + 版本
+- **预置包**: `plugins/<tool>.zip`（官方 zip 原样拷贝），随安装包分发，离线可用
+- **按需安装**: 首次使用时下载校验解压；失败静默降级到 PATH/系统安装
 
 ### 运行模式
-- **临时模式（推荐）**: 程序退出后自动清理，节省空间
-- **持久模式**: 解压到 `libs/` 目录，提升启动速度
+- **临时模式（推荐）**: 解压到 `libs/.temp/`，退出自动清理
+- **持久模式**: 解压到 `libs/` 常驻，下次启动免解压
 
-详细说明请查看 [Tool Bundle 开发指南](docs/PLUGIN_GUIDE.md)
+详细说明请查看 [外部工具供给指南](docs/PLUGIN_GUIDE.md)
 
 ---
 

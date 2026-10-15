@@ -1,13 +1,11 @@
-"""zip 安全解压回归测试（B1：成员审查 tar/zip 共用）。
+"""zip 安全解压回归测试（B1 建立；.mcy 退役后仅存 zip 侧）。
 
 锁定 _safe_extract_zip/_validate_member_paths 的三类拒绝：
-路径穿越（../）、符号链接成员（external_attr S_IFLNK），以及正常 zip 的解压。
-tar 侧审查由 test_bundle_extract_e2e.py 覆盖。
+路径穿越（../）、符号链接成员（external_attr S_IFLNK），以及正常 zip 的解压
+与持久模式的目录布局契约。
 """
-import io
 import os
 import stat
-import tarfile
 import zipfile
 
 import pytest
@@ -74,22 +72,3 @@ def test_persistent_mode_lands_on_discovery_layout(tmp_path, monkeypatch):
     result = loader.extract_zip(z, persistent=True, subdir="pandoc")
     assert result == str(tmp_path / "libs" / "pandoc")
     assert os.path.isfile(os.path.join(result, "pandoc.exe"))
-
-
-def test_tar_symlink_still_rejected(tmp_path, monkeypatch):
-    """共用审查不得削弱 tar 侧的链接拒绝（回归护栏）。"""
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w") as tar:
-        data = b"payload"
-        info = tarfile.TarInfo("evil.txt")
-        info.size = len(data)
-        info.type = tarfile.SYMTYPE
-        tar.addfile(info, io.BytesIO(data))
-    src = tmp_path / "m.tar"
-    src.write_bytes(buf.getvalue())
-
-    tar_obj = tarfile.open(src)
-    target = tmp_path / "out"
-    target.mkdir()
-    with pytest.raises(SecurityError, match="符号链接/硬链接"):
-        loader._safe_extract(tar_obj, str(target))

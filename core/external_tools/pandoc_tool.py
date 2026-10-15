@@ -31,7 +31,7 @@ class PandocTool(ExternalTool):
     def _find(self) -> dict:
         """查找 Pandoc 安装路径 (带缓存)
 
-        发现链：便携目录 → .mcy 惰性解压 → PATH。
+        发现链：便携目录 → 上游包装配（预置 zip/manifest）→ PATH。
         步骤 1-3 在基类 ExternalTool._resolve_executable；pandoc 无系统路径回退。
         """
         if self._cache is not None:
