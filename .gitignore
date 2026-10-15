@@ -62,7 +62,9 @@ Thumbs.db
 # App Specific
 config.json
 libs/
-plugins/
+# 排除目录内容而非目录本身，manifest 需入库（可评审的分发清单）
+plugins/*
+!plugins/manifest.json
 logs/
 temp_output/
 assets/processed_icons/
