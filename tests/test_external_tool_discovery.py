@@ -11,6 +11,7 @@ import os
 import pytest
 
 from core.external_tools.ghostscript_tool import GhostscriptTool
+from core.external_tools.libreoffice_tool import LibreOfficeTool
 
 
 @pytest.fixture
@@ -91,3 +92,68 @@ def test_uses_cached_libs_dir_without_bundle(tool_env, monkeypatch):
 
     assert tool.check_installed() is True
     assert tool.get_source() == "portable"
+
+
+class TestLibreOfficeDiscovery:
+    """LibreOffice 便携/Tool Bundle 发现链（① 新增分支）"""
+
+    @pytest.fixture
+    def lo_env(self, tmp_path, monkeypatch):
+        for target in (
+            "core.utils.resource_path.get_app_root",
+            "core.external_tools.libreoffice_tool.get_app_root",
+        ):
+            monkeypatch.setattr(target, lambda: str(tmp_path))
+        monkeypatch.setattr(
+            "core.external_tools.libreoffice_tool.get_resource_path",
+            lambda rel: str(tmp_path / "_no_internal" / rel),
+        )
+        monkeypatch.setattr(
+            "core.external_tools.libreoffice_tool.shutil.which", lambda name: None
+        )
+        monkeypatch.setenv("ProgramFiles", str(tmp_path / "no_such_pf"))
+        monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "no_such_pf86"))
+        tool = LibreOfficeTool()
+        tool.clear_cache()
+        yield tool, tmp_path
+        tool.clear_cache()
+
+    def test_discovers_bundle_from_plugins_dir(self, lo_env, monkeypatch):
+        tool, tmp_path = lo_env
+        plugins = tmp_path / "plugins"
+        plugins.mkdir()
+        (plugins / "libreoffice.mcy").write_bytes(b"signed bundle placeholder")
+
+        extracted = tmp_path / "libs" / "libreoffice"
+        (extracted / "program").mkdir(parents=True)
+        (extracted / "program" / "soffice.exe").write_bytes(b"fake")
+
+        monkeypatch.setattr(
+            "core.external_tools.libreoffice_tool.bundle_loader.extract_bundle",
+            lambda path, persistent=False: str(extracted),
+        )
+
+        assert tool.check_installed() is True
+        assert os.path.basename(tool.get_path()) == "soffice.exe"
+        assert tool.get_source() == "portable"
+
+    def test_uses_existing_libs_dir_without_bundle(self, lo_env, monkeypatch):
+        tool, tmp_path = lo_env
+        extracted = tmp_path / "libs" / "libreoffice"
+        (extracted / "program").mkdir(parents=True)
+        (extracted / "program" / "soffice.exe").write_bytes(b"fake")
+
+        def _fail(*a, **k):
+            raise AssertionError("libs 目录已存在时不应再解压 .mcy")
+
+        monkeypatch.setattr(
+            "core.external_tools.libreoffice_tool.bundle_loader.extract_bundle", _fail
+        )
+
+        assert tool.check_installed() is True
+        assert tool.get_source() == "portable"
+
+    def test_absent_reports_not_found(self, lo_env):
+        tool, _ = lo_env
+        assert tool.check_installed() is False
+        assert tool.get_source() is None

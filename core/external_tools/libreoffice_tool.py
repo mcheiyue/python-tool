@@ -5,6 +5,9 @@ import platform
 import subprocess
 from typing import Optional
 from .base import ExternalTool
+from core.bundles.loader import loader as bundle_loader
+from config.loader import ConfigLoader
+from core.utils.resource_path import get_app_root, get_resource_path
 
 class LibreOfficeTool(ExternalTool):
     """LibreOffice 办公套件检测工具"""
@@ -34,6 +37,7 @@ class LibreOfficeTool(ExternalTool):
         """查找 LibreOffice 安装路径 (带缓存)
         
         跨平台检测策略：
+        - 便携: libs/libreoffice，或从 plugins/libreoffice.mcy 惰性解压
         - Windows: 查找 soffice.exe 或 soffice.com
         - Linux: 查找 soffice 或 libreoffice
         - macOS: 查找 /Applications/LibreOffice.app/Contents/MacOS/soffice
@@ -54,14 +58,37 @@ class LibreOfficeTool(ExternalTool):
         
         system = platform.system().lower()
         
-        # 1. 检查环境变量 (PATH 中的 soffice)
-        soffice_names = []
-        if system == 'windows':
-            soffice_names = ["soffice.exe", "soffice.com"]
-        else:
-            soffice_names = ["soffice", "libreoffice"]
+        # 1. 优先检查 libs 目录 (便携模式)，不存在则尝试从 Tool Bundle 惰性解压
+        exe_names = ["soffice.exe", "soffice.com"] if system == 'windows' else ["soffice", "libreoffice"]
+        portable_lo_dir = os.path.join(self.get_libs_path(), "libreoffice")
         
-        for exe_name in soffice_names:
+        if not any(os.path.exists(os.path.join(portable_lo_dir, "program", n)) or
+                   os.path.exists(os.path.join(portable_lo_dir, n)) for n in exe_names):
+            internal_plugin = get_resource_path("plugins/libreoffice.mcy")
+            external_plugin = os.path.join(get_app_root(), "plugins", "libreoffice.mcy")
+            plugin_path = internal_plugin if os.path.exists(internal_plugin) else external_plugin
+            
+            if os.path.exists(plugin_path):
+                config = ConfigLoader()
+                persistent = config.get("app.plugin_mode", "temporary") == "persistent"
+                extracted_path = bundle_loader.extract_bundle(plugin_path, persistent=persistent)
+                if extracted_path:
+                    portable_lo_dir = extracted_path
+        
+        for exe_name in exe_names:
+            portable_exe = os.path.join(portable_lo_dir, "program", exe_name)
+            if not os.path.exists(portable_exe):
+                portable_exe = os.path.join(portable_lo_dir, exe_name)
+            if os.path.exists(portable_exe):
+                result["found"] = True
+                result["path"] = portable_exe
+                result["source"] = "portable"
+                result["version"] = self._get_version_from_exe(portable_exe)
+                self._cache = result
+                return result
+        
+        # 2. 检查环境变量 (PATH 中的 soffice)
+        for exe_name in exe_names:
             path = shutil.which(exe_name)
             if path:
                 result["found"] = True
@@ -71,7 +98,7 @@ class LibreOfficeTool(ExternalTool):
                 self._cache = result
                 return result
         
-        # 2. 平台特定的常见安装位置
+        # 3. 平台特定的常见安装位置
         if system == 'windows':
             # Windows 常见安装路径
             search_paths = [
