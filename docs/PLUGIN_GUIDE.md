@@ -40,13 +40,14 @@ v2 特性：
 
 ## 打包（维护者）
 
-验证公钥内嵌 `core/bundles/format.py`（`BUNDLE_PUBLIC_KEY`）；**签名私钥由维护者离线保管，绝不入库**。更换公钥 = 已分发的包全部作废并需重打包。
+验证公钥内嵌 `core/bundles/format.py`（`BUNDLE_PUBLIC_KEY`）；**签名私钥由维护者离线保管，绝不入库、绝不进 CI 日志**。更换公钥 = 旧 .mcy 全部作废并重打包。
 
 ```powershell
 # 私钥：32 字节 hex（64 个字符），经环境变量传入，不写入任何文件
 $env:MCY_SIGNING_KEY = "<private key hex>"
 python tools\pack_plugin.py <源目录> <输出.mcy> [tool_id]
-# tool_id: 0=Ghostscript（默认）, 1=Pandoc
+# tool_id: 0=Ghostscript, 1=Pandoc, 2=LibreOffice（默认 0）
+#          该字段仅为元数据记录，加载器不据此定位解压位置
 ```
 
 示例：
@@ -54,6 +55,26 @@ python tools\pack_plugin.py <源目录> <输出.mcy> [tool_id]
 ```powershell
 python tools\pack_plugin.py libs\ghostscript plugins\ghostscript.mcy 0
 ```
+
+**源目录必须命名为工具名**（`pandoc/`、`ghostscript/`、`libreoffice/`）。
+打包用 `arcname=os.path.basename(source_dir)`，消费方按解压后的顶层目录名
+定位可执行文件；名字不对的后果是运行时静默回退到 PATH 并报"未安装"。
+
+### 三个维护者子命令
+
+```powershell
+# 1) 生成新密钥对（打印私钥 + 需替换进源码的公钥）
+python tools\pack_plugin.py --gen-key
+
+# 2) 校验已有 .mcy：验签并打印 tool_id、体积、解压顶层目录名
+python tools\pack_plugin.py --verify plugins\pandoc.mcy
+
+# 3) 打包（会自动比对「私钥推导公钥」与「源内嵌公钥」，不一致会告警）
+python tools\pack_plugin.py <源目录> <输出.mcy> [tool_id]
+```
+
+打包时的公钥比对是硬防线：私钥与内嵌公钥不匹配时签出的包必然被内置校验拒绝，
+历史上曾因内嵌公钥抄错导致产出全部不可用。
 
 ## 加载（运行时）
 
