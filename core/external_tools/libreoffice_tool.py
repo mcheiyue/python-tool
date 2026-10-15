@@ -94,7 +94,7 @@ class LibreOfficeTool(ExternalTool):
                 result["found"] = True
                 result["path"] = path
                 result["source"] = "env"
-                result["version"] = self._get_version_from_exe(path)
+                result["version"] = self.probe_version(path)
                 self._cache = result
                 return result
         
@@ -121,7 +121,7 @@ class LibreOfficeTool(ExternalTool):
                     result["found"] = True
                     result["path"] = path
                     result["source"] = "system"
-                    result["version"] = self._get_version_from_exe(path)
+                    result["version"] = self.probe_version(path)
                     self._cache = result
                     return result
                     
@@ -137,7 +137,7 @@ class LibreOfficeTool(ExternalTool):
                     result["found"] = True
                     result["path"] = path
                     result["source"] = "system"
-                    result["version"] = self._get_version_from_exe(path)
+                    result["version"] = self.probe_version(path)
                     self._cache = result
                     return result
                     
@@ -156,7 +156,7 @@ class LibreOfficeTool(ExternalTool):
                     result["found"] = True
                     result["path"] = path
                     result["source"] = "system"
-                    result["version"] = self._get_version_from_exe(path)
+                    result["version"] = self.probe_version(path)
                     self._cache = result
                     return result
         

@@ -85,7 +85,7 @@ class GhostscriptTool(ExternalTool):
                 result["found"] = True
                 result["path"] = portable_exe
                 result["source"] = "portable"
-                result["version"] = self._get_version_from_exe(portable_exe)
+                result["version"] = self.probe_version(portable_exe)
                 self._cache = result
                 
                 # 设置 GS_LIB 环境变量，指向便携版的 lib 目录
@@ -105,7 +105,7 @@ class GhostscriptTool(ExternalTool):
             result["found"] = True
             result["path"] = path
             result["source"] = "env"
-            result["version"] = self._get_version_from_exe(path)
+            result["version"] = self.probe_version(path)
             self._cache = result
             return result
             

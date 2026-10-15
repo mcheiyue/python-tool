@@ -11,6 +11,7 @@ import time
 
 import pytest
 
+from core.external_tools.base import ExternalTool
 from core.external_tools.ghostscript_tool import GhostscriptTool
 from core.external_tools.libreoffice_tool import LibreOfficeTool
 
@@ -208,3 +209,100 @@ class TestRefreshStatusAsync:
         tool.refresh_status_async(cb)
         self._pump(3000)
         assert box["thread"] is threading.main_thread()
+
+
+class _FakeConfig:
+    """内存版配置替身，隔离用户配置文件。"""
+
+    def __init__(self):
+        self._data = {}
+        self.saved = 0
+
+    def get(self, key_path, default=None):
+        node = self._data
+        for k in key_path.split('.'):
+            if not isinstance(node, dict) or k not in node:
+                return default
+            node = node[k]
+        return node
+
+    def set(self, key_path, value):
+        keys = key_path.split('.')
+        node = self._data
+        for k in keys[:-1]:
+            node = node.setdefault(k, {})
+        node[keys[-1]] = value
+
+    def save(self):
+        self.saved += 1
+
+
+class _ProbeTool(ExternalTool):
+    """探针计数用的最小 ExternalTool 子类。"""
+
+    name = "probe_tool"
+
+    def __init__(self):
+        self.probe_calls = 0
+
+    def check_installed(self):
+        return True
+
+    def get_version(self):
+        return "1.0"
+
+    def get_path(self):
+        return "/nonexistent/exe"
+
+    def _get_version_from_exe(self, path):
+        self.probe_calls += 1
+        return f"v{self.probe_calls}"
+
+
+class TestVersionProbeCache:
+    """probe_version 的持久缓存：命中跳过子进程，文件变更即失效。"""
+
+    def _make(self, monkeypatch, tmp_path):
+        exe = tmp_path / "tool.exe"
+        exe.write_bytes(b"binary-content")
+        tool = _ProbeTool()
+        fake = _FakeConfig()
+        monkeypatch.setattr(ExternalTool, "_version_cache_config", staticmethod(lambda: fake))
+        return tool, exe, fake
+
+    def test_second_call_hits_cache(self, monkeypatch, tmp_path):
+        tool, exe, fake = self._make(monkeypatch, tmp_path)
+        assert tool.probe_version(str(exe)) == "v1"
+        assert tool.probe_version(str(exe)) == "v1"
+        assert tool.probe_calls == 1
+
+    def test_new_instance_reuses_cache(self, monkeypatch, tmp_path):
+        """跨实例（模拟重启）命中同一份缓存，不再 spawn 子进程。"""
+        tool, exe, fake = self._make(monkeypatch, tmp_path)
+        tool.probe_version(str(exe))
+        fresh = _ProbeTool()
+        assert fresh.probe_version(str(exe)) == "v1"
+        assert fresh.probe_calls == 0
+
+    def test_mtime_change_invalidates(self, monkeypatch, tmp_path):
+        tool, exe, fake = self._make(monkeypatch, tmp_path)
+        tool.probe_version(str(exe))
+        os.utime(exe, (0, 0))
+        assert tool.probe_version(str(exe)) == "v2"
+        assert tool.probe_calls == 2
+
+    def test_size_change_invalidates(self, monkeypatch, tmp_path):
+        tool, exe, fake = self._make(monkeypatch, tmp_path)
+        tool.probe_version(str(exe))
+        exe.write_bytes(b"binary-content-changed")
+        assert tool.probe_version(str(exe)) == "v2"
+
+    def test_probe_failure_not_cached(self, monkeypatch, tmp_path):
+        tool, exe, fake = self._make(monkeypatch, tmp_path)
+
+        def _boom(path):
+            raise OSError("spawn failed")
+
+        monkeypatch.setattr(tool, "_get_version_from_exe", _boom)
+        assert tool.probe_version(str(exe)) is None
+        assert fake.saved == 0

@@ -77,6 +77,53 @@ class ExternalTool(ABC):
         if hasattr(self, '_cache'):
             self._cache = None
 
+    def probe_version(self, exe_path: str) -> Optional[str]:
+        """带缓存的版本探测：按 (路径, mtime, size) 命中则跳过子进程。
+
+        每次 spawn 子进程取版本是可观开销（LibreOffice 达秒级），而进程内
+        _find() 已缓存一次，真正的浪费发生在「每次应用启动都重新探测」。
+        缓存写用户配置的 dependencies.tool_version_cache，文件一变即失效。
+        配置不可用（缺 default.json 等）时退回无缓存探测，不影响功能。
+        """
+        try:
+            st = os.stat(exe_path)
+            fingerprint = [int(st.st_mtime), int(st.st_size)]
+        except OSError:
+            fingerprint = None
+
+        cache = {}
+        config = None
+        try:
+            config = self._version_cache_config()
+            cache = config.get("dependencies.tool_version_cache", {}) or {}
+        except Exception:
+            config = None
+
+        entry = cache.get(self.name) if isinstance(cache, dict) else None
+        if fingerprint and isinstance(entry, dict) \
+                and entry.get("path") == exe_path and entry.get("fp") == fingerprint:
+            return entry.get("version")
+
+        try:
+            version = self._get_version_from_exe(exe_path)
+        except Exception:
+            return None
+
+        if config is not None and fingerprint is not None and version is not None:
+            cache[self.name] = {"path": exe_path, "fp": fingerprint, "version": version}
+            config.set("dependencies.tool_version_cache", cache)
+            config.save()
+        return version
+
+    @staticmethod
+    def _version_cache_config():
+        from config.loader import ConfigLoader
+        return ConfigLoader()
+
+    def _get_version_from_exe(self, path: str) -> Optional[str]:
+        """子类实现：spawn 一次子进程取版本号。基类返回 None。"""
+        return None
+
     @property
     def is_disabled(self) -> bool:
         """检查工具是否被禁用"""

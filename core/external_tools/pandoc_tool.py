@@ -77,7 +77,7 @@ class PandocTool(ExternalTool):
             result["found"] = True
             result["path"] = portable_pandoc
             result["source"] = "portable"
-            result["version"] = self._get_version_from_exe(portable_pandoc)
+            result["version"] = self.probe_version(portable_pandoc)
             self._cache = result
             return result
 
@@ -87,7 +87,7 @@ class PandocTool(ExternalTool):
             result["found"] = True
             result["path"] = path
             result["source"] = "env"
-            result["version"] = self._get_version_from_exe(path)
+            result["version"] = self.probe_version(path)
         
         self._cache = result
         return result
