@@ -3,7 +3,6 @@
 原 core/plugin_loader.py：按 ADR-0002 改名，按 ADR-0003 改接 v2 签名格式
 （读取/验签/解压委托 core.bundles.format.read_bundle；路径安全检查保留在本模块）。
 """
-import io
 import os
 import atexit
 import shutil
@@ -13,7 +12,7 @@ import tempfile
 from core.bundles.format import (
     BUNDLE_PUBLIC_KEY,
     BundleFormatError,
-    read_bundle,
+    stream_bundle,
 )
 from core.utils.logger import AppLogger, timed_operation
 
@@ -109,9 +108,12 @@ class BundleLoader:
 
         self.logger.info(f"开始解压 Tool Bundle: {os.path.basename(bundle_path)}, 模式: {'持久' if persistent else '临时'}")
 
+        staged_tar = None
         try:
-            # 1. 读取 v2 头 + 验签 + LZMA 解压（v1 与签名不符在此拒绝）
-            _tool_id, tar_data = read_bundle(bundle_path, public_key or BUNDLE_PUBLIC_KEY)
+            # 1. 流式加载 v2 头 + 验签 + LZMA 解压（v1 与签名不符在此拒绝）
+            tool_id, staged_tar = self._stage_and_verify(
+                bundle_path, public_key or BUNDLE_PUBLIC_KEY
+            )
 
             # 2. 确定目标目录
             from core.utils.resource_path import get_app_root
@@ -121,20 +123,14 @@ class BundleLoader:
                 target_base = os.path.join(base, "libs")
             else:
                 # 临时目录：libs/.temp/session_xxxx
-                libs_temp = os.path.join(base, "libs", ".temp")
-                if not os.path.exists(libs_temp):
-                    os.makedirs(libs_temp, exist_ok=True)
-
-                # 在 .temp 下创建唯一的临时目录
-                target_base = tempfile.mkdtemp(dir=libs_temp, prefix="session_")
+                target_base = tempfile.mkdtemp(prefix="session_", dir=self._temp_root())
                 self._temp_dirs.append(target_base)
 
             if not os.path.exists(target_base):
                 os.makedirs(target_base, exist_ok=True)
 
             # 3. 解包 TAR（安全检查：防止路径穿越攻击）
-            tar_buffer = io.BytesIO(tar_data)
-            with tarfile.open(fileobj=tar_buffer, mode="r") as tar:
+            with tarfile.open(staged_tar, mode="r") as tar:
                 # 安全检查：验证所有成员路径，防止路径穿越
                 self._safe_extract(tar, target_base)
 
@@ -159,6 +155,44 @@ class BundleLoader:
         except Exception as e:
             self.logger.error(f"Tool Bundle 加载失败: {e}")
             return None
+        finally:
+            if staged_tar:
+                self._remove_staged(staged_tar)
+
+    def _temp_root(self) -> str:
+        """libs/.temp 根目录（分阶段文件与临时解压共用），不存在则创建。"""
+        from core.utils.resource_path import get_app_root
+        root = os.path.join(get_app_root(), "libs", ".temp")
+        if not os.path.exists(root):
+            os.makedirs(root, exist_ok=True)
+        return root
+
+    def _stage_and_verify(self, bundle_path: str, public_key):
+        """流式解压到分阶段文件并完成验签，返回 (tool_id, 分阶段 tar 路径)。
+
+        分阶段文件是解压后的 TAR（与解压结果同体积），单独放在 libs/.temp/stage_*
+        并登记清理；内存占用不随包体积增长。
+        """
+        stage_dir = tempfile.mkdtemp(prefix="stage_", dir=self._temp_root())
+        self._temp_dirs.append(stage_dir)
+        staged_tar = os.path.join(stage_dir, "bundle.tar")
+        try:
+            tool_id = stream_bundle(bundle_path, staged_tar, public_key)
+        except Exception:
+            self._remove_staged(staged_tar)
+            raise
+        return tool_id, staged_tar
+
+    @staticmethod
+    def _remove_staged(staged_tar):
+        """删除分阶段 tar 及其所属的 stage_ 目录（目录为空才算清理干净）。"""
+        try:
+            os.remove(staged_tar)
+            stage_dir = os.path.dirname(staged_tar)
+            if os.path.basename(stage_dir).startswith("stage_") and not os.listdir(stage_dir):
+                os.rmdir(stage_dir)
+        except OSError:
+            pass
 
 
 # 全局单例

@@ -24,3 +24,18 @@
 - 测试随模块改名落在 `tests/test_bundle_loader.py`（另含验签密钥不匹配、_safe_extract 链接安全），并覆盖上述三条验收项。
 - 「SHA256 清单」未单独实现：Ed25519 签名直接覆盖 LZMA 压缩载荷，完整性由签名承载，独立清单为冗余（YAGNI）。
 - 打包器经 `MCY_SIGNING_KEY` 环境变量接收私钥（32 字节 hex），仓库内无任何密钥；验证公钥内嵌 `core/bundles/format.py`。
+
+## 修订记录（2026-10-15）：签名对象改为 TAR 摘要
+
+原实现签的是 LZMA 压缩载荷。`Ed25519PublicKey.verify()` 是一次性 API，必须把
+**整个压缩包装进内存**才能验签；加上解压产物，加载 LibreOffice 量级的包（tar 约 1.5GB）
+峰值内存远超可接受范围。实测同一 224.6MB tar 的包：签载荷路径峰值 595MB，签摘要路径 106MB。
+
+因此签名对象改为 **TAR 的 SHA256 摘要**（Authenticode/minisign/PEP 427 RECORD 的标准做法）。
+磁盘布局不变（`SIGNATURE(64) | COMPRESSED`），仅签名语义改变；加载侧改为
+`core.bundles.format.stream_bundle()` 流式解压、边解压边哈希，内存与包体积解耦。
+
+这也意味着当初判为冗余的「SHA256 清单」以更轻的形式回归了——但只需一个摘要而非逐文件清单。
+已分发的 v2 实物包（若有）需重新签名；截至本次修订仓库内无入库的 .mcy 实物，
+仅本地 `plugins/pandoc.mcy`（gitignored）已重新打包验证：`pandoc 3.12.1` 可执行、
+Markdown→HTML 转换正确。

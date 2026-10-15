@@ -44,7 +44,10 @@ class TestBundleFormat:
         data[-1] ^= 0xFF  # 篡改压缩载荷末字节
         out.write_bytes(bytes(data))
 
-        with pytest.raises(BundleFormatError, match="签名"):
+        # 篡改压缩载荷会被 LZMA 层发现（"解压失败"）；
+        # 若篡改恰好落在可解压区域，则由签名兜底（"签名"）。
+        # 二者都必须是 BundleFormatError，不允许静默通过。
+        with pytest.raises(BundleFormatError, match="(解压失败|签名)"):
             read_bundle(str(out), key.public_key())
 
     def test_v1_sample_rejected(self, tmp_path):
