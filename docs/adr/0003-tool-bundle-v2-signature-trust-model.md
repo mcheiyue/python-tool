@@ -39,3 +39,32 @@
 已分发的 v2 实物包（若有）需重新签名；截至本次修订仓库内无入库的 .mcy 实物，
 仅本地 `plugins/pandoc.mcy`（gitignored）已重新打包验证：`pandoc 3.12.1` 可执行、
 Markdown→HTML 转换正确。
+
+## 修订记录（2026-10-15）：分发模型转向 Manifest + 预置包
+
+**触发**：重新审视「为什么需要这套签名」时确认——单密钥 + 内嵌公钥 + 只能靠发新版
+轮换，在威胁模型上等价于一条硬编码 SHA256，却额外带来密钥 ceremony（私钥丢失=永久
+停产、泄露=轮换重打）与 `cryptography` 依赖。业界对「应用要带第三方二进制」的标准做法
+（winget/scoop）不是维护签名工件，而是维护一份清单：官方 URL + hash，二进制从上游
+位级获取。winget 维护者拒绝以 Authenticode 替代 manifest SHA256 的理由可作为判据：
+*签名并不证明装的是审过的那个产物，manifest hash 才钉住它*。
+
+**决定**：`.mcy` 从分发载体降级为遗留选项；新增 `plugins/manifest.json`
+（tool_id → version/url/sha256）与 `core/tools/downloader.py`（`urllib` 分块下载 +
+hash 校验 + 重试 + 取消），发现链扩展为：
+
+```
+libs/<tool>/exe → 预置 zip（plugins/<tool>.zip）→ manifest 下载解压 → plugins/<tool>.mcy（遗留）→ PATH → 系统路径
+```
+
+- **信任锚**从「私钥签名」变为「manifest 中的 hash + 上游 URL」，溯源强度反而提高
+  （二进制位级对齐官方，而非维护者 repack）。
+- **维护动作**从「打包+签名 350MB 工件」变为「编辑几十行 JSON」，第三方也可对清单提 PR。
+- **`_find()` 的四步发现链**已随 B0 收拢进 `base.ExternalTool`，新步骤只改一处。
+- 「按需解压/调用」语义不变：触发时机、双驻留模式、版本指纹缓存、引擎 spawn 全部保留。
+- **代价**：新增下载路径的失败面（网络超时/403/URL 腐化），以重试+静默降级到 PATH 应对；
+  离线场景随安装包预置 zip 即可。
+
+**待裁决（B5）**：`.mcy` 最终去留——全删 / 留作预置载体（zip+hash 弃签名）/ 双支持。
+裁决前 loader 保持读取兼容；本修订生效后新工具一律走 manifest。
+

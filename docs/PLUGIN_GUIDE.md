@@ -1,110 +1,83 @@
-# Tool Bundle 开发指南（.mcy v2）
+# 外部工具供给指南（Manifest + 预置包）
 
-本文档描述 `.mcy` Tool Bundle 的**真实格式与工具链**（v2，见 `docs/adr/0003-tool-bundle-v2-signature-trust-model.md`）。
+本文档描述 Office Toolkit 外部便携依赖的**真实获取机制**：`plugins/manifest.json`
+（官方 URL + SHA256）与预置 zip 分发；`.mcy` 签名载体已降级为遗留选项
+（ADR-0003 修订版），去留待 B5 裁决。
 
-## 什么是 Tool Bundle
+## 供给方式
 
-`.mcy` 是 Office Toolkit 的外部工具便携分发包（术语见 `GLOSSARY.md`），仅装载外部二进制工具（Ghostscript、Pandoc 等），**不装载 Python 代码**。
+- **Manifest 项**：`plugins/manifest.json` 中按工具名登记 `version/url/sha256`。
+  入库可评审——任何人可为清单提 PR 修正版本。
+- **预置包**：随安装包分发的 `plugins/<tool>.zip`（上游官方 zip 原样拷贝），
+  命中后完全离线可用，不触网。
+- **下载兜底**：本地无 zip 时按 manifest URL 下载并校验 hash 后解压。
 
-v2 特性：
-
-- **Ed25519 签名**：完整性与来源校验；不再加密（打包对象是开源二进制，保密无意义）
-- **LZMA 高压缩**：preset 9
-- **v1 不再读取**：旧 AES 加密包一律拒绝，需用下方工具重新打包
-- **惰性加载**：使用时解压，支持临时/持久两种模式
-
-## 文件格式（v2）
+发现顺序（收拢于 `core/external_tools/base.py`）：
 
 ```
-偏移    长度      字段
-0        4        Magic: "MCY\x00"
-4        1        Version: 2
-5        1        Tool ID（0=Ghostscript, 1=Pandoc）
-6        8        REST_SIZE（uint64 小端）= 64 + len(压缩数据)
-14       64       Ed25519 签名（对压缩数据）
-78       ...      LZMA 压缩的 TAR（TAR 内为工具目录）
+libs/<tool>/exe  →  plugins/<tool>.zip  →  manifest 下载解压  →  plugins/<tool>.mcy（遗留）  →  PATH  →  系统路径
 ```
 
-读取（`core/bundles/format.py::read_bundle`）：
+## 维护 Manifest（维护者/贡献者）
 
-1. 校验 Magic 与 Version（非 v2 直接拒绝）
-2. 按 REST_SIZE 读满「签名 + 载荷」，字节数不符即文件损坏
-3. 内嵌公钥验签，失败抛 `BundleFormatError`
-4. LZMA 解压得到 TAR 字节
-
-解压（`core/bundles/loader.py::BundleLoader.extract_bundle`）：
-
-1. 上述读取 + 验签
-2. TAR 安全解包：**拒绝符号链接/硬链接**，**拒绝路径穿越**
-3. 结果按 .mcy 路径缓存；临时模式解压到 `libs/.temp/session_*`（退出清理），持久模式解压到 `libs/`
-
-## 打包（维护者）
-
-验证公钥内嵌 `core/bundles/format.py`（`BUNDLE_PUBLIC_KEY`）；**签名私钥由维护者离线保管，绝不入库、绝不进 CI 日志**。更换公钥 = 旧 .mcy 全部作废并重打包。
+新增或更新一个外部工具只需三步：
 
 ```powershell
-# 私钥：32 字节 hex（64 个字符），经环境变量传入，不写入任何文件
-$env:MCY_SIGNING_KEY = "<private key hex>"
-python tools\pack_plugin.py <源目录> <输出.mcy> [tool_id]
-# tool_id: 0=Ghostscript, 1=Pandoc, 2=LibreOffice（默认 0）
-#          该字段仅为元数据记录，加载器不据此定位解压位置
+# 1. 从官方 URL 下载 zip（初装/「一键安装」会自动下载到 plugins/<tool>.zip）
+# 2. 用下载器自带的能力算 hash 并校对，编辑 plugins/manifest.json：
+python -c "from core.tools.downloader import sha256_file; print(sha256_file('plugins/pandoc.zip'))"
 ```
 
-示例：
+```json
+"pandoc": {
+  "version": "3.12.1",
+  "url": "https://github.com/jgm/pandoc/releases/download/3.12.1/pandoc-3.12.1-windows-x86_64.zip",
+  "sha256": "6ef431cb20b2c24a0371fc19200dc49d452be54b1b5c9239f3462841ef53e587"
+}
+```
 
 ```powershell
-python tools\pack_plugin.py libs\ghostscript plugins\ghostscript.mcy 0
+# 3. 入库提交；用户下次启动/「一键安装」即生效
 ```
 
-**源目录必须命名为工具名**（`pandoc/`、`ghostscript/`、`libreoffice/`）。
-打包用 `arcname=os.path.basename(source_dir)`，消费方按解压后的顶层目录名
-定位可执行文件；名字不对的后果是运行时静默回退到 PATH 并报"未安装"。
+**hash 是信任锚**：二进制必须来自 URL 指向的官方产物，hash 由下载方计算并记录。
+替换二进制 = 同时改 hash；只有 hash 匹配才会被解压。
 
-### 三个维护者子命令
+## 运行时行为
 
-```powershell
-# 1) 生成新密钥对（打印私钥 + 需替换进源码的公钥）
-python tools\pack_plugin.py --gen-key
-
-# 2) 校验已有 .mcy：验签并打印 tool_id、体积、解压顶层目录名
-python tools\pack_plugin.py --verify plugins\pandoc.mcy
-
-# 3) 打包（会自动比对「私钥推导公钥」与「源内嵌公钥」，不一致会告警）
-python tools\pack_plugin.py <源目录> <输出.mcy> [tool_id]
-```
-
-打包时的公钥比对是硬防线：私钥与内嵌公钥不匹配时签出的包必然被内置校验拒绝，
-历史上曾因内嵌公钥抄错导致产出全部不可用。
-
-## 加载（运行时）
-
-```python
-from core.bundles.loader import loader
-
-path = loader.extract_bundle("plugins/ghostscript.mcy", persistent=False)
-```
-
-- 文件不存在 → 抛 `FileNotFoundError`；验签失败/格式错误/解压失败 → 记录日志并返回 `None`
-- `public_key` 参数（默认内嵌官方公钥）是第三方签名的可插拔留位（b2），未实现多公钥注册
-
-## 第三方签名（b2 留位）
-
-当前**只接受官方公钥签名的包**。b2（多贡献者公钥注册）按 ADR-0003 仅留可插拔接口，出现真实需求前不实现。
-
-第三方贡献方式：提交工具二进制源与目录结构说明的 PR，由维护者用私钥打包分发；或自建包仅限自用（需自行改公钥，不受支持）。
-
-## 加载优先级
-
-1. `plugins/*.mcy`（内置资源或用户放置）
-2. `libs/`（已解压的持久化工具）
-3. 环境变量 PATH
-4. 系统安装路径（如 `C:\Program Files`）
+- **按需安装**：页面显示或点击开始时发现工具不在本地 → 临时模式下载解压到
+  `libs/.temp/session_*`（退出清理）或持久模式解压到 `libs/`（下次直连缓存）。
+- **静默降级**：网络失败/URL 腐化/校验不符 → 记录日志，回退到 PATH/系统路径；
+  界面不弹错，按钮按未安装呈现，不阻塞其他功能。
+- **一键安装**：设置页未安装卡片显示「一键安装」（manifest 有条目时），
+  下载进度在 InfoBar 上实时更新，完成后自动重新探测版本。
+- **版本缓存**：`dependencies.tool_version_cache` 按 (mtime, size) 指纹命中，
+  换进程不重复 spawn `--version`。
 
 ## 新增工具接入
 
-1. 在 `core/external_tools/` 新建工具类（继承 `ExternalTool`，定义 `get_search_paths` 等）
+1. 在 `core/external_tools/` 新建工具类（继承 `ExternalTool`，`_find()` 实现平台特有
+   的第 4 步系统路径探测；发现链前 3 步在基类已收拢）
 2. 在 `core/external_tools/manager.py` 的 `tools` 字典注册
-3. 用上方脚本打包为 `.mcy`，放入 `plugins/`
+3. 在 `plugins/manifest.json` 登记该工具的 url/sha256
+4. 需要离线分发包时，把官方 zip 拷到 `plugins/<tool>.zip`（gitignored）
+
+## 遗留：.mcy（待裁决）
+
+ADR-0003 修订版记录了 `.mcy` 降级为遗留的原因与演变。当前实现仍可读取：
+
+```python
+from core.bundles.loader import loader
+path = loader.extract_bundle("plugins/pandoc.mcy", persistent=False)
+```
+
+维护性说明（不再演进）：
+
+- `tools/pack_plugin.py` 的 `MCY_SIGNING_KEY` 私钥流程与 `--gen-key/--verify` 仅用于
+  历史遗留包的再签名与校验；新工具不使用。
+- `plugins/*.mcy` 仍可在发现链中作为回退源，但优先级低于预置 zip。
+- **B5 待裁决**：全删 / 转为预置载体（zip+hash 弃签名）/ 双支持。裁决前代码与本文
+  「遗留」章节保持现状。
 
 ## 运行模式
 
@@ -115,6 +88,8 @@ path = loader.extract_bundle("plugins/ghostscript.mcy", persistent=False)
 
 ## FAQ
 
-- **打包失败**：检查源目录存在、`MCY_SIGNING_KEY` 为 64 字符 hex、输出目录可写
-- **加载失败（验签）**：文件被篡改、非官方私钥签名、或 v1 旧包（需重打包）
-- **更新版本**：重打包 → 替换 `plugins/*.mcy` → 重启；持久模式需先卸载旧版
+- **一键安装失败**：网络不通、URL 失效、或 hash 与 manifest 不符——改用「下载」按钮
+  去官网手动获取，放入 `plugins/` 后重启
+- **加载失败（hash）**：zip 被替换/损坏，重新下载官方产物并核对 hash
+- **更新版本**：改 manifest 的 version/url/sha256 → 用户点「一键安装」或删掉旧
+  `libs/<tool>/` 后重启；持久模式需先卸载旧版

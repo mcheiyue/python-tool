@@ -195,30 +195,43 @@ self.thread_pool.start(ConvertTask(...))
 
 ---
 
-## 🔐 Tool Bundle（.mcy v2）签名系统
+## 📦 外部工具供给链（Manifest + 预置包）
 
-**设计思想**: 外部工具便携分发包，以 Ed25519 签名保证完整性与来源（v2 规格见 ADR-0003）。
+**设计思想**: 外部便携依赖以「官方 URL + SHA256」的 manifest 描述获取方式，
+预置 zip 随安装包分发，按需下载/解压（spec: ADR-0003 修订版）。
+旧 `.mcy` 签名载体保留读取兼容，去留待 B5 裁决。
+
+**发现链**（收拢于 `core/external_tools/base.py::_resolve_executable`）:
 
 ```
-.mcy 文件结构 (v2)
-├─ Header (14 bytes)
-│  ├─ Magic: "MCY\x00"
-│  ├─ Version: 2
-│  ├─ Tool ID (0=Ghostscript, 1=Pandoc)
-│  └─ REST_SIZE (uint64, = 64 + 压缩数据长度)
-├─ Ed25519 签名 (64 bytes, 对压缩数据)
-└─ LZMA 压缩的 TAR (Preset 9)
+libs/<tool>/exe            →  已安装（便携或持久化解压产物）
+  → plugins/<tool>.zip     →  预置包：SHA256 校验后安全解压
+  → manifest 下载          →  plugins/manifest.json 的 url 下载 + 校验 + 解压
+  → plugins/<tool>.mcy     →  遗留：内嵌公钥验签 + LZMA 流式解压
+  → PATH / 系统路径        →  环境安装
 ```
 
-**加载流程**:
-1. 校验 Magic/Version → 读满「签名+载荷」→ 内嵌公钥验签（失败拒绝）
-2. LZMA 解压 → TAR 安全解包（拒符号链接/硬链接、拒路径穿越）→ 提取到目标目录
-3. 根据模式（临时/持久）管理解压文件
+**Manifest 项**（`plugins/manifest.json`，入库可评审）:
+
+```json
+"pandoc": { "version": "3.12.1", "url": "https://github.com/jgm/pandoc/…",
+            "sha256": "6ef431cb…" }
+```
+
+**关键实现**:
+
+| 组件 | 职责 |
+| --- | --- |
+| `core/tools/downloader.py` | `urllib` 分块下载、hash 校验、重试、取消 |
+| `core/tools/package_store.py` | 读 manifest、下载/定位 zip、委托 `BundleLoader.extract_zip` |
+| `core/bundles/loader.py` | 成员路径审查 + tar/zip 安全解压（顶层目录归一化） |
+| `base.ExternalTool` | 四步发现链、异步状态解析、版本指纹缓存 |
 
 **优势**:
-- 🔏 Ed25519 签名防伪造（私钥离线；v1 硬编码 AES 密钥已废除）
-- 📦 LZMA 压缩率高达 60%+
-- 🚀 惰性解压，按需加载
+- 🔗 二进制位级对齐上游（hash 钉住官方产物，而非维护者 repack）
+- 📝 维护动作是编辑 JSON；新增贡献者可对清单提 PR
+- 🧊 离线场景：预置 zip 随包分发，命中后不触网
+- 🚀 惰性安装，按需解压；「按需解压/调用」语义与 `.mcy` 时代一致
 
 ---
 
