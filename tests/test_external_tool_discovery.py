@@ -160,6 +160,27 @@ class TestLibreOfficeDiscovery:
         assert tool.check_installed() is False
         assert tool.get_source() is None
 
+    def test_portable_branch_uses_version_cache(self, lo_env, monkeypatch):
+        """回归：便携/.mcy 分支也必须走 probe_version（曾绕过缓存）。
+
+        该分支的参数名是 portable_exe 而非 path，靠人工逐一比对 _find()
+        的调用点时极易漏掉；此用例直接锁死行为。
+        """
+        tool, tmp_path = lo_env
+        extracted = tmp_path / "libs" / "libreoffice"
+        (extracted / "program").mkdir(parents=True)
+        (extracted / "program" / "soffice.exe").write_bytes(b"fake")
+
+        seen = []
+        monkeypatch.setattr(tool, "probe_version",
+                            lambda p: seen.append(p) or "24.2.0")
+        monkeypatch.setattr(tool, "_get_version_from_exe",
+                            lambda p: (_ for _ in ()).throw(
+                                AssertionError("便携分支不得绕过 probe_version")))
+
+        assert tool.get_version() == "24.2.0"
+        assert seen and os.path.basename(seen[0]) == "soffice.exe"
+
 
 class TestRefreshStatusAsync:
     """refresh_status_async 的线程生命周期回归。

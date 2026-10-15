@@ -83,7 +83,7 @@ class LibreOfficeTool(ExternalTool):
                 result["found"] = True
                 result["path"] = portable_exe
                 result["source"] = "portable"
-                result["version"] = self._get_version_from_exe(portable_exe)
+                result["version"] = self.probe_version(portable_exe)
                 self._cache = result
                 return result
         
