@@ -159,6 +159,8 @@ class ExternalTool(ABC):
         tool_dir = os.path.join(self.get_libs_path(), self.name)
         found = self._exe_in_dirs(tool_dir, exe_names, portable_subdirs)
         if not found:
+            found = self._install_from_package(exe_names, portable_subdirs)
+        if not found:
             plugin_path = self._locate_bundle(f"{self.name}.mcy")
             if plugin_path:
                 from config.loader import ConfigLoader
@@ -179,6 +181,28 @@ class ExternalTool(ABC):
             if path:
                 return path, "env"
         return None, None
+
+    def _install_from_package(self, exe_names, portable_subdirs):
+        """从上游官方包装配可执行文件：预置 zip 优先，manifest 下载兜底。
+
+        全部失败（无 zip/manifest/网络/校验）静默降级返回 None，由调用方继续
+        回退到 .mcy 与 PATH——网络问题不阻塞发现链。
+        """
+        from core.tools.package_store import PackageStore
+
+        try:
+            from config.loader import ConfigLoader
+            persistent = ConfigLoader().get(
+                "app.plugin_mode", "temporary") == "persistent"
+        except Exception:
+            # 配置不可用（测试环境/首启）时按默认 temporary 继续
+            persistent = False
+
+        store = PackageStore()
+        extracted = store.install(self.name, persistent=persistent)
+        if extracted:
+            return self._exe_in_dirs(extracted, exe_names, portable_subdirs)
+        return None
 
     @property
     def is_disabled(self) -> bool:

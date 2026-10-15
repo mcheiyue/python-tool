@@ -104,17 +104,23 @@ class BundleLoader:
 
         zip_file.extractall(target_base)
 
-    def extract_zip(self, zip_path, persistent=False):
-        """安全解压上游官方 zip，返回解压出的顶层目录（或目标目录本身）。
+    def extract_zip(self, zip_path, persistent=False, subdir=None):
+        """安全解压上游官方 zip，返回解压目录。
 
         模式与 extract_bundle 一致：temporary → libs/.temp/session_*
-        （atexit 清理），persistent → libs/。SecurityError 向外抛给调用方。
+        （atexit 清理），persistent → libs/<subdir>/（subdir=工具名时）。
+        SecurityError 向外抛给调用方。
+
+        解压后把「唯一顶层目录」的内容提升到目标根：官方 zip 顶层名带版本
+        （pandoc-3.12.1/），不归一化的话持久模式会落到带版本号的目录，
+        与发现链的 libs/<工具名>/ 布局不符，导致每次启动重复解压。
         """
         from core.utils.resource_path import get_app_root
         base = get_app_root()
 
         if persistent:
-            target_base = os.path.join(base, "libs")
+            target_base = os.path.join(base, "libs", subdir) if subdir \
+                else os.path.join(base, "libs")
         else:
             target_base = tempfile.mkdtemp(prefix="session_", dir=self._temp_root())
             self._temp_dirs.append(target_base)
@@ -126,12 +132,23 @@ class BundleLoader:
             self._safe_extract_zip(zf, target_base)
             names = zf.namelist()
 
-        if names:
-            root_dir = names[0].split('/')[0].split('\\')[0]
-            candidate = os.path.join(target_base, root_dir)
-            if os.path.isdir(candidate):
-                return candidate
+        self._flatten_single_toplevel(target_base, names)
         return target_base
+
+    @staticmethod
+    def _flatten_single_toplevel(target_base, names):
+        """zip 唯一顶层是目录时，把其内容提升到 target_base（抹掉版本名层）。"""
+        tops = {n.split('/')[0].split('\\')[0] for n in names if n.strip('/')}
+        if len(tops) != 1:
+            return
+        root = tops.pop()
+        root_dir = os.path.join(target_base, root)
+        if not os.path.isdir(root_dir):
+            return
+        for entry in os.listdir(root_dir):
+            shutil.move(os.path.join(root_dir, entry),
+                        os.path.join(target_base, entry))
+        os.rmdir(root_dir)
 
     @timed_operation("Tool Bundle 解压")
     def extract_bundle(self, bundle_path, persistent=False, public_key=None):

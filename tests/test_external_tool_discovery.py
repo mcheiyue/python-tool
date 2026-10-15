@@ -9,12 +9,14 @@ extract_bundle 本身的行为由 test_bundle_extract_e2e.py 覆盖；
 import os
 import shutil
 import time
+import zipfile
 
 import pytest
 
 from core.external_tools.base import ExternalTool
 from core.external_tools.ghostscript_tool import GhostscriptTool
 from core.external_tools.libreoffice_tool import LibreOfficeTool
+from core.external_tools.pandoc_tool import PandocTool
 
 
 @pytest.fixture
@@ -337,3 +339,58 @@ class TestVersionProbeCache:
         monkeypatch.setattr(tool, "_get_version_from_exe", _boom)
         assert tool.probe_version(str(exe)) is None
         assert fake.saved == 0
+
+
+@pytest.fixture
+def pandoc_env(tmp_path, monkeypatch):
+    """pandoc 专用环境：资源定向 tmp、shutil.which 置空。"""
+    monkeypatch.setattr("core.utils.resource_path.get_app_root", lambda: str(tmp_path))
+    monkeypatch.setattr(
+        "core.utils.resource_path.get_resource_path",
+        lambda rel: str(tmp_path / "_no_internal" / rel),
+    )
+    monkeypatch.setattr(
+        "core.external_tools.base.shutil.which", lambda name: None
+    )
+    tool = PandocTool()
+    tool.clear_cache()
+    yield tool, tmp_path
+    tool.clear_cache()
+
+
+def test_discovers_from_preplaced_zip(pandoc_env):
+    """plugins/<tool>.zip（预置官方包）走真 extract_zip，命中 portable。"""
+    tool, tmp_path = pandoc_env
+    plugins = tmp_path / "plugins"
+    plugins.mkdir()
+    with zipfile.ZipFile(plugins / "pandoc.zip", "w") as zf:
+        zf.writestr("pandoc/pandoc.exe", b"official-binary")
+
+    assert tool.check_installed() is True
+    assert tool.get_source() == "portable"
+    assert "pandoc.exe" in tool.get_path()
+
+
+def test_zip_takes_precedence_over_mcy(pandoc_env, monkeypatch):
+    """zip 与 .mcy 同在时官方 zip 优先（B 方向以位级对齐的官方字节为准）。"""
+    tool, tmp_path = pandoc_env
+    plugins = tmp_path / "plugins"
+    plugins.mkdir()
+    with zipfile.ZipFile(plugins / "pandoc.zip", "w") as zf:
+        zf.writestr("pandoc/pandoc.exe", b"official-binary")
+    (plugins / "pandoc.mcy").write_bytes(b"signed bundle placeholder")
+
+    def _fail(*a, **k):
+        raise AssertionError("zip 命中时不应再解压 .mcy")
+
+    monkeypatch.setattr("core.bundles.loader.loader.extract_bundle", _fail)
+
+    assert tool.check_installed() is True
+    assert tool.get_source() == "portable"
+
+
+def test_manifest_absent_and_no_zip_falls_back(pandoc_env):
+    """无 zip、无 manifest、无 PATH → 未安装（不触发任何下载）。"""
+    tool, _ = pandoc_env
+    assert tool.check_installed() is False
+    assert tool.get_source() is None

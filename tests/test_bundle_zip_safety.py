@@ -52,12 +52,28 @@ def test_zip_happy_path_extracts(tmp_path, monkeypatch):
         "core.utils.resource_path.get_app_root", lambda: str(tmp_path)
     )
     result = loader.extract_zip(z, persistent=False)
-    assert os.path.basename(result) == "pandoc"
+    # 顶层目录被提升：exe 直接在会话根下（持久模式才能命中 libs/<工具名>/）
     assert os.path.isfile(os.path.join(result, "pandoc.exe"))
-    # temporary 模式的会话目录登记了清理
     assert result.startswith(str(tmp_path / "libs" / ".temp"))
-    session_dir = os.path.dirname(result)
+    session_dir = result
     assert session_dir in loader._temp_dirs
+
+
+def test_persistent_mode_lands_on_discovery_layout(tmp_path, monkeypatch):
+    """持久模式解压后 exe 必须在 libs/<工具名>/ 下——发现链按此布局查找。"""
+    z = _make_zip(
+        tmp_path / "official.zip",
+        {
+            "pandoc-3.12.1/pandoc.exe": (b"binary", 0),
+            "pandoc-3.12.1/README.md": (b"doc", 0),
+        },
+    )
+    monkeypatch.setattr(
+        "core.utils.resource_path.get_app_root", lambda: str(tmp_path)
+    )
+    result = loader.extract_zip(z, persistent=True, subdir="pandoc")
+    assert result == str(tmp_path / "libs" / "pandoc")
+    assert os.path.isfile(os.path.join(result, "pandoc.exe"))
 
 
 def test_tar_symlink_still_rejected(tmp_path, monkeypatch):
