@@ -98,7 +98,9 @@ class FuzzySearchEngine:
                     match_type = 'pinyin_full'
             
             # 4. 描述包含匹配 (最低权重)
-            elif query in desc_lower:
+            # 独立于上面 elif 链：装了 pypinyin 时拼音分支会短路，若并进 elif
+            # 则描述匹配永不可达（历史 bug：search("Merge") 返回空）
+            if score == 0 and query in desc_lower:
                 score = 40
                 match_type = 'desc'
                 

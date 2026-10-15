@@ -3,19 +3,8 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from PIL import Image
 from PyQt6.QtGui import QImage
-from PyQt6.QtWidgets import QApplication
-import sys
 
 from core.features.image.clipboard_handler import ClipboardImageHandler
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    """创建 QApplication 实例用于测试"""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
-    yield app
 
 
 class TestClipboardImageHandler:
