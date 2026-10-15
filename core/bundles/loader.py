@@ -7,6 +7,7 @@ import os
 import atexit
 import shutil
 import tarfile
+import zipfile
 import tempfile
 
 from core.bundles.format import (
@@ -62,27 +63,75 @@ class BundleLoader:
                 pass
         self._temp_dirs.clear()
 
+    def _validate_member_paths(self, names, target_base):
+        """路径审查：所有成员必须落在 target_base 内（tar/zip 共用）。"""
+        target_base_abs = os.path.abspath(target_base)
+
+        for name in names:
+            member_path_abs = os.path.abspath(os.path.join(target_base, name))
+
+            # 检查路径是否在目标目录内
+            if not member_path_abs.startswith(target_base_abs + os.sep) and member_path_abs != target_base_abs:
+                raise SecurityError(f"路径穿越攻击检测: {name}")
+
     def _safe_extract(self, tar, target_base):
         """
         安全解压 TAR 文件，防止路径穿越攻击
         :param tar: tarfile.TarFile 对象
         :param target_base: 目标解压目录
         """
-        target_base_abs = os.path.abspath(target_base)
-
         for member in tar.getmembers():
             if member.issym() or member.islnk():
                 raise SecurityError(f"符号链接/硬链接成员被拒绝: {member.name}")
-            # 计算成员的绝对路径
-            member_path = os.path.join(target_base, member.name)
-            member_path_abs = os.path.abspath(member_path)
 
-            # 检查路径是否在目标目录内
-            if not member_path_abs.startswith(target_base_abs + os.sep) and member_path_abs != target_base_abs:
-                raise SecurityError(f"路径穿越攻击检测: {member.name}")
+        self._validate_member_paths([m.name for m in tar.getmembers()], target_base)
 
         # 所有路径验证通过，执行解压
         tar.extractall(path=target_base)
+
+    def _safe_extract_zip(self, zip_file, target_base):
+        """安全解压 ZIP：链接成员（external_attr 中的 S_IFLNK）与路径穿越均拒绝。
+
+        zip 没有 islnk 概念，符号链接只能从 external_attr 高位识别——
+        不检查的话 Linux/macOS 构建的上游包可能带链接成员。
+        """
+        infos = zip_file.infolist()
+        for info in infos:
+            if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                raise SecurityError(f"符号链接成员被拒绝: {info.filename}")
+
+        self._validate_member_paths([i.filename for i in infos], target_base)
+
+        zip_file.extractall(target_base)
+
+    def extract_zip(self, zip_path, persistent=False):
+        """安全解压上游官方 zip，返回解压出的顶层目录（或目标目录本身）。
+
+        模式与 extract_bundle 一致：temporary → libs/.temp/session_*
+        （atexit 清理），persistent → libs/。SecurityError 向外抛给调用方。
+        """
+        from core.utils.resource_path import get_app_root
+        base = get_app_root()
+
+        if persistent:
+            target_base = os.path.join(base, "libs")
+        else:
+            target_base = tempfile.mkdtemp(prefix="session_", dir=self._temp_root())
+            self._temp_dirs.append(target_base)
+
+        if not os.path.exists(target_base):
+            os.makedirs(target_base, exist_ok=True)
+
+        with zipfile.ZipFile(zip_path) as zf:
+            self._safe_extract_zip(zf, target_base)
+            names = zf.namelist()
+
+        if names:
+            root_dir = names[0].split('/')[0].split('\\')[0]
+            candidate = os.path.join(target_base, root_dir)
+            if os.path.isdir(candidate):
+                return candidate
+        return target_base
 
     @timed_operation("Tool Bundle 解压")
     def extract_bundle(self, bundle_path, persistent=False, public_key=None):
