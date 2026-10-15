@@ -4,8 +4,9 @@ import subprocess
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 from PyQt6.QtCore import QSettings, Qt, QTimer
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, IconWidget,
-                            ComboBox, Theme, setTheme, FluentIcon as FIF,
-                            PushButton, ToolButton, CaptionLabel)
+                             ComboBox, Theme, setTheme, FluentIcon as FIF,
+                             PushButton, ToolButton, CaptionLabel, InfoBar,
+                             InfoBarPosition)
 from app.container import AppContainer
 from core.external_tools.base import ExternalTool
 from config.loader import ConfigLoader
@@ -112,7 +113,10 @@ class SettingsInterface(QWidget):
         self.tools_layout = QVBoxLayout()
         self.tools_layout.setSpacing(10)
         self.vbox.addLayout(self.tools_layout)
-        
+
+        # 安装中的 worker 必须持有到 finished（运行中的 QThread 被回收会崩进程）
+        self._install_workers = []
+
         self.refresh_tools_ui()
 
     def refresh_tools_ui(self):
@@ -222,6 +226,14 @@ class SettingsInterface(QWidget):
                 download_btn = PushButton(FIF.DOWNLOAD, "下载", self)
                 download_btn.clicked.connect(lambda: self._open_download_url(status["download_url"]))
                 layout.addWidget(download_btn)
+
+            if self._manifest_entry(status["name"]):
+                install_btn = PushButton(FIF.CLOUD_DOWNLOAD, "一键安装", self)
+                install_btn.setToolTip("从官方地址下载并安装到 libs 便携目录")
+                install_btn.clicked.connect(
+                    lambda: self._install_tool_async(status["name"])
+                )
+                layout.addWidget(install_btn)
             
             # Refresh Button (only useful when checking for installation)
             refresh_btn = ToolButton(FIF.SYNC, self)
@@ -276,6 +288,62 @@ class SettingsInterface(QWidget):
     def _open_download_url(self, url):
         """Open download URL in browser"""
         webbrowser.open(url)
+
+    @staticmethod
+    def _manifest_entry(tool_name):
+        """manifest 中该工具的条目（无则返回 None）——决定是否提供一键安装。"""
+        from core.tools.package_store import PackageStore
+        return PackageStore().read_manifest_entry(tool_name)
+
+    def _install_tool_async(self, tool_name):
+        """异步一键安装：下载+解压全程后台，完成后刷新卡片。
+
+        进度写 InfoBar 的 contentLabel（跨线程信号排队回主线程）；
+        失败不抛到界面，仅换错误提示，用户仍可用「下载」手动安装。
+        """
+        from core.external_tools.base import _ToolInstallWorker
+
+        manager = AppContainer().external_tool_manager
+        tool = manager.get_tool(tool_name)
+        if tool is None:
+            return
+        tool.clear_cache()
+
+        entry = self._manifest_entry(tool_name)
+        if not entry:
+            InfoBar.warning("无法一键安装", "manifest 中没有该组件的条目",
+                            position=InfoBarPosition.TOP_RIGHT, parent=self)
+            return
+        hint = InfoBar.info(
+            f"正在安装 {tool.display_name}",
+            f"从官方地址下载 {entry.get('version', '')}".strip(),
+            duration=-1, position=InfoBarPosition.TOP_RIGHT, parent=self,
+        )
+        content = getattr(hint, "contentLabel", None)
+
+        def _on_progress(downloaded, total):
+            if content is None:
+                return
+            text = (f"已下载 {downloaded / 1e6:.1f} MB" if total is None
+                    else f"已下载 {downloaded / 1e6:.1f} / {total / 1e6:.1f} MB")
+            content.setText(text)
+
+        def _finish(installed, _version):
+            hint.close()
+            if installed:
+                InfoBar.success("安装完成", tool.display_name,
+                                position=InfoBarPosition.TOP_RIGHT, parent=self)
+            else:
+                InfoBar.error("安装失败", "下载或校验未通过，可改用「下载」手动安装",
+                              position=InfoBarPosition.TOP_RIGHT, parent=self)
+            self.refresh_tools_ui()
+
+        worker = _ToolInstallWorker(tool)
+        worker.signals.progress.connect(_on_progress)
+        worker.signals.finished.connect(_finish)
+        # 持有到 finished：运行中的 QThread 被回收会崩进程
+        self._install_workers.append(worker)
+        worker.start()
 
     def _open_libs_folder(self):
         """Open the libs folder"""

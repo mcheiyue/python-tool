@@ -394,3 +394,81 @@ def test_manifest_absent_and_no_zip_falls_back(pandoc_env):
     tool, _ = pandoc_env
     assert tool.check_installed() is False
     assert tool.get_source() is None
+
+
+class _StubTool(ExternalTool):
+    name = "stubtool"
+    display_name = "Stub"
+    download_url = ""
+
+    def _find(self):
+        return {"found": False, "path": None, "version": None, "source": None}
+
+    def check_installed(self):
+        return False
+
+    def get_path(self):
+        return None
+
+    def get_version(self):
+        return None
+
+
+class TestToolInstallWorker:
+    """安装 worker：跨线程把 install 结果转成 (installed, version)。
+
+    锁两个真实坑：run() 内引用 AppLogger 曾漏 import（NameError 让整个
+    异步安装在生产路径必炸）；install 抛异常时必须降级为 finished(False)
+    而不是崩线程。
+    """
+
+    def test_success_reports_version(self, qtbot, monkeypatch):
+        from core.external_tools.base import _ToolInstallWorker
+
+        tool = _StubTool()
+        monkeypatch.setattr(
+            "core.tools.package_store.PackageStore.install",
+            lambda self, name, **kw: "/fake/extracted",
+        )
+        monkeypatch.setattr(
+            _StubTool, "_find",
+            lambda self: {"found": True, "version": "1.2.3"},
+        )
+
+        worker = _ToolInstallWorker(tool)
+        got = []
+        worker.signals.finished.connect(lambda ok, ver: got.append((ok, ver)))
+        worker.run()
+        assert got == [(True, "1.2.3")]
+
+    def test_install_failure_degrades(self, qtbot, monkeypatch):
+        from core.external_tools.base import _ToolInstallWorker
+
+        tool = _StubTool()
+
+        def _boom(self, name, **kw):
+            raise OSError("network down")
+
+        monkeypatch.setattr("core.tools.package_store.PackageStore.install", _boom)
+
+        worker = _ToolInstallWorker(tool)
+        got = []
+        worker.signals.finished.connect(lambda ok, ver: got.append((ok, ver)))
+        worker.run()
+        assert got == [(False, None)]
+
+    def test_cancel_flag_stops_download(self, qtbot, monkeypatch):
+        from core.external_tools.base import _ToolInstallWorker
+
+        tool = _StubTool()
+        seen = {}
+
+        def _install(self, name, on_progress=None, should_cancel=None, **kw):
+            seen["cancel_fn"] = should_cancel
+            return None
+
+        monkeypatch.setattr("core.tools.package_store.PackageStore.install", _install)
+        worker = _ToolInstallWorker(tool)
+        worker.cancel()
+        worker.run()
+        assert seen["cancel_fn"]() is True

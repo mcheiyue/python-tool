@@ -5,8 +5,9 @@ import shutil
 import sys
 import threading
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
+from core.utils.logger import AppLogger
 # 解析串行化：惰性解压是重 IO 操作，并发解压会叠加内存/磁盘峰值，
 # 故所有工具共用一把锁。_find() 不会回调其他工具，因此不存在死锁面。
 _RESOLVE_LOCK = threading.Lock()
@@ -47,6 +48,52 @@ class _StatusResolver(QThread):
                 callback(result)
             except Exception:
                 pass
+
+
+class _InstallSignals(QObject):
+    """一键安装的结果回传：progress(已下载字节, 总字节或 None)，
+    finished(是否装上, 版本字符串)。跨线程排队回主线程。"""
+    progress = pyqtSignal(int, object)
+    finished = pyqtSignal(bool, object)
+
+
+class _ToolInstallWorker(QThread):
+    """工具安装工作线程：下载（带进度/取消）+ 安全解压 + 重新探测版本。
+
+    与 _StatusResolver 的分工：这是「安装」动作（用户显式触发、有进度），
+    resolver 是「发现」动作（页面加载时自动触发）。调用方（界面）必须持有
+    本对象直到 finished——运行中的 QThread 被回收会直接崩进程。
+    """
+
+    def __init__(self, tool, parent=None):
+        super().__init__(parent)
+        self._tool = tool
+        self.signals = _InstallSignals()
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    def run(self):
+        logger = AppLogger()
+        try:
+            from core.tools.package_store import PackageStore
+
+            store = PackageStore()
+            extracted = store.install(
+                self._tool.name,
+                persistent=False,
+                on_progress=lambda d, t: self.signals.progress.emit(d, t),
+                should_cancel=lambda: self._cancelled,
+            )
+            if not extracted:
+                self.signals.finished.emit(False, None)
+                return
+            info = self._tool._find()
+            self.signals.finished.emit(bool(info.get("found")), info.get("version"))
+        except Exception as e:
+            logger.error(f"安装 {self._tool.name} 失败: {e}")
+            self.signals.finished.emit(False, None)
 
 
 class ExternalTool(ABC):
