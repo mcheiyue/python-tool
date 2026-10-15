@@ -147,6 +147,7 @@ class MarkdownPdfBatchInterface(QWidget):
         self.files = []
         self.converter = PandocMarkdownToPdf()
         self.thread = None
+        self._status_worker = None
         self._has_pdf_engine = False  # 标记是否存在可用的 PDF 引擎
         
         self._log_bridged.connect(self.append_log)
@@ -157,7 +158,11 @@ class MarkdownPdfBatchInterface(QWidget):
         self.check_pandoc_status()
 
     def check_pandoc_status(self):
-        """检查 Pandoc 状态和 PDF 引擎状态并更新 UI"""
+        """检查 Pandoc 状态和 PDF 引擎状态并更新 UI
+
+        PDF 引擎是 PATH 探测（快），同步完成；Pandoc 可能触发 .mcy 惰性解压（秒级），
+        必须走异步，否则切换页面即冻结。
+        """
         # 1. 检查 PDF 引擎
         self._detect_and_set_default_engine()
 
@@ -166,21 +171,32 @@ class MarkdownPdfBatchInterface(QWidget):
             self.check_state()
             return
 
-        # 2. 检查 Pandoc
+        # 2. 检查 Pandoc（异步）
         if not self.pandoc_tool:
             self._set_status_error("内部错误: 未找到组件管理器")
             return
 
-        if self.pandoc_tool.is_disabled:
-            self._set_status_error("Pandoc 组件已禁用 (点击管理启用)", show_btn=True)
-        elif self.pandoc_tool.is_available():
-            info = self.pandoc_tool.get_status_info()
-            source = "便携版" if info.get("source") == "portable" else "系统版"
-            self._set_status_ready(f"Pandoc 已就绪 ({source})")
-        else:
-            self._set_status_error("缺少 Pandoc 组件 (点击管理安装)", show_btn=True)
-            
-        self.check_state()
+        self._set_status_busy("正在准备 Pandoc…")
+
+        def _apply(status):
+            if not status or status.get("disabled"):
+                self._set_status_error("Pandoc 组件已禁用 (点击管理启用)", show_btn=True)
+            elif status.get("installed"):
+                source = "便携版" if status.get("source") == "portable" else "系统版"
+                self._set_status_ready(f"Pandoc 已就绪 ({source})")
+            else:
+                self._set_status_error("缺少 Pandoc 组件 (点击管理安装)", show_btn=True)
+            self.check_state()
+
+        self._status_worker = self.pandoc_tool.refresh_status_async(_apply)
+
+    def _set_status_busy(self, text):
+        """准备中：既不是就绪也不是错误，避免把耗时解压误报成不可用"""
+        self.status_icon.setIcon(FIF.SYNC)
+        self.status_icon.setStyleSheet("IconWidget { color: #605E5C; }")
+        self.status_label.setText(text)
+        self.status_label.setTextColor("#605E5C", "#8A8886")
+        self.action_btn.hide()
 
     def _set_status_ready(self, text):
         self.status_icon.setIcon(FIF.ACCEPT)
@@ -257,37 +273,42 @@ class MarkdownPdfBatchInterface(QWidget):
         out_dir = self.out_edit.text()
         if not self.files or not out_dir:
             return
-        
-        # 检查 Pandoc 路径
-        pandoc_path = self.pandoc_tool.get_path()
-        if not pandoc_path or not os.path.exists(pandoc_path):
-            InfoBar.error("错误", "无法找到 Pandoc 可执行文件", parent=self)
-            self.check_pandoc_status()
-            return
-        
-        # 获取设置
+
+        # UI 状态先在主线程读齐，避免异步回调时控件已被改
         engine_text = self.engine_combo.currentText()
         pdf_engine = engine_text.split(' ')[0]  # 提取引擎名
         enable_math = self.math_check.isChecked()
         enable_highlight = self.highlight_check.isChecked()
-        
+
         self.start_btn.setEnabled(False)
-        self.log_text.clear()
-        
-        # 创建并启动线程
-        self.thread = WorkerThread(
-            self.converter.convert_batch,
-            files=self.files,
-            output_dir=out_dir,
-            enable_math=enable_math,
-            enable_highlight=enable_highlight,
-            pdf_engine=pdf_engine,
-            on_log=self._log_bridged.emit,
-            on_progress=self._progress_bridged.emit,
-            on_finished=self._finished_bridged.emit,
-        )
-        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
-        self.thread.start()
+        self._set_status_busy("正在准备 Pandoc…")
+
+        def _ready(status):
+            pandoc_path = (status or {}).get("path")
+            if not pandoc_path or not os.path.exists(pandoc_path):
+                InfoBar.error("错误", "无法找到 Pandoc 可执行文件", parent=self)
+                self.start_btn.setEnabled(True)
+                self.check_pandoc_status()
+                return
+
+            self.log_text.clear()
+
+            # 创建并启动线程
+            self.thread = WorkerThread(
+                self.converter.convert_batch,
+                files=self.files,
+                output_dir=out_dir,
+                enable_math=enable_math,
+                enable_highlight=enable_highlight,
+                pdf_engine=pdf_engine,
+                on_log=self._log_bridged.emit,
+                on_progress=self._progress_bridged.emit,
+                on_finished=self._finished_bridged.emit,
+            )
+            self.thread.error.connect(lambda msg: self.on_finished(0, 1))
+            self.thread.start()
+
+        self._status_worker = self.pandoc_tool.refresh_status_async(_ready)
         
     def showEvent(self, event):
         """界面显示时刷新状态"""

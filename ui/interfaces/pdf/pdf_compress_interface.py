@@ -112,6 +112,7 @@ class PDFCompressInterface(QWidget):
         # 使用新的引擎
         self.compressor = GhostscriptCompressor()
         self.thread = None
+        self._status_worker = None
         
         self.compressor.log.connect(self.append_log)
         self.compressor.progress.connect(self.update_progress)
@@ -121,21 +122,32 @@ class PDFCompressInterface(QWidget):
         self.check_gs_status()
 
     def check_gs_status(self):
-        """检查 GS 状态并更新 UI"""
+        """异步检测 GS 状态：解压/版本探测可达秒级，不能卡住 UI 线程"""
         if not self.gs_tool:
              self._set_status_error("内部错误: 未找到组件管理器")
              return
 
-        if self.gs_tool.is_disabled:
-            self._set_status_error("Ghostscript 组件已禁用 (点击管理启用)", show_btn=True)
-        elif self.gs_tool.is_available():
-            info = self.gs_tool.get_status_info()
-            source = "便携版" if info.get("source") == "portable" else "系统版"
-            self._set_status_ready(f"Ghostscript 已就绪 ({source})")
-        else:
-            self._set_status_error("缺少 Ghostscript 组件 (点击管理安装)", show_btn=True)
-            
-        self.check_state()
+        self._set_status_busy("正在准备 Ghostscript…")
+
+        def _apply(status):
+            if not status or status.get("disabled"):
+                self._set_status_error("Ghostscript 组件已禁用 (点击管理启用)", show_btn=True)
+            elif status.get("installed"):
+                source = "便携版" if status.get("source") == "portable" else "系统版"
+                self._set_status_ready(f"Ghostscript 已就绪 ({source})")
+            else:
+                self._set_status_error("缺少 Ghostscript 组件 (点击管理安装)", show_btn=True)
+            self.check_state()
+
+        self._status_worker = self.gs_tool.refresh_status_async(_apply)
+
+    def _set_status_busy(self, text):
+        """准备中：既不是就绪也不是错误，避免把耗时解压误报成不可用"""
+        self.status_icon.setIcon(FIF.SYNC)
+        self.status_icon.setStyleSheet("IconWidget { color: #605E5C; }")
+        self.status_label.setText(text)
+        self.status_label.setTextColor("#605E5C", "#8A8886")
+        self.action_btn.hide()
 
     def _set_status_ready(self, text):
         self.status_icon.setIcon(FIF.ACCEPT)
@@ -207,23 +219,29 @@ class PDFCompressInterface(QWidget):
             # 线程会自然结束，在 on_finished 中处理取消状态
 
     def start_compression(self):
-        # 动态获取路径
-        gs_path = self.gs_tool.get_executable_path()
-        if not gs_path or not os.path.exists(gs_path):
-            InfoBar.error("错误", "无法找到 Ghostscript 可执行文件", parent=self)
-            self.check_gs_status() # Re-check
-            return
-            
+        # UI 状态先在主线程读齐，避免异步回调时控件已被改
         quality = self.quality_combo.currentText().split(' ')[0]
-        
+        file_count = len(self.files)
+
         self.start_btn.setEnabled(False)
-        self.progress.start(len(self.files))
-        self.progress.show()
-        
-        self.thread = WorkerThread(
-            self.compressor.compress, self.files, quality, gs_path=gs_path
-        )
-        self.thread.start()
+        self._set_status_busy("正在准备 Ghostscript…")
+
+        def _ready(status):
+            gs_path = (status or {}).get("path")
+            if not gs_path or not os.path.exists(gs_path):
+                InfoBar.error("错误", "无法找到 Ghostscript 可执行文件", parent=self)
+                self.check_gs_status()  # Re-check
+                return
+
+            self.progress.start(file_count)
+            self.progress.show()
+
+            self.thread = WorkerThread(
+                self.compressor.compress, self.files, quality, gs_path=gs_path
+            )
+            self.thread.start()
+
+        self._status_worker = self.gs_tool.refresh_status_async(_ready)
         
     def showEvent(self, event):
         """界面显示时刷新状态"""

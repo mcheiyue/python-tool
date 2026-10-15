@@ -7,6 +7,7 @@ extract_bundle 本身的行为由 test_bundle_extract_e2e.py 覆盖；
 此处替身化它，专测「发现/装配」逻辑，零网络、零真二进制。
 """
 import os
+import time
 
 import pytest
 
@@ -157,3 +158,53 @@ class TestLibreOfficeDiscovery:
         tool, _ = lo_env
         assert tool.check_installed() is False
         assert tool.get_source() is None
+
+
+class TestRefreshStatusAsync:
+    """refresh_status_async 的线程生命周期回归。
+
+    历史 bug：每次调用新建 QThread，界面重复触发（构造 + showEvent）时前一个
+    仍在运行的线程被替换、引用归零 → 运行中的 QThread 被析构 → 进程硬崩
+    （Qt Fatal: Destroyed while thread is still running）。故 resolver 必须常驻复用。
+    """
+
+    def _pump(self, deadline_ms=4000):
+        """驱动主线程事件循环，直到 deadline（QThread 的回调经队列信号投递）。"""
+        from PyQt6.QtCore import QElapsedTimer
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication.instance()
+        timer = QElapsedTimer()
+        timer.start()
+        while timer.elapsed() < deadline_ms:
+            app.processEvents()
+            time.sleep(0.01)
+
+    def test_reuses_single_resolver(self, qapp, tool_env):
+        tool, _ = tool_env
+        first = tool.refresh_status_async(lambda s: None)
+        second = tool.refresh_status_async(lambda s: None)
+        assert first is second
+
+    def test_repeated_calls_all_callbacks_fire(self, qapp, tool_env):
+        """飞行中/已完成的重复调用都不能丢回调，且不得重建线程"""
+        tool, _ = tool_env
+        got = []
+        tool.refresh_status_async(got.append)
+        tool.refresh_status_async(got.append)   # 飞行中追加
+        resolver = tool._resolver
+        self._pump(3000)
+        tool.refresh_status_async(got.append)   # 已结束后再调用
+        self._pump(3000)
+        assert tool._resolver is resolver
+        assert len(got) == 3
+        assert all(isinstance(s, dict) and "installed" in s for s in got)
+
+    def test_callback_runs_on_main_thread(self, qapp, tool_env):
+        import threading
+        tool, _ = tool_env
+        box = {}
+        def cb(status):
+            box["thread"] = threading.current_thread()
+        tool.refresh_status_async(cb)
+        self._pump(3000)
+        assert box["thread"] is threading.main_thread()

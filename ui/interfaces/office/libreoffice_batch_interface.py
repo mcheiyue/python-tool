@@ -145,6 +145,7 @@ class LibreOfficeBatchInterface(QWidget):
         self.files = []
         self.converter = LibreOfficeFormatConverter()
         self.thread = None
+        self._status_worker = None
         
         # 连接信号
         self._log_bridged.connect(self.append_log)
@@ -178,22 +179,34 @@ class LibreOfficeBatchInterface(QWidget):
         return 'pdf'
     
     def check_lo_status(self):
-        """检查 LibreOffice 状态并更新 UI"""
+        """异步检测 LibreOffice 状态：解压/版本探测可达秒级，不能卡住 UI 线程"""
         if not self.lo_tool:
             self._set_status_error("内部错误: 未找到组件管理器")
             return
-        
-        if self.lo_tool.is_disabled:
-            self._set_status_error("LibreOffice 组件已禁用 (点击管理启用)", show_btn=True)
-        elif self.lo_tool.is_available():
-            info = self.lo_tool.get_status_info()
-            version = info.get("version", "未知版本")
-            source = "便携版" if info.get("source") == "portable" else "系统版"
-            self._set_status_ready(f"LibreOffice 已就绪 ({source} {version})")
-        else:
-            self._set_status_error("缺少 LibreOffice 组件 (点击管理安装)", show_btn=True)
-        
-        self.check_state()
+
+        self._set_status_busy("正在准备 LibreOffice…")
+
+        def _apply(status):
+            if not status or status.get("disabled"):
+                self._set_status_error("LibreOffice 组件已禁用 (点击管理启用)", show_btn=True)
+            elif status.get("installed"):
+                version = status.get("version") or "未知版本"
+                source = "便携版" if status.get("source") == "portable" else "系统版"
+                self._set_status_ready(f"LibreOffice 已就绪 ({source} {version})")
+            else:
+                self._set_status_error("缺少 LibreOffice 组件 (点击管理安装)", show_btn=True)
+            self.check_state()
+
+        self._status_worker = self.lo_tool.refresh_status_async(_apply)
+
+    def _set_status_busy(self, text):
+        """准备中：既不是就绪也不是错误，避免把耗时解压误报成不可用"""
+        self.status_icon.setIcon(FIF.SYNC)
+        self.status_icon.setStyleSheet("IconWidget { color: #605E5C; }")
+        self.status_label.setText(text)
+        self.status_label.setTextColor("#605E5C", "#8A8886")
+        self.action_btn.hide()
+
     
     def _set_status_ready(self, text):
         """设置就绪状态"""
@@ -290,30 +303,39 @@ class LibreOfficeBatchInterface(QWidget):
     
     def start_conversion(self):
         """开始转换"""
-        if not self.lo_tool or not self.lo_tool.is_available():
-            InfoBar.error("错误", "LibreOffice 不可用", parent=self)
-            self.check_lo_status()
-            return
-        
+        # UI 状态先在主线程读齐，避免异步回调时控件已被改
         output_format = self._get_selected_format()
-        
-        self.log_text.clear()
-        self.append_log(f"🚀 开始批量转换到 {output_format.upper()} 格式")
-        self.append_log(f"📦 共 {len(self.files)} 个文件")
-        self.append_log("")
-        
+        file_count = len(self.files)
+
         self.start_btn.setEnabled(False)
         self.add_btn.setEnabled(False)
         self.clear_btn.setEnabled(False)
-        
-        self.thread = WorkerThread(
-            self.converter.convert_batch, self.files, output_format,
-            on_log=self._log_bridged.emit,
-            on_progress=self._progress_bridged.emit,
-            on_finished=self._finished_bridged.emit,
-        )
-        self.thread.error.connect(lambda msg: self.on_finished(0, 1))
-        self.thread.start()
+        self._set_status_busy("正在准备 LibreOffice…")
+
+        def _ready(status):
+            if not status or not status.get("installed"):
+                InfoBar.error("错误", "LibreOffice 不可用", parent=self)
+                self.start_btn.setEnabled(True)
+                self.add_btn.setEnabled(True)
+                self.clear_btn.setEnabled(True)
+                self.check_lo_status()
+                return
+
+            self.log_text.clear()
+            self.append_log(f"🚀 开始批量转换到 {output_format.upper()} 格式")
+            self.append_log(f"📦 共 {file_count} 个文件")
+            self.append_log("")
+
+            self.thread = WorkerThread(
+                self.converter.convert_batch, self.files, output_format,
+                on_log=self._log_bridged.emit,
+                on_progress=self._progress_bridged.emit,
+                on_finished=self._finished_bridged.emit,
+            )
+            self.thread.error.connect(lambda msg: self.on_finished(0, 1))
+            self.thread.start()
+
+        self._status_worker = self.lo_tool.refresh_status_async(_ready)
     
     def on_finished(self, success, fail):
         """转换完成"""
