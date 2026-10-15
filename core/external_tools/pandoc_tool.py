@@ -1,12 +1,8 @@
 import shutil
 import subprocess
 import os
-import sys
 from typing import Optional
 from .base import ExternalTool
-from core.bundles.loader import loader as bundle_loader
-from config.loader import ConfigLoader
-from core.utils.resource_path import get_app_root, get_resource_path
 
 class PandocTool(ExternalTool):
     """Pandoc 文档转换工具"""
@@ -33,7 +29,11 @@ class PandocTool(ExternalTool):
         return self._find()["source"]
 
     def _find(self) -> dict:
-        """查找 Pandoc 安装路径 (带缓存)"""
+        """查找 Pandoc 安装路径 (带缓存)
+
+        发现链：便携目录 → .mcy 惰性解压 → PATH。
+        步骤 1-3 在基类 ExternalTool._resolve_executable；pandoc 无系统路径回退。
+        """
         if self._cache is not None:
             return self._cache
 
@@ -48,49 +48,18 @@ class PandocTool(ExternalTool):
         if self.is_disabled:
             return result
         
-        # 1. 优先检查 libs 目录 (便携模式)
-        libs_path = self.get_libs_path()
-        portable_pandoc = os.path.join(libs_path, "pandoc", "pandoc.exe")
-        
-        # 如果便携版不存在，尝试从插件加载 (惰性加载)
-        if not os.path.exists(portable_pandoc):
-            # 优先查找内部资源(单文件版打包进去的)
-            internal_plugin = get_resource_path("plugins/pandoc.mcy")
-            
-            # 兜底查找外部目录(用户手动放置的)
-            external_plugin = os.path.join(get_app_root(), "plugins", "pandoc.mcy")
-            
-            # 选择存在的插件路径
-            plugin_path = internal_plugin if os.path.exists(internal_plugin) else external_plugin
-            
-            if os.path.exists(plugin_path):
-                # 获取配置的插件模式
-                config = ConfigLoader()
-                mode = config.get("app.plugin_mode", "temporary")
-                persistent = (mode == "persistent")
-                
-                extracted_path = bundle_loader.extract_bundle(plugin_path, persistent=persistent)
-                if extracted_path:
-                    portable_pandoc = os.path.join(extracted_path, "pandoc.exe")
-
-        if os.path.exists(portable_pandoc):
-            result["found"] = True
-            result["path"] = portable_pandoc
-            result["source"] = "portable"
-            result["version"] = self.probe_version(portable_pandoc)
-            self._cache = result
-            return result
-
-        # 2. 检查环境变量
-        path = shutil.which("pandoc")
+        path, source = self._resolve_executable(["pandoc.exe", "pandoc"])
         if path:
-            result["found"] = True
-            result["path"] = path
-            result["source"] = "env"
-            result["version"] = self.probe_version(path)
-        
+            result.update(
+                found=True,
+                path=path,
+                source=source,
+                version=self.probe_version(path),
+            )
+
         self._cache = result
         return result
+
 
     def uninstall(self) -> bool:
         """卸载便携版 Pandoc (删除目录)"""

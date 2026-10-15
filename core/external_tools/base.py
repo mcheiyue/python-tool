@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Callable, List
 import os
+import shutil
 import sys
 import threading
 
@@ -125,6 +126,59 @@ class ExternalTool(ABC):
     def _get_version_from_exe(self, path: str) -> Optional[str]:
         """子类实现：spawn 一次子进程取版本号。基类返回 None。"""
         return None
+
+    def _locate_bundle(self, filename: str) -> Optional[str]:
+        """载体(.mcy)路径：内部资源优先，外部 plugins 目录兜底；不存在返回 None。"""
+        from core.utils.resource_path import get_app_root, get_resource_path
+        internal = get_resource_path(f"plugins/{filename}")
+        if os.path.exists(internal):
+            return internal
+        external = os.path.join(get_app_root(), "plugins", filename)
+        return external if os.path.exists(external) else None
+
+    @staticmethod
+    def _exe_in_dirs(base_dir: str, exe_names, subdirs=("",)) -> Optional[str]:
+        """在 base_dir 的若干子目录中按序查找可执行文件，返回首个存在的完整路径。"""
+        for sub in subdirs:
+            directory = os.path.join(base_dir, sub) if sub else base_dir
+            for exe_name in exe_names:
+                candidate = os.path.join(directory, exe_name)
+                if os.path.exists(candidate):
+                    return candidate
+        return None
+
+    def _resolve_executable(self, exe_names, which_names=None,
+                            portable_subdirs=("",), on_portable=None):
+        """发现链步骤 1-3：便携目录 → 载体(.mcy)惰性解压 → PATH。
+
+        返回 (路径, source)，source 取值为 "portable"/"env"/None。
+        步骤 4（平台系统路径）各工具差异大（gs 版本目录扫描 / LO 固定路径 /
+        pandoc 无），由调用方自行追加。
+        on_portable(exe_path) 在便携命中时回调（gs 借它注入 GS_LIB）。
+        """
+        tool_dir = os.path.join(self.get_libs_path(), self.name)
+        found = self._exe_in_dirs(tool_dir, exe_names, portable_subdirs)
+        if not found:
+            plugin_path = self._locate_bundle(f"{self.name}.mcy")
+            if plugin_path:
+                from config.loader import ConfigLoader
+                from core.bundles.loader import loader as bundle_loader
+                persistent = ConfigLoader().get(
+                    "app.plugin_mode", "temporary") == "persistent"
+                extracted = bundle_loader.extract_bundle(
+                    plugin_path, persistent=persistent)
+                if extracted:
+                    found = self._exe_in_dirs(extracted, exe_names, portable_subdirs)
+        if found:
+            if on_portable:
+                on_portable(found)
+            return found, "portable"
+
+        for exe_name in (which_names or exe_names):
+            path = shutil.which(exe_name)
+            if path:
+                return path, "env"
+        return None, None
 
     @property
     def is_disabled(self) -> bool:
