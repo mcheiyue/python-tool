@@ -310,3 +310,37 @@ def test_word_page_filters_extensions_and_toggles_start_button(qapp):
     assert page.list_widget.count() == 0
     assert not page.start_btn.isEnabled(), "清空后应重新禁用"
     page.deleteLater()
+
+
+# ---------- 6. ppt 完成横幅必须按 fail 分支（7 个界面里唯一漏掉的） ----------
+
+
+def test_ppt_image_banner_shows_warning_when_any_failed(qapp, monkeypatch):
+    from ui.interfaces.office import ppt_image_interface as mod
+
+    class _Recorder:
+        calls = []
+
+        @classmethod
+        def success(cls, title, msg, **kwargs):
+            cls.calls.append(("success", msg))
+
+        @classmethod
+        def warning(cls, title, msg, **kwargs):
+            cls.calls.append(("warning", msg))
+
+    monkeypatch.setattr(mod, "InfoBar", _Recorder)
+
+    page = mod.PPTImageInterface()
+    page.on_finished(0, 2)
+    assert [c[0] for c in _Recorder.calls] == ["warning"], (
+        f"失败时应走 warning，实得 {_Recorder.calls}"
+    )
+    assert "失败 2" in _Recorder.calls[0][1], _Recorder.calls
+
+    _Recorder.calls.clear()
+    page.on_finished(3, 0)
+    assert [c[0] for c in _Recorder.calls] == ["success"], (
+        f"全成功时应走 success，实得 {_Recorder.calls}"
+    )
+    page.deleteLater()
