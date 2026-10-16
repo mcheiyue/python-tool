@@ -30,6 +30,15 @@ def default_fetch(url: str, timeout: float):
     return urllib.request.urlopen(req, timeout=timeout)
 
 
+def sha256_file(path: str) -> str:
+    """分块计算文件 sha256，返回小写十六进制（调用方按此格式比对 manifest）。"""
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(_CHUNK_SIZE), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 class Downloader:
     """单文件流式下载器。下载中先写 <dest>.part，成功后原子替换。"""
 

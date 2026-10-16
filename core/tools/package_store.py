@@ -9,7 +9,7 @@ import json
 import os
 
 from core.utils.logger import AppLogger
-from core.tools.downloader import Downloader
+from core.tools.downloader import Downloader, sha256_file
 
 _SOURCE_MARKER = ".source-id"
 
@@ -31,7 +31,7 @@ class PackageStore:
                 on_progress=None, should_cancel=None):
         """安装工具包，返回解压出的目录；任何失败返回 None。"""
         zip_path = self.locate_zip(tool_name)
-        if zip_path:
+        if zip_path and self._preplaced_trusted(zip_path, tool_name):
             return self._extract_and_mark(zip_path, persistent, tool_name)
 
         entry = self.read_manifest_entry(tool_name)
@@ -61,6 +61,24 @@ class PackageStore:
                 os.remove(stage)
             except OSError:
                 pass
+
+    def _preplaced_trusted(self, zip_path, tool_name):
+        entry = self.read_manifest_entry(tool_name)
+        expected = (entry or {}).get("sha256")
+        if not expected:
+            return True
+        try:
+            actual = sha256_file(zip_path)
+        except OSError as e:
+            self._logger.error(f"读取预置包 {tool_name} 失败: {e}")
+            return False
+        if actual.lower() != expected.lower():
+            self._logger.error(
+                f"预置包与 manifest sha256 不符（预期 {expected[:12]}…，实得 {actual[:12]}…），"
+                f"{tool_name} 改走下载"
+            )
+            return False
+        return True
 
     def locate_zip(self, tool_name):
         """预置 zip（随安装包分发）：内部资源优先，外部 plugins 目录兜底。"""

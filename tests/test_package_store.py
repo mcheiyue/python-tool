@@ -3,6 +3,7 @@
 覆盖：预置 zip 命中、manifest 缺条目、下载+解压成功、hash 不符降级、
 网络错误降级、staged zip 清理、来源指纹护栏（source_identity / is_current / 标记写入）。
 """
+import hashlib
 import io
 import json
 import os
@@ -177,8 +178,11 @@ def test_source_identity_none_without_source(app_root):
 
 
 def test_persistent_install_writes_source_marker(app_root):
-    _write_manifest(app_root, {"url": "https://x/p.zip", "sha256": "ab" * 32})
-    _make_zip(app_root / "plugins" / "pandoc.zip", {"pandoc/pandoc.exe": b"x"})
+    (app_root / "plugins").mkdir(exist_ok=True)
+    z = app_root / "plugins" / "pandoc.zip"
+    _make_zip(z, {"pandoc/pandoc.exe": b"x"})
+    sha = hashlib.sha256(z.read_bytes()).hexdigest()
+    _write_manifest(app_root, {"url": "https://x/p.zip", "sha256": sha})
     extracted = app_root / "libs" / "pandoc"
     extracted.mkdir(parents=True)
     store = PackageStore(loader=_StubLoader(str(extracted)))
@@ -186,7 +190,7 @@ def test_persistent_install_writes_source_marker(app_root):
     assert store.install("pandoc", persistent=True) == str(extracted)
     marker = extracted / ".source-id"
     assert marker.exists()
-    assert marker.read_text(encoding="utf-8") == "sha256:" + "ab" * 32
+    assert marker.read_text(encoding="utf-8") == "sha256:" + sha
 
 
 def test_temporary_install_writes_no_marker(app_root):
@@ -232,3 +236,75 @@ def test_is_current_true_when_source_unknown(app_root):
     (tool_dir / ".source-id").write_text("sha256:" + "ab" * 32, encoding="utf-8")
     store = PackageStore(loader=_StubLoader("unused"))
     assert store.is_current(str(tool_dir), "pandoc") is True
+
+
+def test_sha256_file_returns_lowercase_digest(app_root):
+    from core.tools.downloader import sha256_file
+
+    payload = b"streamed-content" * 64
+    target = app_root / "blob.bin"
+    target.write_bytes(payload)
+    assert sha256_file(str(target)) == hashlib.sha256(payload).hexdigest()
+
+
+def test_preplaced_zip_used_when_hash_matches(app_root):
+    (app_root / "plugins").mkdir(exist_ok=True)
+    zip_path = app_root / "plugins" / "pandoc.zip"
+    _make_zip(zip_path, {"pandoc/pandoc.exe": b"x"})
+    _write_manifest(app_root, {
+        "url": "https://example.invalid/p.zip",
+        "sha256": hashlib.sha256(zip_path.read_bytes()).hexdigest(),
+    })
+
+    from core.tools.downloader import Downloader
+
+    def _boom(url, timeout):
+        raise AssertionError(f"hash 一致时不该触发下载: {url}")
+
+    extracted = app_root / "libs" / "pandoc"
+    extracted.mkdir(parents=True)
+    loader = _StubLoader(str(extracted))
+    store = PackageStore(loader=loader, downloader=Downloader(fetch=_boom))
+
+    assert store.install("pandoc") == str(extracted)
+    assert loader.calls
+    assert loader.calls[0][0] == str(zip_path)
+
+
+def test_preplaced_zip_skipped_when_hash_mismatches(app_root):
+    payload = b"official-bytes" * 100
+    (app_root / "plugins").mkdir(exist_ok=True)
+    _make_zip(app_root / "plugins" / "pandoc.zip", {"pandoc/pandoc.exe": b"stale"})
+    manifest = {
+        "pandoc": {
+            "version": "3.12.1",
+            "url": "https://example.invalid/pandoc.zip",
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
+    }
+    extracted = app_root / "libs" / "pandoc"
+    extracted.mkdir(parents=True)
+    loader = _StubLoader(str(extracted))
+    store = _store(app_root, loader, response=payload, manifest=manifest)
+
+    assert store.install("pandoc") == str(extracted)
+    assert loader.calls
+    assert loader.calls[0][0].endswith("stage_pandoc.zip")
+
+
+def test_preplaced_zip_mismatch_degrades_when_download_fails(app_root):
+    (app_root / "plugins").mkdir(exist_ok=True)
+    _make_zip(app_root / "plugins" / "pandoc.zip", {"pandoc/pandoc.exe": b"stale"})
+    manifest = {
+        "pandoc": {
+            "version": "3.12.1",
+            "url": "https://example.invalid/pandoc.zip",
+            "sha256": "0" * 64,
+        }
+    }
+    loader = _StubLoader("/should/not/be/used")
+    store = _store(app_root, loader, response=b"tampered", manifest=manifest)
+
+    assert store.install("pandoc") is None
+    assert not loader.calls
+    assert not (app_root / "libs" / ".temp" / "stage_pandoc.zip").exists()
