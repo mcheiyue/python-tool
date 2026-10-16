@@ -68,13 +68,13 @@ class SettingsInterface(QWidget):
         self.plugin_label = BodyLabel("插件加载模式", self)
         
         self.plugin_combo = ComboBox(self)
-        self.plugin_combo.addItems(["临时模式 (推荐)", "持久模式"])
+        self.plugin_combo.addItems(["临时模式", "持久模式 (推荐)"])
         self.plugin_combo.setFixedWidth(150)
-        self.plugin_combo.setToolTip("临时模式：退出后清理插件文件（更干净）\n持久模式：保留插件文件（启动更快）")
+        self.plugin_combo.setToolTip("临时模式：退出后清理插件文件（更干净）\n持久模式：保留插件文件（启动更快，默认）")
 
         # Load plugin mode
         config = ConfigLoader()
-        plugin_mode = config.get("app.plugin_mode", "temporary")
+        plugin_mode = config.get("app.plugin_mode", "persistent")
         if plugin_mode == "persistent":
             self.plugin_combo.setCurrentIndex(1)
         else:

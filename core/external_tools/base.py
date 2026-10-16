@@ -220,9 +220,9 @@ class ExternalTool(ABC):
         try:
             from config.loader import ConfigLoader
             persistent = ConfigLoader().get(
-                "app.plugin_mode", "temporary") == "persistent"
+                "app.plugin_mode", "persistent") == "persistent"
         except Exception:
-            # 配置不可用（测试环境/首启）时按默认 temporary 继续
+            # 配置完全不可用时走安全回退：不落持久文件，避免污染真实 libs/
             persistent = False
 
         store = PackageStore()

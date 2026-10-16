@@ -3,7 +3,7 @@
         "theme_mode": "Auto",
         "language": "zh_CN",
         "version": "1.0.0",
-        "plugin_mode": "temporary"
+        "plugin_mode": "persistent"
     },
     "dependencies": {
         "ghostscript": {

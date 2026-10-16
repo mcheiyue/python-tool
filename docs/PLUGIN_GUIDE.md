@@ -72,8 +72,8 @@ Manifest + 预置包后，B5 已整体删除：`core/bundles/format.py`（签名
 
 ## 运行模式
 
-- **temporary（默认）**：解压到 `libs/.temp/`，退出清理
-- **persistent**：解压到 `libs/` 常驻，下次启动免解压
+- **persistent（默认）**：解压到 `libs/` 常驻，下次启动免解压
+- **temporary**：解压到 `libs/.temp/`，退出清理
 
 用户可在「设置 → 外部工具」中切换。
 
