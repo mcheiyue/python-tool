@@ -36,6 +36,9 @@ class CodeExtractor:
                             out.write("\n\n")
                             total_files += 1
                             
-            finished(True, f"已合并 {total_files} 个文件到 {output_path}")
+            if total_files == 0:
+                finished(False, "未找到匹配的文件，未写入任何内容")
+            else:
+                finished(True, f"已合并 {total_files} 个文件到 {output_path}")
         except Exception as e:
             finished(False, str(e))

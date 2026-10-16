@@ -50,8 +50,7 @@ def test_code_extractor_merges_only_requested_extensions(tmp_path):
     assert "=" * 50 in text and "File: " in text, "缺少分隔符契约"
 
 
-def test_code_extractor_counts_matched_files_in_message(tmp_path):
-    """消息必须报真实文件数——0 个文件也报数，便于识别空输入。"""
+def test_code_extractor_zero_match_reports_failure(tmp_path):
     root = tmp_path / "only_txt"
     root.mkdir()
     (root / "x.txt").write_text("n\n", encoding="utf-8")
@@ -63,10 +62,40 @@ def test_code_extractor_counts_matched_files_in_message(tmp_path):
     )
 
     assert len(events) == 1
-    assert events[0][0] is True
-    assert "已合并 0 个文件" in events[0][1], (
-        f"空匹配应如实报 0，当前行为记录在此作为特征：{events[0][1]}"
-    )
+    assert events[0][0] is False, f"0 匹配必须报失败，实得：{events[0]}"
+    assert "未找到匹配的文件" in events[0][1], f"失败需说明原因，实得：{events[0][1]}"
+
+
+def test_code_extract_rejects_empty_extensions(qapp, monkeypatch, tmp_path):
+    import importlib
+
+    mod = importlib.import_module("ui.interfaces.text.code_extract_interface")
+    calls = []
+
+    class _Rec:
+        @staticmethod
+        def error(title, msg, **kwargs):
+            calls.append(msg)
+
+        @staticmethod
+        def success(title, msg, **kwargs):
+            calls.append(msg)
+
+    monkeypatch.setattr(mod, "InfoBar", _Rec)
+
+    page = mod.CodeExtractInterface()
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "a.py").write_text("x = 1\n", encoding="utf-8")
+    page.dir_edit.setText(str(root))
+    page.ext_edit.setText("  ,  ")
+    page.out_edit.setText(str(tmp_path / "out.txt"))
+
+    page.start_extract()
+
+    assert any("扩展名" in m for m in calls), f"空扩展名必须前置报错，实得：{calls}"
+    assert page.thread is None, "空扩展名不得启动线程"
+    page.deleteLater()
 
 
 # ---------- 7. TxtConverter：txt → PDF（fpdf2，纯 Python） ----------

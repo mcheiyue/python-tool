@@ -105,7 +105,10 @@ class CodeExtractInterface(QWidget):
             return
 
         exts = [e.strip() for e in exts_str.split(',') if e.strip()]
-        
+        if not exts:
+            InfoBar.error("错误", "扩展名不能为空，如 .py,.c", parent=self)
+            return
+
         self.start_btn.setEnabled(False)
         self.log_text.clear()
         self.thread = WorkerThread(
