@@ -153,3 +153,26 @@ def test_batch_rename_branches_on_partial_failure(qapp, monkeypatch):
     page.on_rename_finished((5, 0))
     assert _kinds(rec) == ["success"], f"全成功应 success：{rec.calls}"
     page.deleteLater()
+
+
+def test_pdf_pages_progress_state_tracks_failures(qapp, monkeypatch):
+    """进度条状态须与横幅同向——set_complete 原为硬编码 True，与横幅脱节。"""
+    for path, cls in (
+        ("ui.interfaces.pdf.pdf_compress_interface", "PDFCompressInterface"),
+        ("ui.interfaces.pdf.pdf_render_interface", "PDFRenderInterface"),
+        ("ui.interfaces.pdf.pdf_image_extract_interface", "PDFImageExtractInterface"),
+    ):
+        page, rec = _page(path, cls, monkeypatch)
+
+        page.on_finished(1, 3)
+        assert page.progress.cancel_btn.text() == "失败", (
+            f"{cls} 有失败时进度条应显示'失败'，实得 {page.progress.cancel_btn.text()!r}"
+        )
+        assert page.progress.progress_bar.status_label.text() == "处理失败", cls
+
+        rec.calls.clear()
+        page.on_finished(4, 0)
+        assert page.progress.cancel_btn.text() == "完成", (
+            f"{cls} 全成功时进度条应显示'完成'，实得 {page.progress.cancel_btn.text()!r}"
+        )
+        page.deleteLater()

@@ -275,7 +275,7 @@ class PDFRenderInterface(QWidget):
             self.progress.set_complete(success=False)
             InfoBar.warning("已取消", "渲染任务已取消", duration=3000, parent=self)
         else:
-            self.progress.set_complete(success=True)
+            self.progress.set_complete(success=fail == 0)
             if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
             else: InfoBar.success("完成", f"成功渲染 {success} 个文件", duration=3000, parent=self)
 
