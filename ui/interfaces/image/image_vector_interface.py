@@ -14,6 +14,7 @@ from ui.threads import WorkerThread
 
 class ImageVectorInterface(QWidget):
     _log_bridged = pyqtSignal(str)
+    _finished_bridged = pyqtSignal(bool, str)
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -142,6 +143,7 @@ class ImageVectorInterface(QWidget):
         self.files = []
         self.threads = [] # Keep references
         self._log_bridged.connect(self.log_text.append)
+        self._finished_bridged.connect(self.on_one_finished)
 
     def remove_selection(self):
         # 从后往前删
@@ -186,46 +188,52 @@ class ImageVectorInterface(QWidget):
         # 为简单起见，这里我们逐个启动转换，实际项目中可以用线程池
         self.total = len(self.files)
         self.finished_count = 0
-        
+        self.success_count = 0
+        self.last_output = None
+
         for input_path in self.files:
             output_path = os.path.splitext(input_path)[0] + ".svg"
             thread = WorkerThread(
                 partial(self.vectorizer.convert, input_path, output_path, **kwargs),
                 on_log=self._log_bridged.emit,
+                on_finished=self._finished_bridged.emit,
             )
-            thread.finished.connect(lambda p=output_path: self.on_one_finished(p))
+            thread.error.connect(lambda msg: self.on_one_finished(False, msg))
             thread.start()
             self.threads.append(thread) # 防止被垃圾回收
 
-    def on_one_finished(self, path):
-        self.log_text.append(f"[完成] 生成: {os.path.basename(path)}")
+    def on_one_finished(self, success, result):
+        if success:
+            self.success_count += 1
+            self.last_output = result
+            self.log_text.append(f"[完成] 生成: {os.path.basename(result)}")
+        else:
+            self.log_text.append(f"[失败] {result}")
         self.finished_count += 1
         if self.finished_count >= self.total:
             self.start_btn.setEnabled(True)
             self.log_text.append("所有任务已完成！")
-            
+
             # 创建带有操作按钮的 InfoBar
-            bar = InfoBar.success(
-                title="转换完成",
-                content=f"成功处理 {self.total} 个文件",
-                duration=5000,
-                parent=self
-            )
-            
+            fail = self.total - self.success_count
+            if fail > 0: bar = InfoBar.warning(title="转换完成", content=f"成功 {self.success_count}, 失败 {fail}", duration=5000, parent=self)
+            else: bar = InfoBar.success(title="转换完成", content=f"成功处理 {self.success_count} 个文件", duration=5000, parent=self)
+
             # 添加打开文件夹按钮
-            open_folder_btn = PushButton("打开所在文件夹")
-            def open_folder():
-                def do_open():
-                    folder_path = os.path.dirname(path)
-                    if os.name == 'nt':
-                        subprocess.Popen(['explorer', folder_path], shell=False)
-                    else:
-                        from PyQt6.QtGui import QDesktopServices
-                        from PyQt6.QtCore import QUrl
-                        QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
-                QTimer.singleShot(300, do_open)
-            open_folder_btn.clicked.connect(open_folder)
-            bar.addWidget(open_folder_btn)
+            if self.last_output:
+                open_folder_btn = PushButton("打开所在文件夹")
+                def open_folder():
+                    def do_open():
+                        folder_path = os.path.dirname(self.last_output)
+                        if os.name == 'nt':
+                            subprocess.Popen(['explorer', folder_path], shell=False)
+                        else:
+                            from PyQt6.QtGui import QDesktopServices
+                            from PyQt6.QtCore import QUrl
+                            QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+                    QTimer.singleShot(300, do_open)
+                open_folder_btn.clicked.connect(open_folder)
+                bar.addWidget(open_folder_btn)
             
             bar.show()
             self.threads.clear()

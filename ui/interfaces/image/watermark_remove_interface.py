@@ -201,6 +201,7 @@ class WatermarkRemoveInterface(QWidget):
         self.start_btn.setEnabled(False)
         self.total_count = len(self.files)
         self.finished_count = 0
+        self.success_count = 0
         self.log_text.append("开始处理任务...")
         
         for path in self.files:
@@ -216,19 +217,14 @@ class WatermarkRemoveInterface(QWidget):
 
     def on_one_finished(self, success, result):
         self.finished_count += 1
-        
         if success:
-            # 如果当前预览的是处理完成的文件，更新预览（虽然预览是实时生成的，但这里可以确认处理结果）
-            pass
+            self.success_count += 1
 
         if self.finished_count >= self.total_count:
             self.start_btn.setEnabled(True)
             self.log_text.append("所有任务已完成！")
-            
-            InfoBar.success(
-                title="处理完成",
-                content=f"成功处理 {self.total_count} 个图片",
-                duration=3000,
-                parent=self
-            )
+
+            fail = self.total_count - self.success_count
+            if fail > 0: InfoBar.warning(title="处理完成", content=f"成功 {self.success_count}, 失败 {fail}", duration=3000, parent=self)
+            else: InfoBar.success(title="处理完成", content=f"成功处理 {self.total_count} 个图片", duration=3000, parent=self)
             self.threads.clear()

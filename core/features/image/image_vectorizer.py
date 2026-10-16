@@ -37,6 +37,8 @@ class ImageVectorizer:
             )
             log(f"转换成功: {output_path}")
             finished(True, output_path)
-        except Exception as e:
+        except BaseException as e:
+            # 必须 BaseException：vtracer 的 Rust panic 是 PanicException，非 Exception 子类；
+            # 用 except Exception 会漏网，异常逃进 WorkerThread.run 的同款捕获而两个信号都不发
             log(f"错误: {str(e)}")
             finished(False, str(e))
