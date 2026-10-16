@@ -1,7 +1,7 @@
 """PackageStore 测试：fake transport 注入，零真实网络。
 
 覆盖：预置 zip 命中、manifest 缺条目、下载+解压成功、hash 不符降级、
-网络错误降级、staged zip 清理。
+网络错误降级、staged zip 清理、来源指纹护栏（source_identity / is_current / 标记写入）。
 """
 import io
 import json
@@ -146,3 +146,89 @@ def test_network_error_silently_degrades(app_root):
     loader = _StubLoader("/should/not/be/used")
     store = PackageStore(loader=loader, downloader=Downloader(fetch=boom))
     assert store.install("pandoc") is None
+
+
+def _write_manifest(app_root, entry):
+    (app_root / "plugins").mkdir(exist_ok=True)
+    (app_root / "plugins" / "manifest.json").write_text(
+        json.dumps({"pandoc": entry}), encoding="utf-8"
+    )
+
+
+def test_source_identity_prefers_manifest_sha256(app_root):
+    _write_manifest(app_root, {"url": "https://x/p.zip", "sha256": "AB" * 32})
+    _make_zip(app_root / "plugins" / "pandoc.zip", {"pandoc/pandoc.exe": b"x"})
+    store = PackageStore(loader=_StubLoader("unused"))
+    assert store.source_identity("pandoc") == "sha256:" + "ab" * 32
+
+
+def test_source_identity_falls_back_to_zip_fingerprint(app_root):
+    (app_root / "plugins").mkdir(exist_ok=True)
+    z = app_root / "plugins" / "pandoc.zip"
+    _make_zip(z, {"pandoc/pandoc.exe": b"x"})
+    st = z.stat()
+    store = PackageStore(loader=_StubLoader("unused"))
+    assert store.source_identity("pandoc") == f"zip:{int(st.st_mtime)}:{st.st_size}"
+
+
+def test_source_identity_none_without_source(app_root):
+    store = PackageStore(loader=_StubLoader("unused"))
+    assert store.source_identity("pandoc") is None
+
+
+def test_persistent_install_writes_source_marker(app_root):
+    _write_manifest(app_root, {"url": "https://x/p.zip", "sha256": "ab" * 32})
+    _make_zip(app_root / "plugins" / "pandoc.zip", {"pandoc/pandoc.exe": b"x"})
+    extracted = app_root / "libs" / "pandoc"
+    extracted.mkdir(parents=True)
+    store = PackageStore(loader=_StubLoader(str(extracted)))
+
+    assert store.install("pandoc", persistent=True) == str(extracted)
+    marker = extracted / ".source-id"
+    assert marker.exists()
+    assert marker.read_text(encoding="utf-8") == "sha256:" + "ab" * 32
+
+
+def test_temporary_install_writes_no_marker(app_root):
+    (app_root / "plugins").mkdir(exist_ok=True)
+    _make_zip(app_root / "plugins" / "pandoc.zip", {"pandoc/pandoc.exe": b"x"})
+    extracted = app_root / "libs" / ".temp" / "session_x"
+    extracted.mkdir(parents=True)
+    store = PackageStore(loader=_StubLoader(str(extracted)))
+
+    assert store.install("pandoc", persistent=False) == str(extracted)
+    assert not (extracted / ".source-id").exists()
+
+
+def test_is_current_false_when_marker_mismatches(app_root):
+    _write_manifest(app_root, {"url": "https://x/p.zip", "sha256": "ab" * 32})
+    tool_dir = app_root / "libs" / "pandoc"
+    tool_dir.mkdir(parents=True)
+    (tool_dir / ".source-id").write_text("sha256:" + "cd" * 32, encoding="utf-8")
+    store = PackageStore(loader=_StubLoader("unused"))
+    assert store.is_current(str(tool_dir), "pandoc") is False
+
+
+def test_is_current_true_when_marker_matches(app_root):
+    _write_manifest(app_root, {"url": "https://x/p.zip", "sha256": "ab" * 32})
+    tool_dir = app_root / "libs" / "pandoc"
+    tool_dir.mkdir(parents=True)
+    (tool_dir / ".source-id").write_text("sha256:" + "ab" * 32, encoding="utf-8")
+    store = PackageStore(loader=_StubLoader("unused"))
+    assert store.is_current(str(tool_dir), "pandoc") is True
+
+
+def test_is_current_true_without_marker(app_root):
+    _write_manifest(app_root, {"url": "https://x/p.zip", "sha256": "ab" * 32})
+    tool_dir = app_root / "libs" / "pandoc"
+    tool_dir.mkdir(parents=True)
+    store = PackageStore(loader=_StubLoader("unused"))
+    assert store.is_current(str(tool_dir), "pandoc") is True
+
+
+def test_is_current_true_when_source_unknown(app_root):
+    tool_dir = app_root / "libs" / "pandoc"
+    tool_dir.mkdir(parents=True)
+    (tool_dir / ".source-id").write_text("sha256:" + "ab" * 32, encoding="utf-8")
+    store = PackageStore(loader=_StubLoader("unused"))
+    assert store.is_current(str(tool_dir), "pandoc") is True

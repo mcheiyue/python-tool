@@ -6,6 +6,7 @@
 zip 解压与安全审查本身由 test_bundle_zip_safety.py 覆盖。
 """
 import os
+import json
 import shutil
 import time
 import zipfile
@@ -100,6 +101,51 @@ def test_uses_cached_libs_dir_without_install(tool_env, monkeypatch):
     monkeypatch.setattr(
         "core.tools.package_store.PackageStore.install", _fail
     )
+
+    assert tool.check_installed() is True
+    assert tool.get_source() == "portable"
+
+
+def _write_manifest(tmp_path, tool_name, sha256):
+    plugins = tmp_path / "plugins"
+    plugins.mkdir(exist_ok=True)
+    (plugins / "manifest.json").write_text(
+        json.dumps({tool_name: {"url": "https://example.invalid/x.zip", "sha256": sha256}}),
+        encoding="utf-8",
+    )
+
+
+def test_stale_portable_dir_triggers_reinstall(tool_env, monkeypatch):
+    tool, tmp_path = tool_env
+    extracted = _make_extracted_gs(tmp_path)
+    _write_manifest(tmp_path, "ghostscript", "ab" * 32)
+    # 目录标记是旧版本，manifest 已是新 sha256 → 过期
+    (extracted / ".source-id").write_text("sha256:" + "cd" * 32, encoding="utf-8")
+
+    installs = []
+
+    def _fake_install(self, name, **kw):
+        installs.append(name)
+        extracted.mkdir(parents=True, exist_ok=True)
+        (extracted / "gswin64c.exe").write_bytes(b"fake")
+        return str(extracted)
+
+    monkeypatch.setattr("core.tools.package_store.PackageStore.install", _fake_install)
+
+    assert tool.check_installed() is True
+    assert installs == ["ghostscript"]
+
+
+def test_current_portable_dir_skips_reinstall(tool_env, monkeypatch):
+    tool, tmp_path = tool_env
+    extracted = _make_extracted_gs(tmp_path)
+    _write_manifest(tmp_path, "ghostscript", "ab" * 32)
+    (extracted / ".source-id").write_text("sha256:" + "ab" * 32, encoding="utf-8")
+
+    def _fail(*a, **k):
+        raise AssertionError("未过期的持久目录不应触发重装")
+
+    monkeypatch.setattr("core.tools.package_store.PackageStore.install", _fail)
 
     assert tool.check_installed() is True
     assert tool.get_source() == "portable"

@@ -11,6 +11,8 @@ import os
 from core.utils.logger import AppLogger
 from core.tools.downloader import Downloader
 
+_SOURCE_MARKER = ".source-id"
+
 
 def _default_loader():
     from core.bundles.loader import loader
@@ -30,7 +32,7 @@ class PackageStore:
         """安装工具包，返回解压出的目录；任何失败返回 None。"""
         zip_path = self.locate_zip(tool_name)
         if zip_path:
-            return self._extract(zip_path, persistent, tool_name)
+            return self._extract_and_mark(zip_path, persistent, tool_name)
 
         entry = self.read_manifest_entry(tool_name)
         if not entry:
@@ -52,7 +54,7 @@ class PackageStore:
             return None
 
         try:
-            return self._extract(stage, persistent, tool_name)
+            return self._extract_and_mark(stage, persistent, tool_name)
         finally:
             # zip 只是解压源：持久化解压后不再需要，临时模式退出即清
             try:
@@ -95,3 +97,54 @@ class PackageStore:
         except Exception as e:
             self._logger.error(f"解压 {os.path.basename(zip_path)} 失败: {e}")
             return None
+
+    def _extract_and_mark(self, zip_path, persistent, tool_name):
+        extracted = self._extract(zip_path, persistent, tool_name)
+        if extracted and persistent:
+            self._write_source_marker(extracted, tool_name)
+        return extracted
+
+    def source_identity(self, tool_name):
+        """当前源包的版本标识，用于判断持久解压目录是否过期。
+
+        优先 manifest 的 sha256（下载源持久有效，zip 删掉后仍可判定），回退到源
+        zip 的 (mtime, size)；两者都取不到返回 None（无法判定）。
+        """
+        entry = self.read_manifest_entry(tool_name)
+        if entry and entry.get("sha256"):
+            return f"sha256:{str(entry['sha256']).lower()}"
+        zip_path = self.locate_zip(tool_name)
+        if zip_path:
+            try:
+                st = os.stat(zip_path)
+                return f"zip:{int(st.st_mtime)}:{st.st_size}"
+            except OSError:
+                return None
+        return None
+
+    def _write_source_marker(self, tool_dir, tool_name):
+        identity = self.source_identity(tool_name)
+        if not identity:
+            return
+        try:
+            with open(os.path.join(tool_dir, _SOURCE_MARKER), "w", encoding="utf-8") as f:
+                f.write(identity)
+        except OSError:
+            pass
+
+    def is_current(self, tool_dir, tool_name):
+        """持久解压目录是否与当前源包一致。
+
+        无标记（旧版本留下的目录）或无法确定当前源包身份时返回 True，信任现有
+        目录；只有「有标记且与当前源包身份不符」才判定过期，避免误删可用目录。
+        """
+        marker = os.path.join(tool_dir, _SOURCE_MARKER)
+        if not os.path.exists(marker):
+            return True
+        try:
+            with open(marker, encoding="utf-8") as f:
+                recorded = f.read().strip()
+        except OSError:
+            return True
+        current = self.source_identity(tool_name)
+        return (not current) or recorded == current

@@ -196,6 +196,12 @@ class ExternalTool(ABC):
         """
         tool_dir = os.path.join(self.get_libs_path(), self.name)
         found = self._exe_in_dirs(tool_dir, exe_names, portable_subdirs)
+        if found:
+            from core.tools.package_store import PackageStore
+            if not PackageStore().is_current(tool_dir, self.name):
+                # 源包已升级：先删旧目录再重装，否则新包会与旧文件混装
+                shutil.rmtree(tool_dir, ignore_errors=True)
+                found = None
         if not found:
             found = self._install_from_package(exe_names, portable_subdirs)
         if found:
