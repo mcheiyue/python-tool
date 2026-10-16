@@ -349,7 +349,10 @@ class BatchRenameInterface(QWidget):
     def on_rename_finished(self, result=None):
         """重命名完成"""
         self._restore_ui()
-        InfoBar.success("完成", "批量重命名已完成", duration=3000, parent=self)
+        # execute 把冲突跳过与重命名异常都记入返回值且从不抛异常，故部分失败也走本回调
+        success, fail = result or (0, 0)
+        if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+        else: InfoBar.success("完成", "批量重命名已完成", duration=3000, parent=self)
 
         # 清空列表，重新开始
         self.clear_files()

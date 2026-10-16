@@ -13,6 +13,7 @@ from ui.threads import WorkerThread
 class ImagePdfInterface(QWidget):
     # 桥接信号：转换回调在工作线程触发，经此排队回主线程
     _log_bridged = pyqtSignal(str)
+    _finished_bridged = pyqtSignal(bool, str)
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -86,6 +87,7 @@ class ImagePdfInterface(QWidget):
         
         # 连接日志信号
         self._log_bridged.connect(self.log_text.append)
+        self._finished_bridged.connect(self.on_finished)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
@@ -134,17 +136,13 @@ class ImagePdfInterface(QWidget):
         self.thread = WorkerThread(
             self.converter.convert, self.files, output_path, merge_mode,
             on_log=self._log_bridged.emit,
+            on_finished=self._finished_bridged.emit,
         )
-        self.thread.finished.connect(self.on_finished)
-        self.thread.error.connect(self.on_finished)
+        self.thread.error.connect(lambda msg: self.on_finished(False, msg))
         self.thread.start()
 
-    def on_finished(self, result=None):
+    def on_finished(self, success, msg):
         self.start_btn.setEnabled(True)
         self.thread = None
-        # 注意：成功提示已在 converter 的 finished 信号中处理（如果有连接的话），
-        # 但这里我们主要依赖日志输出，也可以添加一个 InfoBar
-        # 由于 ImageToPdfConverter 也发出了 finished 信号，我们可以在那里连接槽函数
-        # 但为了简单起见，且 log 已经有输出，这里只恢复按钮状态
-        # 我们可以根据最后一条日志判断是否成功，或者修改 ImageToPdfThread 来传递结果
-        InfoBar.success("任务结束", "处理完成，请查看日志", parent=self)
+        if success: InfoBar.success("完成", msg, parent=self)
+        else: InfoBar.error("错误", msg, parent=self)

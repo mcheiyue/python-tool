@@ -258,4 +258,5 @@ class PDFCompressInterface(QWidget):
             InfoBar.warning("已取消", "压缩任务已取消", duration=3000, parent=self)
         else:
             self.progress.set_complete(success=True)
-            InfoBar.success("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+            if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+            else: InfoBar.success("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)

@@ -320,7 +320,8 @@ class MarkdownPdfBatchInterface(QWidget):
         self.start_btn.setText("开始转换")
         self.progress.stop()
         self.progress.hide()
-        InfoBar.success("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+        if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+        else: InfoBar.success("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
 
     def _detect_and_set_default_engine(self):
         """检测可用的 PDF 引擎并设置默认值"""

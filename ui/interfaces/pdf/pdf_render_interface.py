@@ -276,7 +276,8 @@ class PDFRenderInterface(QWidget):
             InfoBar.warning("已取消", "渲染任务已取消", duration=3000, parent=self)
         else:
             self.progress.set_complete(success=True)
-            InfoBar.success("完成", f"成功渲染 {success} 个文件", duration=3000, parent=self)
+            if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
+            else: InfoBar.success("完成", f"成功渲染 {success} 个文件", duration=3000, parent=self)
 
     def on_tool_status_changed(self, name):
         """工具状态变更"""
