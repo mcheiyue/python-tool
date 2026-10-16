@@ -100,7 +100,10 @@ class DocToDocxConverter:
 
         except Exception as e:
             log(f"🔥 严重错误: {str(e)}")
-        
+            # 循环外异常（COM 启动失败等）= 文件未被处理，按未成功数计失败；
+            # 否则 finally 报 (0,0) 与"成功0失败0"不可区分，界面走成功横幅
+            fail = total - success
+
         finally:
             # 6. 清理应用实例
             if self._app:

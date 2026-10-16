@@ -191,6 +191,54 @@ def test_doc_converted_to_docx(doc_file, tmp_path):
     assert out.read_bytes()[:2] == b"PK", "docx 魔数应为 PK"
 
 
+# ---------- 3b. COM 启动失败必须报 (0, N)，不得报 (0, 0) ----------
+# (0,0) 与"成功0失败0"不可区分——界面按 `if fail > 0` 分支，拿到 (0,0) 会把
+# COM 根本没起来显示成"成功处理 0 个文件"；其余转换器一律报 (0, N)，此处对齐。
+
+
+def _make_com_fail(monkeypatch, message):
+    import comtypes.client
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(comtypes.client, "CreateObject", _boom)
+
+
+def test_ppt_export_reports_all_failed_when_com_unavailable(tmp_path, monkeypatch):
+    _make_com_fail(monkeypatch, "PowerPoint 不可用")
+
+    events = []
+    PPTImageExporter().export(
+        ["a.pptx", "b.pptx"],
+        str(tmp_path),
+        "PNG",
+        on_finished=lambda ok, fail: events.append((ok, fail)),
+    )
+
+    assert events == [(0, 2)], (
+        f"COM 启动失败应报 (0, 文件数)，实得 {events}——"
+        "(0,0) 会让界面把失败显示成成功"
+    )
+
+
+def test_doc_convert_reports_all_failed_when_com_unavailable(tmp_path, monkeypatch):
+    _make_com_fail(monkeypatch, "Word 不可用")
+
+    src = tmp_path / "a.doc"
+    src.write_bytes(b"fake")
+    events = []
+    DocToDocxConverter().convert(
+        [str(src)],
+        str(tmp_path),
+        on_finished=lambda ok, fail: events.append((ok, fail)),
+    )
+
+    assert events == [(0, 1)], (
+        f"COM 启动失败应报 (0, 文件数)，实得 {events}"
+    )
+
+
 # ---------- 4. LibreOfficeFormatConverter（本机未装 → 验缺失分支走对） ----------
 
 

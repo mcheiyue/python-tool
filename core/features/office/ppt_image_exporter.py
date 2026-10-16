@@ -47,7 +47,9 @@ class PPTImageExporter:
                     log(f"提示: 无法最小化 PowerPoint 窗口: {str(e)}")
             except Exception as e:
                 log(f"无法启动 PowerPoint: {str(e)}")
-                finished(0, 0)
+                # 文件一个都没处理，全计失败；finished 由外层 finally 统一发一次，
+                # 这里再发会造成双发（UI 弹两条横幅）且第二条是 (0,0)
+                fail_count = total_files
                 return
 
             for i, path in enumerate(file_paths):
