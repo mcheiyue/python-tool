@@ -12,6 +12,7 @@ import pytest
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 
+from core.engines.pdf.ghostscript import GhostscriptCompressor
 from core.features.image.color_extractor import ColorExtractor
 from core.features.image.image_converter import ImageConverter
 from core.features.pdf.image_to_pdf_converter import ImageToPdfConverter
@@ -231,6 +232,37 @@ def test_render_with_ghostscript_flag_falls_back_to_pymupdf(tmp_path):
     assert events == [(1, 0)], f"GS 缺失应回退并成功，实得：{events}"
     names = sorted(p.name for p in (out / "fb_pages").glob("page_*.png"))
     assert len(names) == 2, f"回退渲染页数不足：{names}"
+
+
+def test_render_with_ghostscript_produces_png_when_installed(tmp_path):
+    renderer = PDFPageRenderer()
+    if not renderer.is_gs_available():
+        pytest.skip("Ghostscript 未装，正向用例不适用")
+
+    src = _make_pdf(tmp_path / "gs.pdf", 2)
+    out = tmp_path / "page0.png"
+    ok = renderer.render_with_ghostscript(src, 0, str(out), dpi=72)
+
+    assert ok, "GS 渲染应返回 True"
+    assert out.exists() and out.stat().st_size > 0, "未产出图片"
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", "不是 PNG"
+
+
+def test_ghostscript_compresses_pdf_when_installed(tmp_path):
+    renderer = PDFPageRenderer()
+    if not renderer.is_gs_available():
+        pytest.skip("Ghostscript 未装，正向用例不适用")
+
+    pdf = _make_pdf(tmp_path / "doc.pdf", 2)
+    compressor = GhostscriptCompressor()
+    events = []
+    compressor.finished.connect(lambda ok, fail: events.append((ok, fail)))
+    compressor.compress([pdf], "/screen", gs_path=renderer.gs_tool.get_path())
+
+    assert events == [(1, 0)], f"载荷异常：{events}"
+    out = tmp_path / "Compressed" / "doc_compressed.pdf"
+    assert out.exists() and out.stat().st_size > 0, "未产出压缩产物"
+    assert out.read_bytes()[:4] == b"%PDF", "产物不是 PDF"
 
 
 def test_render_empty_input_reports_zero(tmp_path):

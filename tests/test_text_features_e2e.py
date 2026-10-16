@@ -177,6 +177,25 @@ def test_pandoc_pdf_reports_missing_pandoc(tmp_path, monkeypatch):
     assert any("Pandoc 未安装" in m for m in logs), f"日志：{logs}"
 
 
+def test_pandoc_pdf_converts_markdown_when_engine_installed(tmp_path):
+    if not shutil.which("xelatex") or not _has_pandoc():
+        pytest.skip("xelatex/pandoc 缺失，正向用例不适用")
+
+    src = tmp_path / "doc.md"
+    src.write_text("# Title\n\nhello **world**\n", encoding="utf-8")
+    events = []
+    PandocMarkdownToPdf().convert_batch(
+        [str(src)],
+        output_dir=str(tmp_path),
+        on_finished=lambda ok, fail: events.append((ok, fail)),
+    )
+
+    assert events == [(1, 0)], f"载荷异常：{events}"
+    out = tmp_path / "doc.pdf"
+    assert out.exists(), "未产出 pdf"
+    assert out.read_bytes()[:4] == b"%PDF", "不是合法 PDF"
+
+
 # ---------- 9. MarkdownConverter：pandoc 分支（此前只测了纯 Python 分支） ----------
 
 

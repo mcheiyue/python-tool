@@ -263,6 +263,27 @@ def test_libreoffice_missing_reports_not_installed(tmp_path):
     assert not (tmp_path / "in.pdf").exists(), "缺工具时不应产出文件"
 
 
+def test_libreoffice_converts_txt_to_pdf_when_installed(tmp_path):
+    converter = LibreOfficeFormatConverter()
+    if not converter.is_available():
+        pytest.skip("本机未装 LibreOffice，正向用例不适用")
+
+    src = tmp_path / "note.txt"
+    src.write_text("hello office toolkit\n", encoding="utf-8")
+    events = []
+    converter.convert_batch(
+        [str(src)],
+        "pdf",
+        output_dir=str(tmp_path),
+        on_finished=lambda ok, fail: events.append((ok, fail)),
+    )
+
+    assert events == [(1, 0)], f"载荷异常：{events}"
+    out = tmp_path / "note.pdf"
+    assert out.exists(), "未产出 pdf"
+    assert out.read_bytes()[:4] == b"%PDF", "不是合法 PDF"
+
+
 # ---------- 5. OfficeConvertInterface 3 合 1（构造 + 过滤 + 按钮态） ----------
 
 
