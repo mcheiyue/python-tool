@@ -36,6 +36,9 @@ def tool_env(tmp_path, monkeypatch):
     tool.clear_cache()
     yield tool, tmp_path
     tool.clear_cache()
+    # _set_gs_lib 会直写 os.environ["GS_LIB"]（不走 monkeypatch），teardown 必须清掉，
+    # 否则泄漏的 tmp 路径会让同一进程后续真实 GS 调用找不到资源而失败
+    os.environ.pop("GS_LIB", None)
 
 
 def _make_extracted_gs(root):
