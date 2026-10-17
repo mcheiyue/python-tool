@@ -66,6 +66,24 @@ def test_code_extractor_zero_match_reports_failure(tmp_path):
     assert "未找到匹配的文件" in events[0][1], f"失败需说明原因，实得：{events[0][1]}"
 
 
+def test_code_extractor_zero_match_preserves_existing_output(tmp_path):
+    root = tmp_path / "only_txt"
+    root.mkdir()
+    (root / "x.txt").write_text("n\n", encoding="utf-8")
+    out = tmp_path / "out.txt"
+    out.write_text("PRECIOUS USER CONTENT\n", encoding="utf-8")
+
+    events = []
+    CodeExtractor().extract(
+        str(root), [".py"], str(out), on_finished=lambda ok, msg: events.append((ok, msg))
+    )
+
+    assert events[0][0] is False
+    assert out.read_text(encoding="utf-8") == "PRECIOUS USER CONTENT\n", (
+        "0 匹配不得截断用户已有的输出文件"
+    )
+
+
 def test_code_extract_rejects_empty_extensions(qapp, monkeypatch, tmp_path):
     import importlib
 
