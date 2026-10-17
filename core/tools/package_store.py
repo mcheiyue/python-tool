@@ -1,7 +1,8 @@
 """上游官方包安装：预置 zip 优先，manifest 驱动的下载兜底。
 
-读取 plugins/manifest.json（version/url/sha256）→ 下载到 libs/.temp
-→ sha256 校验 → 委托 BundleLoader.extract_zip 安全解压。所有失败静默降级
+读取 plugins/manifest.json（version / url 或 urls / sha256）→ 下载到 libs/.temp
+→ sha256 校验 → 委托 BundleLoader.extract_zip 安全解压。urls 为镜像列表逐个尝试，
+哈希与来源无关，换镜像零信任成本。所有失败静默降级
 （返回 None 并记日志）：网络不可用/URL 失效都不阻塞界面，由发现链继续回退
 到 PATH 与系统路径。
 """
@@ -42,15 +43,25 @@ class PackageStore:
         stage = os.path.join(get_app_root(), "libs", ".temp", f"stage_{tool_name}.zip")
         os.makedirs(os.path.dirname(stage), exist_ok=True)
 
-        try:
-            self._downloader.download(
-                entry["url"], stage,
-                expected_sha256=entry.get("sha256"),
-                on_progress=on_progress,
-                should_cancel=should_cancel,
-            )
-        except Exception as e:
-            self._logger.error(f"下载 {tool_name} 失败: {e}")
+        # urls 为镜像列表逐个尝试，单源失败（传输/HTTP/hash）换下一个，全部失败才降级。
+        # 取消须立即放弃不换源：DownloadError 不带取消标记，不重查 should_cancel 会把
+        # 用户取消当成源失败而换镜像继续下载
+        urls = entry.get("urls") or ([entry["url"]] if entry.get("url") else [])
+        for url in urls:
+            try:
+                self._downloader.download(
+                    url, stage,
+                    expected_sha256=entry.get("sha256"),
+                    on_progress=on_progress,
+                    should_cancel=should_cancel,
+                )
+                break
+            except Exception as e:
+                if should_cancel is not None and should_cancel():
+                    self._logger.info(f"{tool_name} 下载已取消")
+                    return None
+                self._logger.error(f"下载 {tool_name} 失败（{url}）: {e}")
+        else:
             return None
 
         try:
@@ -102,7 +113,7 @@ class PackageStore:
             except (OSError, ValueError):
                 continue
             entry = manifest.get(tool_name)
-            if isinstance(entry, dict) and entry.get("url"):
+            if isinstance(entry, dict) and (entry.get("url") or entry.get("urls")):
                 return entry
             return None
         return None

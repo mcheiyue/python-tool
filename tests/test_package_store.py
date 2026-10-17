@@ -308,3 +308,101 @@ def test_preplaced_zip_mismatch_degrades_when_download_fails(app_root):
     assert store.install("pandoc") is None
     assert not loader.calls
     assert not (app_root / "libs" / ".temp" / "stage_pandoc.zip").exists()
+
+
+def test_urls_fallback_tries_second_mirror(app_root):
+    import urllib.error
+
+    from core.tools.downloader import Downloader
+
+    payload = b"mirror-bytes" * 50
+    _write_manifest(app_root, {"version": "3.12.1", "urls": [
+        "https://bad.example/pandoc.zip",
+        "https://good.example/pandoc.zip",
+    ]})
+    loader = _StubLoader("/extracted/dir")
+    seen = []
+
+    def fetch(url, timeout):
+        seen.append(url)
+        if "bad." in url:
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        return _FakeResponse(payload)
+
+    store = PackageStore(loader=loader, downloader=Downloader(fetch=fetch))
+    assert store.install("pandoc") == "/extracted/dir"
+    assert seen == [
+        "https://bad.example/pandoc.zip",
+        "https://good.example/pandoc.zip",
+    ]
+
+
+def test_urls_first_success_stops(app_root):
+    from core.tools.downloader import Downloader
+
+    payload = b"primary-bytes" * 50
+    _write_manifest(app_root, {"version": "3.12.1", "urls": [
+        "https://good.example/pandoc.zip",
+        "https://mirror.example/pandoc.zip",
+    ]})
+    loader = _StubLoader("/extracted/dir")
+    seen = []
+
+    def fetch(url, timeout):
+        seen.append(url)
+        return _FakeResponse(payload)
+
+    store = PackageStore(loader=loader, downloader=Downloader(fetch=fetch))
+    assert store.install("pandoc") == "/extracted/dir"
+    assert seen == ["https://good.example/pandoc.zip"]
+
+
+def test_urls_all_fail_returns_none(app_root):
+    import urllib.error
+
+    from core.tools.downloader import Downloader
+
+    _write_manifest(app_root, {"version": "3.12.1", "urls": [
+        "https://one.example/pandoc.zip",
+        "https://two.example/pandoc.zip",
+    ]})
+    loader = _StubLoader("/extracted/dir")
+    seen = []
+
+    def fetch(url, timeout):
+        seen.append(url)
+        raise urllib.error.HTTPError(url, 503, "Unavailable", None, None)
+
+    store = PackageStore(loader=loader, downloader=Downloader(fetch=fetch))
+    assert store.install("pandoc") is None
+    assert not loader.calls
+    assert len(seen) == 2
+
+
+def test_cancel_stops_url_fallback(app_root):
+    import urllib.error
+
+    from core.tools.downloader import Downloader
+
+    _write_manifest(app_root, {"version": "3.12.1", "urls": [
+        "https://one.example/pandoc.zip",
+        "https://two.example/pandoc.zip",
+    ]})
+    loader = _StubLoader("/extracted/dir")
+    seen = []
+
+    def fetch(url, timeout):
+        seen.append(url)
+        raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+
+    store = PackageStore(loader=loader, downloader=Downloader(fetch=fetch))
+    assert store.install("pandoc", should_cancel=lambda: True) is None
+    assert seen == ["https://one.example/pandoc.zip"]
+
+
+def test_read_manifest_entry_accepts_urls_array(app_root):
+    _write_manifest(app_root, {"version": "3.12.1", "urls": [
+        "https://one.example/pandoc.zip"], "sha256": "ab" * 32})
+    entry = PackageStore(loader=_StubLoader("/x")).read_manifest_entry("pandoc")
+    assert entry is not None
+    assert entry["urls"] == ["https://one.example/pandoc.zip"]

@@ -6,8 +6,8 @@
 
 ## 供给方式
 
-- **Manifest 项**：`plugins/manifest.json` 中按工具名登记 `version/url/sha256`。
-  入库可评审——任何人可为清单提 PR 修正版本。
+- **Manifest 项**：`plugins/manifest.json` 中按工具名登记 `version/url（或
+  urls 镜像列表）/sha256`。入库可评审——任何人可为清单提 PR 修正版本。
 - **预置包**：随安装包分发的 `plugins/<tool>.zip`（上游官方 zip 原样拷贝），
   命中后完全离线可用，不触网。
 - **下载兜底**：本地无 zip 时按 manifest URL 下载并校验 hash 后解压。
@@ -80,7 +80,10 @@ Manifest + 预置包后，B5 已整体删除：`core/bundles/format.py`（签名
 ## FAQ
 
 - **一键安装失败**：网络不通、URL 失效、或 hash 与 manifest 不符——改用「下载」按钮
-  去官网手动获取，放入 `plugins/` 后重启
+  去官网手动获取，放入 `plugins/` 后重启。manifest 已有条目时，预置包必须与
+  sha256 逐字节一致才被采用，不符则拒收改走下载
+- **国内网络慢/超时**：把该工具条目的 `url` 换成 `urls` 数组（官方源在前、镜像在后），
+  下载逐个尝试直到 hash 校验通过；hash 与来源无关，换镜像零信任成本，无需改代码
 - **加载失败（hash）**：zip 被替换/损坏，重新下载官方产物并核对 hash
 - **更新版本**：改 manifest 的 version/url/sha256 → 用户点「一键安装」或删掉旧
   `libs/<tool>/` 后重启；持久模式需先卸载旧版
