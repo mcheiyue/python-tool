@@ -5,37 +5,14 @@
 每条用例都必须断言载荷，不能只看"没抛异常"。
 本机实测（2026-10-16）：MS Office COM 三件可用、pandoc 3.12.1 可用、LibreOffice 未装。
 """
+import gc
+
 import pytest
 
 from core.features.office.doc_to_docx_converter import DocToDocxConverter
 from core.features.office.libreoffice_converter import LibreOfficeFormatConverter
 from core.features.office.ppt_image_exporter import PPTImageExporter
 from core.features.office.word_converter import WordConverter
-
-
-# ---------- 缺失工具探测（清单 §2：前置探测，不靠回调值区分） ----------
-
-
-def _com_available(progid: str) -> bool:
-    """COM 可用性探测。
-
-    ppt/doc 转换器没有 is_available API，且其缺失回调是 (0, 0)——与
-    "成功 0 失败 0" 不可区分，因此只能前置试启动再退出，不能靠回调判定。
-    """
-    try:
-        import win32com.client
-    except Exception:
-        return False
-    try:
-        app = win32com.client.Dispatch(progid)
-    except Exception:
-        return False
-    try:
-        if hasattr(app, "Quit"):
-            app.Quit()
-    except Exception:
-        pass
-    return True
 
 
 def _has_pandoc() -> bool:
@@ -48,8 +25,6 @@ def _has_pandoc() -> bool:
 @pytest.fixture(scope="module")
 def pptx_file(tmp_path_factory):
     """用本机 PowerPoint 造一个真 pptx（仓库内无现成输入夹具）。"""
-    if not _com_available("PowerPoint.Application"):
-        pytest.skip("PowerPoint 不可用")
     path = tmp_path_factory.mktemp("ppt") / "sample.pptx"
     try:
         _build_pptx(str(path))
@@ -61,8 +36,6 @@ def pptx_file(tmp_path_factory):
 @pytest.fixture(scope="module")
 def doc_file(tmp_path_factory):
     """用本机 Word 造一个真 .doc（doc_to_docx 的唯一合法输入）。"""
-    if not _com_available("Word.Application"):
-        pytest.skip("Word 不可用")
     path = tmp_path_factory.mktemp("doc") / "sample.doc"
     try:
         _build_doc(str(path))
@@ -289,6 +262,10 @@ def test_libreoffice_converts_txt_to_pdf_when_installed(tmp_path):
 
 def test_three_in_one_pages_construct_with_live_signals(qapp):
     """三个薄子类构造期即 connect 三信号——任一引擎缺信号则整页崩。"""
+    # 全量跑此测前强制整轮 GC：前序文件遗留的 comtypes 悬挂代理若留到本测结束
+    # pytest-qt 的 _process_events() 泵里析构，会连环 RPC/AV 杀进程
+    # （全量 10/10 崩于本测体后，加本行后 3/3 绿；子集≤2 行从未复现）
+    gc.collect()
     from core.external_tools.manager import ExternalToolManager
     from ui.interfaces.office.office_convert_interface import (
         ExcelInterface,
