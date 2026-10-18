@@ -1,5 +1,8 @@
 @echo off
 chcp 65001 >nul
+
+REM 版本号来自仓库根 VERSION 文件（唯一来源，勿在此写死）
+set /p APP_VERSION=<"%~dp0..\VERSION"
 echo ==========================================
 echo Nuitka 极速开发编译 - 目录模式 (Standalone)
 echo ==========================================
@@ -23,8 +26,8 @@ nuitka ^
     --windows-console-mode=force ^
     --windows-icon-from-ico=assets/processed_icons/icon_transparent.ico ^
     --product-name="Office Toolkit (Dev)" ^
-    --file-version=1.0.0 ^
-    --product-version=1.0.0 ^
+    --file-version=%APP_VERSION% ^
+    --product-version=%APP_VERSION% ^
     --file-description="多功能办公工具箱 (开发版)" ^
     --enable-plugin=pyqt6 ^
     --include-qt-plugins=sensible,styles ^
@@ -41,6 +44,7 @@ nuitka ^
     --include-package=vtracer ^
     --include-data-dir=assets=assets ^
     --include-data-dir=config=config ^
+    --include-data-file=VERSION=VERSION ^
     --output-dir=dist/dev ^
     --output-filename=OfficeToolkit.exe ^
     --show-progress ^

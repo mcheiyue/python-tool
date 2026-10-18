@@ -1,9 +1,11 @@
 ; Office Toolkit 安装脚本
 ; 支持三种模式: 安装版、绿化版、便携版
-; 注意: 版本号应与 build_nuitka.bat 中的 APP_VERSION 保持一致
+; 版本号唯一来源：仓库根 VERSION 文件（ISPP 预处理期读取）
 
 #define MyAppName "Office Toolkit"
-#define MyAppVersion "1.0.0"
+#define VersionHandle FileOpen("..\VERSION")
+#define MyAppVersion Trim(FileRead(VersionHandle))
+#expr FileClose(VersionHandle)
 #define MyAppPublisher "OfficeToolkit Team"
 #define MyAppExeName "OfficeToolkit.exe"
 

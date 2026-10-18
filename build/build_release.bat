@@ -5,7 +5,8 @@ echo Office Toolkit 全渠道发布打包脚本
 echo ==========================================
 
 REM 版本号配置 (与 build_nuitka.bat 保持一致)
-set APP_VERSION=1.0.0
+REM 版本号来自仓库根 VERSION 文件（唯一来源，勿在此写死）
+set /p APP_VERSION=<"%~dp0..\VERSION"
 
 echo [INFO] 应用版本: %APP_VERSION%
 echo [INFO] 开始打包发布文件...

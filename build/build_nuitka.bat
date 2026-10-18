@@ -5,7 +5,8 @@ echo Nuitka 双重构建脚本
 echo ==========================================
 
 REM 版本号配置 (统一管理)
-set APP_VERSION=1.0.0
+REM 版本号来自仓库根 VERSION 文件（唯一来源，勿在此写死）
+set /p APP_VERSION=<"%~dp0..\VERSION"
 
 REM 定义公共参数 (避免重复)
 set COMMON_FLAGS=^
@@ -33,6 +34,7 @@ set COMMON_FLAGS=^
     --include-package=vtracer ^
     --include-data-dir=assets=assets ^
     --include-data-dir=config=config ^
+    --include-data-file=VERSION=VERSION ^
     --show-progress ^
     --show-memory ^
     --jobs=10

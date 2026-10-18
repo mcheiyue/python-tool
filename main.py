@@ -25,7 +25,8 @@ if __name__ == "__main__":
 
     # 设置 AppUserModelID，确保任务栏图标显示正确
     try:
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("OfficeToolkit.App.v1.0.0")
+        # AUMID 不带版本号：随版本变化会让任务栏固定项被系统当成另一个应用
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("OfficeToolkit.App")
     except Exception:
         pass
 

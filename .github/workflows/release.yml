@@ -30,14 +30,14 @@ jobs:
       - name: 安装 Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: 校验 tag 与 APP_VERSION 一致
+      - name: 校验 tag 与 VERSION 一致
         shell: bash
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          appver=$(grep -oE 'set APP_VERSION=[0-9][0-9.]*' build/build_nuitka.bat | head -1 | cut -d= -f2 | tr -d '\r')
-          echo "tag=$tag  APP_VERSION=$appver"
-          if [ -z "$appver" ] || [ "$tag" != "$appver" ]; then
-            echo "::error::git tag ($tag) 与 build_nuitka.bat 的 APP_VERSION ($appver) 不一致"
+          filever=$(tr -d '\r\n' < VERSION)
+          echo "tag=$tag  VERSION=$filever"
+          if [ -z "$filever" ] || [ "$tag" != "$filever" ]; then
+            echo "::error::git tag ($tag) 与 VERSION 文件 ($filever) 不一致"
             exit 1
           fi
 
