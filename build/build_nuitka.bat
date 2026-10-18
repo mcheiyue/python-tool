@@ -10,6 +10,7 @@ set APP_VERSION=1.0.0
 REM 定义公共参数 (避免重复)
 set COMMON_FLAGS=^
     --mingw64 ^
+    --assume-yes-for-downloads ^
     --windows-console-mode=disable ^
     --windows-icon-from-ico=assets/processed_icons/icon_transparent.ico ^
     --company-name="OfficeToolkit Team" ^

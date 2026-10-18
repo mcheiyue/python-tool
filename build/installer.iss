@@ -40,7 +40,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; 打包整个 standalone 目录（包含所有依赖）
 Source: "..\dist\standalone\main.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; 确保 plugins 目录存在并包含说明文件
-Source: "..\plugins\README.txt"; DestDir: "{app}\plugins"; Flags: ignoreversion
+Source: "..\plugins\README.txt"; DestDir: "{app}\plugins"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
