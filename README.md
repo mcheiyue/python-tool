@@ -5,6 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.4+-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![CI](https://github.com/mcheiyue/python-tool/actions/workflows/ci.yml/badge.svg)
 
 ---
 
