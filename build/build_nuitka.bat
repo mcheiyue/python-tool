@@ -37,7 +37,8 @@ set COMMON_FLAGS=^
     --include-data-file=VERSION=VERSION ^
     --show-progress ^
     --show-memory ^
-    --jobs=10
+    --low-memory ^
+    --jobs=3
 
 echo [INFO] 应用版本: %APP_VERSION%
 echo [INFO] 编译器: Nuitka with MinGW64

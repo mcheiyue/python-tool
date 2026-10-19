@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 180
+    timeout-minutes: 350
     env:
       PYTHONUTF8: "1"
     steps:
@@ -21,6 +21,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+
+      # 复用 Nuitka/scons 的编译中间产物：中途失败重跑时只需续编剩余文件
+      - uses: actions/cache@v4
+        with:
+          path: |
+            dist/standalone/main.build
+            dist/onefile/main.build
+          key: nuitka-${{ hashFiles('requirements.txt', 'main.py', 'core/**', 'ui/**', 'app/**', 'config/**') }}
 
       - name: 安装依赖（含 Nuitka）
         run: |
