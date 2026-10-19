@@ -42,6 +42,11 @@ set COMMON_FLAGS=^
     --include-data-file=VERSION=VERSION ^
     --nofollow-import-to=pymupdf.mupdf ^
     --include-module=pymupdf.mupdf ^
+    --include-module=pymupdf._mupdf ^
+    --include-package-data=pypinyin ^
+    --include-package-data=pptx ^
+    --include-package-data=fpdf ^
+    --include-package-data=docx ^
     --show-progress ^
     --show-memory ^
     --low-memory ^
