@@ -8,8 +8,13 @@ REM 版本号配置 (统一管理)
 REM 版本号来自仓库根 VERSION 文件（唯一来源，勿在此写死）
 set /p APP_VERSION=<"%~dp0..\VERSION"
 
+REM gcc 编译巨型生成文件时内存不足（cc1: out of memory），-O1 显著降低编译期峰值内存
+set CCFLAGS=-O1
+
 REM 定义公共参数 (避免重复)
 REM comtypes.gen 不纳入：应用全程 CreateObject(dynamic=True)，不生成/不读 typelib；该目录在干净机器上不存在，纳入会让构建 FATAL
+REM pymupdf.mupdf 不编译成 C：6 万行模块生成的 C 超 100MB，gcc cc1 必 OOM（Nuitka issue #3243）；
+REM 改为以字节码包含，运行时仍可正常 import
 set COMMON_FLAGS=^
     --mingw64 ^
     --assume-yes-for-downloads ^
@@ -35,6 +40,8 @@ set COMMON_FLAGS=^
     --include-data-dir=assets=assets ^
     --include-data-dir=config=config ^
     --include-data-file=VERSION=VERSION ^
+    --nofollow-import-to=pymupdf.mupdf ^
+    --include-module=pymupdf.mupdf ^
     --show-progress ^
     --show-memory ^
     --low-memory ^
