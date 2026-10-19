@@ -9,6 +9,7 @@ REM 版本号来自仓库根 VERSION 文件（唯一来源，勿在此写死）
 set /p APP_VERSION=<"%~dp0..\VERSION"
 
 REM 定义公共参数 (避免重复)
+REM comtypes.gen 不纳入：应用全程 CreateObject(dynamic=True)，不生成/不读 typelib；该目录在干净机器上不存在，纳入会让构建 FATAL
 set COMMON_FLAGS=^
     --mingw64 ^
     --assume-yes-for-downloads ^
@@ -25,7 +26,6 @@ set COMMON_FLAGS=^
     --include-package=PyQt6 ^
     --include-package=qfluentwidgets ^
     --include-package=comtypes ^
-    --include-package=comtypes.gen ^
     --include-package=core ^
     --include-package=ui ^
     --include-package=config ^

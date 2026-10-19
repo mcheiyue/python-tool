@@ -35,7 +35,6 @@ nuitka ^
     --include-package=PyQt6 ^
     --include-package=qfluentwidgets ^
     --include-package=comtypes ^
-    --include-package=comtypes.gen ^
     --include-package=core ^
     --include-package=ui ^
     --include-package=config ^
