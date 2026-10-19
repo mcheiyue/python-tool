@@ -38,6 +38,18 @@ jobs:
       - name: 安装 Inno Setup
         run: choco install innosetup --no-progress -y
 
+      # choco 的 Inno Setup 不带中文语言文件，installer.iss 引用它后 ISCC 会失败
+      - name: 补装 Inno 中文语言文件
+        shell: pwsh
+        run: |
+          $dir = "C:\Program Files (x86)\Inno Setup 6\Languages"
+          $lang = Join-Path $dir "ChineseSimplified.isl"
+          if (-not (Test-Path $lang)) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl" -OutFile $lang
+          }
+          Get-Item $lang | Select-Object FullName, Length
+
       - name: 校验 tag 与 VERSION 一致
         shell: bash
         run: |
@@ -57,6 +69,16 @@ jobs:
       - name: 打包（安装包 + 绿化 zip + 单文件）
         shell: cmd
         run: cmd /c "build\build_release.bat < NUL"
+
+      - name: 校验三个产物齐全
+        shell: pwsh
+        run: |
+          $missing = @()
+          foreach ($pat in @("OfficeToolkit_Setup_v*.exe","OfficeToolkit_Portable_v*.zip","OfficeToolkit_Single_v*.exe")) {
+            $f = Get-ChildItem "release\$pat" -ErrorAction SilentlyContinue
+            if ($f) { $f | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.Name } } else { $missing += $pat }
+          }
+          if ($missing.Count -gt 0) { Write-Error "缺少产物: $($missing -join ', ')"; exit 1 }
 
       - name: 发布到 GitHub Release
         shell: bash

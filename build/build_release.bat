@@ -51,8 +51,8 @@ set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if exist %ISCC% (
     echo [INFO] 正在编译安装包...
     %ISCC% build\installer.iss
-    if %errorlevel% neq 0 (
-        echo [ERROR] Inno Setup 编译失败！错误代码: %errorlevel%
+    if errorlevel 1 (
+        echo [ERROR] Inno Setup 编译失败（原因见上方输出）
         pause
         exit /b 1
     )
