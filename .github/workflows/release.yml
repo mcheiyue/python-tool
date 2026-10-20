@@ -70,6 +70,20 @@ jobs:
         shell: cmd
         run: cmd /c "build\build_release.bat < NUL"
 
+      # 只校验文件存在不够：v0.0.4/v0.0.5 产物齐全却启动即崩（缺包数据），
+      # 必须实跑一次确认能起来，否则照样会把坏包发出去
+      - name: 冒烟：打包产物必须能启动
+        shell: pwsh
+        run: |
+          $exe = "dist\standalone\main.dist\OfficeToolkit.exe"
+          if (-not (Test-Path $exe)) { Write-Error "找不到 standalone 产物: $exe"; exit 1 }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $out = (& $exe --benchmark 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { Write-Host $out; Write-Error "产物启动失败 exit=$code"; exit 1 }
+          if ($out -notmatch "BENCHMARK_STARTUP_TIME_MS") { Write-Host $out; Write-Error "产物未真正启动（无基准标记输出）"; exit 1 }
+          ($out -split "`n" | Select-String "BENCHMARK_STARTUP_TIME_MS") -join ""
+
       - name: 校验三个产物齐全
         shell: pwsh
         run: |
