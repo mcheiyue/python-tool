@@ -15,8 +15,11 @@ AppId={{A35B6F8C-7E4D-4F2A-9B3C-1D5E6F7A8B9C}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
+; 应用把 logs / config.json / libs 写在自身目录旁，必须落到用户可写位置：
+; lowest 让 {autopf} 解析为 {localappdata}\Programs，同时安装不再需要管理员
+PrivilegesRequired=lowest
 ; 输出目录
 OutputDir=..\release
 OutputBaseFilename=OfficeToolkit_Setup_v{#MyAppVersion}

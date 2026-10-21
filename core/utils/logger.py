@@ -1,8 +1,9 @@
 import logging
 import time
 from functools import wraps
-from pathlib import Path
 from datetime import datetime
+
+from core.utils.resource_path import get_log_dir
 
 class AppLogger:
     """应用程序日志管理器（单例模式）"""
@@ -16,9 +17,7 @@ class AppLogger:
     
     def _init_logger(self):
         """初始化日志系统"""
-        # 创建日志目录
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
+        log_dir = get_log_dir()
         
         # 日志文件按日期命名
         log_file = log_dir / f"app_{datetime.now().strftime('%Y%m%d')}.log"

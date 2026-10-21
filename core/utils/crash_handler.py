@@ -6,17 +6,14 @@ import logging
 from datetime import datetime
 from PyQt6.QtWidgets import QMessageBox, QApplication
 from PyQt6.QtCore import Qt
+from core.utils.resource_path import get_log_dir
 from core.utils.version import get_app_version
 
 class CrashHandler:
     def __init__(self, app_name="Office Toolkit", app_version=None):
         self.app_name = app_name
         self.app_version = app_version or get_app_version()
-        self.log_dir = os.path.join(os.getcwd(), "logs")
-        
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
-            
+        self.log_dir = str(get_log_dir())
         self.log_file = os.path.join(self.log_dir, "crash.log")
         
         # 配置 Logging

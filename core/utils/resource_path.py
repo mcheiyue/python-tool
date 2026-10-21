@@ -1,5 +1,7 @@
 import os
 import sys
+import tempfile
+from pathlib import Path
 
 def get_app_root():
     """
@@ -40,3 +42,20 @@ def get_resource_path(relative_path):
     else:
         # 开发环境：直接使用项目根目录
         return os.path.join(get_app_root(), relative_path)
+
+
+def get_log_dir():
+    """日志目录：优先当前目录下的 logs（便携形态）；只读环境回退到用户数据目录。
+
+    装到 Program Files 后从安装目录启动时，当前目录不可写，
+    原先直接 mkdir 会抛 PermissionError —— 异常发生在日志/崩溃处理器自身初始化阶段，
+    控制台又被禁用，表现为「双击后无任何反应」。
+    """
+    fallback_root = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    for candidate in (Path("logs"), Path(fallback_root) / "OfficeToolkit" / "logs"):
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except OSError:
+            continue
+    return Path(tempfile.gettempdir())
