@@ -25,8 +25,8 @@ PrivilegesRequiredOverridesAllowed=dialog
 ; 输出目录
 OutputDir=..\release
 OutputBaseFilename=OfficeToolkit_Setup_v{#MyAppVersion}
-; 压缩设置
-Compression=lzma2/ultra64
+; 压缩设置（ultra64 单线程极限压缩要磨十几分钟，normal 省时且体积差约一成）
+Compression=lzma2/normal
 SolidCompression=yes
 ; 图标
 SetupIconFile=..\assets\processed_icons\icon_transparent.ico

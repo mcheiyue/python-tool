@@ -28,7 +28,8 @@ jobs:
           path: |
             dist/standalone/main.build
             dist/onefile/main.build
-          key: nuitka-${{ hashFiles('requirements.txt', 'main.py', 'core/**', 'ui/**', 'app/**', 'config/**') }}
+          # key 只含依赖与构建脚本：改业务代码不应让依赖（PyQt6/PyMuPDF 占九成编译量）的缓存全部失效
+          key: nuitka-${{ hashFiles('requirements.txt', 'build/build_nuitka.bat') }}
 
       - name: 安装依赖（含 Nuitka）
         run: |
