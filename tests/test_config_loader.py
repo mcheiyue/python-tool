@@ -17,13 +17,13 @@ def _write(path, data):
 
 @pytest.fixture
 def config_env(tmp_path, monkeypatch):
-    """默认配置在 config_dir，用户配置在 get_app_root()（monkeypatch 到 tmp）"""
+    """默认配置在 config_dir，用户配置在 get_data_root()（monkeypatch 到 tmp）"""
     config_dir = tmp_path / "defaults"
     config_dir.mkdir()
     user_root = tmp_path / "user"
     user_root.mkdir()
 
-    monkeypatch.setattr(loader_module, "get_app_root", lambda: str(user_root))
+    monkeypatch.setattr(loader_module, "get_data_root", lambda: user_root)
     monkeypatch.setattr(
         loader_module, "get_resource_path", lambda rel: str(config_dir / rel.split("/")[-1])
     )

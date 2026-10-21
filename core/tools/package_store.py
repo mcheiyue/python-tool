@@ -39,8 +39,8 @@ class PackageStore:
         if not entry:
             return None
 
-        from core.utils.resource_path import get_app_root
-        stage = os.path.join(get_app_root(), "libs", ".temp", f"stage_{tool_name}.zip")
+        from core.utils.resource_path import get_data_root
+        stage = os.path.join(get_data_root(), "libs", ".temp", f"stage_{tool_name}.zip")
         os.makedirs(os.path.dirname(stage), exist_ok=True)
 
         # urls 为镜像列表逐个尝试，单源失败（传输/HTTP/hash）换下一个，全部失败才降级。
@@ -93,19 +93,19 @@ class PackageStore:
 
     def locate_zip(self, tool_name):
         """预置 zip（随安装包分发）：内部资源优先，外部 plugins 目录兜底。"""
-        from core.utils.resource_path import get_app_root, get_resource_path
+        from core.utils.resource_path import get_data_root, get_resource_path
         internal = get_resource_path(f"plugins/{tool_name}.zip")
         if os.path.exists(internal):
             return internal
-        external = os.path.join(get_app_root(), "plugins", f"{tool_name}.zip")
+        external = os.path.join(get_data_root(), "plugins", f"{tool_name}.zip")
         return external if os.path.exists(external) else None
 
     def read_manifest_entry(self, tool_name):
         """读 plugins/manifest.json 中该工具的条目；缺文件/缺条目返回 None。"""
-        from core.utils.resource_path import get_app_root, get_resource_path
+        from core.utils.resource_path import get_data_root, get_resource_path
         for candidate in (
             get_resource_path("plugins/manifest.json"),
-            os.path.join(get_app_root(), "plugins", "manifest.json"),
+            os.path.join(get_data_root(), "plugins", "manifest.json"),
         ):
             try:
                 with open(candidate, encoding="utf-8") as f:

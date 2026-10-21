@@ -39,8 +39,8 @@ class BundleLoader:
     def _clean_stale_temps(self):
         """清理上次未正常退出留下的临时目录"""
         try:
-            from core.utils.resource_path import get_app_root
-            temp_root = os.path.join(get_app_root(), "libs", ".temp")
+            from core.utils.resource_path import get_data_root
+            temp_root = os.path.join(get_data_root(), "libs", ".temp")
 
             if os.path.exists(temp_root):
                 # 如果其他实例正在运行且锁定了文件，删除会失败（Windows下），这是预期的安全行为
@@ -94,8 +94,8 @@ class BundleLoader:
         （pandoc-3.12.1/），不归一化的话持久模式会落到带版本号的目录，
         与发现链的 libs/<工具名>/ 布局不符，导致每次启动重复解压。
         """
-        from core.utils.resource_path import get_app_root
-        base = get_app_root()
+        from core.utils.resource_path import get_data_root
+        base = get_data_root()
 
         if persistent:
             target_base = os.path.join(base, "libs", subdir) if subdir \
@@ -131,8 +131,8 @@ class BundleLoader:
 
     def _temp_root(self) -> str:
         """libs/.temp 根目录（临时解压与下载暂存共用），不存在则创建。"""
-        from core.utils.resource_path import get_app_root
-        root = os.path.join(get_app_root(), "libs", ".temp")
+        from core.utils.resource_path import get_data_root
+        root = os.path.join(get_data_root(), "libs", ".temp")
         if not os.path.exists(root):
             os.makedirs(root, exist_ok=True)
         return root

@@ -15,11 +15,13 @@ AppId={{A35B6F8C-7E4D-4F2A-9B3C-1D5E6F7A8B9C}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={localappdata}\Programs\{#MyAppName}
+; 默认：全用户安装到 Program Files（需管理员）。安装界面可改用「仅为我安装」。
+; 应用的可写状态（logs/config.json/libs）走 get_data_root，装到只读目录时自动落到
+; %LOCALAPPDATA%\OfficeToolkit，所以两种模式都能正常写入。
+DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
-; 应用把 logs / config.json / libs 写在自身目录旁，必须落到用户可写位置：
-; lowest 让 {autopf} 解析为 {localappdata}\Programs，同时安装不再需要管理员
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog
 ; 输出目录
 OutputDir=..\release
 OutputBaseFilename=OfficeToolkit_Setup_v{#MyAppVersion}

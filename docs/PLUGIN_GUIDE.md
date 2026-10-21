@@ -18,6 +18,9 @@
 libs/<tool>/exe  →  plugins/<tool>.zip  →  manifest 下载解压  →  PATH  →  系统路径
 ```
 
+上表中的 `libs/` 与 `plugins/` 指**可写数据目录**：绿色版/单文件版就是程序所在目录；
+安装版（装到 Program Files 或 `%LOCALAPPDATA%\Programs`）是 `%LOCALAPPDATA%\OfficeToolkit\`。
+
 ## 维护 Manifest（维护者/贡献者）
 
 新增或更新一个外部工具只需三步：

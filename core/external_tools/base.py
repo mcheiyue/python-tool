@@ -315,6 +315,6 @@ class ExternalTool(ABC):
 
     @staticmethod
     def get_libs_path() -> str:
-        """获取便携 libs 目录路径"""
-        from core.utils.resource_path import get_app_root
-        return os.path.join(get_app_root(), "libs")
+        """获取便携 libs 目录路径（必须可写，见 get_data_root）"""
+        from core.utils.resource_path import get_data_root
+        return os.path.join(get_data_root(), "libs")

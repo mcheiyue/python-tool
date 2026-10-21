@@ -44,18 +44,34 @@ def get_resource_path(relative_path):
         return os.path.join(get_app_root(), relative_path)
 
 
-def get_log_dir():
-    """日志目录：优先当前目录下的 logs（便携形态）；只读环境回退到用户数据目录。
+def get_data_root() -> Path:
+    """可写数据根目录（logs / config.json / libs 都放这里）。
 
-    装到 Program Files 后从安装目录启动时，当前目录不可写，
-    原先直接 mkdir 会抛 PermissionError —— 异常发生在日志/崩溃处理器自身初始化阶段，
-    控制台又被禁用，表现为「双击后无任何反应」。
+    程序目录可写则用它（源码运行、Portable、单文件版：数据跟着程序走）；
+    装到 Program Files 时程序目录只读，回退到 %LOCALAPPDATA%\\OfficeToolkit，
+    否则日志初始化会抛 PermissionError（控制台已禁用 → 表现为双击无反应），
+    配置保存与外部工具下载也会失败。
     """
-    fallback_root = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    for candidate in (Path("logs"), Path(fallback_root) / "OfficeToolkit" / "logs"):
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            return candidate
-        except OSError:
-            continue
-    return Path(tempfile.gettempdir())
+    root = Path(get_app_root())
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        probe = root / "logs"
+        probe.mkdir(parents=True, exist_ok=True)
+        return root
+    except OSError:
+        pass
+    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    fallback = Path(base) / "OfficeToolkit"
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+def get_log_dir() -> Path:
+    """日志目录：始终位于可写数据根目录下。
+
+    注意不能依赖当前工作目录——快捷方式启动的 CWD 可能是任何位置
+    （装到 Program Files 时就是只读的安装目录）。
+    """
+    log_dir = get_data_root() / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir

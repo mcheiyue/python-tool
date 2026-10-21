@@ -72,23 +72,21 @@ jobs:
 
       # 只校验文件存在不够：v0.0.4/v0.0.5 产物齐全却启动即崩（缺包数据），
       # 必须实跑一次确认能起来，否则照样会把坏包发出去
-      - name: 冒烟：打包产物必须能启动（含只读工作目录）
+      - name: 冒烟：打包产物必须能启动（可写 + 只读程序目录）
         shell: pwsh
         run: |
-          $exe = (Resolve-Path "dist\standalone\main.dist\OfficeToolkit.exe").Path
+          $src = "dist\standalone\main.dist"
           $env:QT_QPA_PLATFORM = "offscreen"
-          # 只读 CWD：模拟装到 Program Files 后从安装目录启动（应用会把 logs 写在 CWD）
-          $ro = Join-Path $env:RUNNER_TEMP "ro_cwd"
-          New-Item -ItemType Directory -Force -Path $ro | Out-Null
+          # 只读程序目录：模拟装到 Program Files（可写状态必须回退到 %LOCALAPPDATA%）
+          $ro = Join-Path $env:RUNNER_TEMP "ro_app"
+          Copy-Item $src $ro -Recurse -Force
           icacls $ro /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)(RX)" | Out-Null
-          foreach ($wd in @((Get-Location).Path, $ro)) {
-            Push-Location $wd
-            $out = (& $exe --benchmark 2>&1 | Out-String)
+          foreach ($dir in @((Resolve-Path $src).Path, $ro)) {
+            $out = (& (Join-Path $dir "OfficeToolkit.exe") --benchmark 2>&1 | Out-String)
             $code = $LASTEXITCODE
-            Pop-Location
-            if ($code -ne 0) { Write-Host $out; Write-Error "CWD=$wd 下启动失败 exit=$code"; exit 1 }
-            if ($out -notmatch "BENCHMARK_STARTUP_TIME_MS") { Write-Host $out; Write-Error "CWD=$wd 下未真正启动"; exit 1 }
-            Write-Host "$wd -> $(($out -split "`n" | Select-String 'BENCHMARK_STARTUP_TIME_MS') -join '')"
+            if ($code -ne 0) { Write-Host $out; Write-Error "$dir 启动失败 exit=$code"; exit 1 }
+            if ($out -notmatch "BENCHMARK_STARTUP_TIME_MS") { Write-Host $out; Write-Error "$dir 未真正启动"; exit 1 }
+            Write-Host "$dir -> $(($out -split "`n" | Select-String 'BENCHMARK_STARTUP_TIME_MS') -join '')"
           }
 
       - name: 校验三个产物齐全
