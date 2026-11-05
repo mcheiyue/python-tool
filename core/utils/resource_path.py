@@ -44,6 +44,22 @@ def get_resource_path(relative_path):
         return os.path.join(get_app_root(), relative_path)
 
 
+def _is_writable(directory: Path) -> bool:
+    """真实写一个探针文件判断可写。
+
+    不能用 mkdir 判断：目录已存在时 mkdir(exist_ok=True) 是空操作，
+    在只读目录里也会“成功”，随后写日志才抛 PermissionError。
+    """
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        probe = directory / f".write_probe_{os.getpid()}"
+        probe.write_bytes(b"")
+        probe.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def get_data_root() -> Path:
     """可写数据根目录（logs / config.json / libs 都放这里）。
 
@@ -53,17 +69,13 @@ def get_data_root() -> Path:
     配置保存与外部工具下载也会失败。
     """
     root = Path(get_app_root())
-    try:
-        root.mkdir(parents=True, exist_ok=True)
-        probe = root / "logs"
-        probe.mkdir(parents=True, exist_ok=True)
+    if _is_writable(root):
         return root
-    except OSError:
-        pass
     base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
     fallback = Path(base) / "OfficeToolkit"
-    fallback.mkdir(parents=True, exist_ok=True)
-    return fallback
+    if _is_writable(fallback):
+        return fallback
+    return Path(tempfile.gettempdir())
 
 
 def get_log_dir() -> Path:
