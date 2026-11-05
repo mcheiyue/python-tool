@@ -52,6 +52,45 @@ def test_data_root_falls_back_when_dir_exists_but_unwritable(monkeypatch, tmp_pa
     assert resource_path.get_data_root() == local_appdata / "OfficeToolkit"
 
 
+def test_log_dir_falls_back_when_logs_dir_exists_but_unwritable(monkeypatch, tmp_path):
+    """程序目录里的 logs 已存在但不可写时，日志目录要换到用户数据目录。"""
+    fake_app = tmp_path / "ExistingApp"
+    (fake_app / "logs").mkdir(parents=True)
+    local_appdata = tmp_path / "LocalAppData"
+    monkeypatch.setattr(resource_path, "get_app_root", lambda: str(fake_app))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
+
+    real_write = pathlib.Path.write_bytes
+
+    def deny(self, data):
+        if str(self).startswith(str(fake_app)):
+            raise PermissionError(13, "denied", str(self))
+        return real_write(self, data)
+
+    monkeypatch.setattr(pathlib.Path, "write_bytes", deny)
+
+    assert resource_path.get_log_dir() == local_appdata / "OfficeToolkit" / "logs"
+
+
+def test_logger_degrades_instead_of_crashing_when_log_file_unwritable(monkeypatch, tmp_path):
+    """日志文件打不开时只能降级，不能让进程在启动阶段就死掉。"""
+    import logging
+
+    from core.utils import logger as logger_module
+
+    monkeypatch.setattr(logger_module, "get_log_dir", lambda: tmp_path / "logs")
+
+    def deny(*args, **kwargs):
+        raise PermissionError(13, "denied", str(tmp_path / "logs"))
+
+    monkeypatch.setattr(logging, "FileHandler", deny)
+    monkeypatch.setattr(logger_module.AppLogger, "_instance", None)
+    try:
+        logger_module.AppLogger()
+    finally:
+        logger_module.AppLogger._instance = None
+
+
 def test_data_root_stays_next_to_app_when_writable(monkeypatch, tmp_path):
     """便携/源码运行时数据跟着程序走，不污染用户数据目录。"""
     fake_app = tmp_path / "PortableApp"

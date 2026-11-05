@@ -67,10 +67,13 @@ class CrashHandler:
         error_msg += f"\n堆栈跟踪 (Traceback):\n{tb_text}"
         error_msg += f"{'='*50}\n"
         
-        # 写入日志
+        # 写入日志（写不进去也不能让崩溃处理本身再抛异常，否则弹窗都出不来）
         print(error_msg, file=sys.stderr) # 同时也输出到控制台
-        with open(self.log_file, "a", encoding="utf-8") as f:
-            f.write(error_msg)
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(error_msg)
+        except OSError:
+            pass
             
         # 显示错误弹窗
         self.show_crash_dialog(exc_type.__name__, str(exc_value), tb_text)

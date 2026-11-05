@@ -28,8 +28,11 @@ class AppLogger:
         
         # 避免重复添加 handler
         if not self.logger.handlers:
-            # 文件处理器
-            fh = logging.FileHandler(log_file, encoding='utf-8')
+            # 文件处理器：拿不到可写位置也不能让启动失败（控制台已禁用，否则表现为双击无反应）
+            try:
+                fh = logging.FileHandler(log_file, encoding='utf-8')
+            except OSError:
+                fh = logging.NullHandler()
             fh.setLevel(logging.DEBUG)
             
             # 格式化器

@@ -44,6 +44,11 @@ def get_resource_path(relative_path):
         return os.path.join(get_app_root(), relative_path)
 
 
+def _user_data_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    return Path(base) / "OfficeToolkit"
+
+
 def _is_writable(directory: Path) -> bool:
     """真实写一个探针文件判断可写。
 
@@ -61,20 +66,27 @@ def _is_writable(directory: Path) -> bool:
 
 
 def get_data_root() -> Path:
-    """可写数据根目录（logs / config.json / libs 都放这里）。
+    """可写数据根目录（config.json / libs 等放这里）。
 
     程序目录可写则用它（源码运行、Portable、单文件版：数据跟着程序走）；
-    装到 Program Files 时程序目录只读，回退到 %LOCALAPPDATA%\\OfficeToolkit，
-    否则日志初始化会抛 PermissionError（控制台已禁用 → 表现为双击无反应），
-    配置保存与外部工具下载也会失败。
+    装到 Program Files 时程序目录只读，回退到 %LOCALAPPDATA%\\OfficeToolkit。
     """
-    root = Path(get_app_root())
-    if _is_writable(root):
-        return root
-    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    fallback = Path(base) / "OfficeToolkit"
-    if _is_writable(fallback):
-        return fallback
+    for base in (Path(get_app_root()), _user_data_dir()):
+        if _is_writable(base):
+            return base
+    return Path(tempfile.gettempdir())
+
+
+def get_log_dir() -> Path:
+    """日志目录：候选按「程序目录 → 用户数据目录 → 系统临时目录」逐个真实试写。
+
+    日志目录拿不到可写位置时绝不能抛异常——日志/崩溃处理器的初始化一旦失败，
+    控制台又是禁用的，用户看到的就是「双击后毫无反应」。
+    """
+    for base in (Path(get_app_root()), _user_data_dir()):
+        logs = base / "logs"
+        if _is_writable(logs):
+            return logs
     return Path(tempfile.gettempdir())
 
 
