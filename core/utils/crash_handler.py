@@ -16,12 +16,15 @@ class CrashHandler:
         self.log_dir = str(get_log_dir())
         self.log_file = os.path.join(self.log_dir, "crash.log")
         
-        # 配置 Logging
-        logging.basicConfig(
-            filename=self.log_file,
-            level=logging.ERROR,
-            format='%(asctime)s - %(levelname)s - %(message)s'
-        )
+        # 配置 Logging（文件打不开不能影响启动）
+        try:
+            logging.basicConfig(
+                filename=self.log_file,
+                level=logging.ERROR,
+                format='%(asctime)s - %(levelname)s - %(message)s'
+            )
+        except OSError:
+            logging.basicConfig(level=logging.ERROR)
 
     def install(self):
         """安装全局异常钩子"""

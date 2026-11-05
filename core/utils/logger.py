@@ -1,9 +1,11 @@
 import logging
+import tempfile
 import time
 from functools import wraps
 from datetime import datetime
+from pathlib import Path
 
-from core.utils.resource_path import get_log_dir
+from core.utils.resource_path import get_log_dir, get_user_data_dir
 
 class AppLogger:
     """应用程序日志管理器（单例模式）"""
@@ -15,12 +17,25 @@ class AppLogger:
             cls._instance._init_logger()
         return cls._instance
     
+    @staticmethod
+    def _open_handler(log_name):
+        """依次尝试 日志目录 → 用户数据目录 → 临时目录，全部失败才用空处理器。"""
+        candidates = (
+            get_log_dir(),
+            get_user_data_dir() / "logs",
+            Path(tempfile.gettempdir()) / "OfficeToolkit" / "logs",
+        )
+        for directory in candidates:
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                return logging.FileHandler(directory / log_name, encoding='utf-8')
+            except OSError:
+                continue
+        return logging.NullHandler()
+
     def _init_logger(self):
         """初始化日志系统"""
-        log_dir = get_log_dir()
-        
-        # 日志文件按日期命名
-        log_file = log_dir / f"app_{datetime.now().strftime('%Y%m%d')}.log"
+        log_name = f"app_{datetime.now().strftime('%Y%m%d')}.log"
         
         # 创建 logger
         self.logger = logging.getLogger("OfficeToolkit")
@@ -28,11 +43,8 @@ class AppLogger:
         
         # 避免重复添加 handler
         if not self.logger.handlers:
-            # 文件处理器：拿不到可写位置也不能让启动失败（控制台已禁用，否则表现为双击无反应）
-            try:
-                fh = logging.FileHandler(log_file, encoding='utf-8')
-            except OSError:
-                fh = logging.NullHandler()
+            # 文件处理器：打不开也只能降级，不能让启动失败（控制台已禁用，否则表现为双击无反应）
+            fh = self._open_handler(log_name)
             fh.setLevel(logging.DEBUG)
             
             # 格式化器

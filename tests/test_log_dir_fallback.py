@@ -91,6 +91,23 @@ def test_logger_degrades_instead_of_crashing_when_log_file_unwritable(monkeypatc
         logger_module.AppLogger._instance = None
 
 
+def test_crash_handler_survives_unwritable_log_file(monkeypatch, tmp_path):
+    """崩溃处理器的日志文件打不开时也不能抛异常，否则连崩溃弹窗都出不来。"""
+    import logging
+
+    from core.utils import crash_handler as crash_module
+
+    monkeypatch.setattr(crash_module, "get_log_dir", lambda: tmp_path / "logs")
+
+    def deny(*args, **kwargs):
+        if args or kwargs.get("filename"):
+            raise PermissionError(13, "denied", str(kwargs.get("filename")))
+
+    monkeypatch.setattr(logging, "basicConfig", deny)
+
+    crash_module.CrashHandler()
+
+
 def test_data_root_stays_next_to_app_when_writable(monkeypatch, tmp_path):
     """便携/源码运行时数据跟着程序走，不污染用户数据目录。"""
     fake_app = tmp_path / "PortableApp"

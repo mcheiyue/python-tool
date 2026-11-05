@@ -44,7 +44,7 @@ def get_resource_path(relative_path):
         return os.path.join(get_app_root(), relative_path)
 
 
-def _user_data_dir() -> Path:
+def get_user_data_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
     return Path(base) / "OfficeToolkit"
 
@@ -71,7 +71,7 @@ def get_data_root() -> Path:
     程序目录可写则用它（源码运行、Portable、单文件版：数据跟着程序走）；
     装到 Program Files 时程序目录只读，回退到 %LOCALAPPDATA%\\OfficeToolkit。
     """
-    for base in (Path(get_app_root()), _user_data_dir()):
+    for base in (Path(get_app_root()), get_user_data_dir()):
         if _is_writable(base):
             return base
     return Path(tempfile.gettempdir())
@@ -83,7 +83,7 @@ def get_log_dir() -> Path:
     日志目录拿不到可写位置时绝不能抛异常——日志/崩溃处理器的初始化一旦失败，
     控制台又是禁用的，用户看到的就是「双击后毫无反应」。
     """
-    for base in (Path(get_app_root()), _user_data_dir()):
+    for base in (Path(get_app_root()), get_user_data_dir()):
         logs = base / "logs"
         if _is_writable(logs):
             return logs
