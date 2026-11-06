@@ -119,3 +119,49 @@ def test_data_root_stays_next_to_app_when_writable(monkeypatch, tmp_path):
     assert resource_path.get_data_root() == fake_app
     assert not local_appdata.exists()
 
+
+def test_log_dir_falls_back_when_logs_is_a_file(monkeypatch, tmp_path):
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "logs").write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(resource_path, "get_app_root", lambda: str(app))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "user"))
+
+    directory = resource_path.get_log_dir()
+
+    assert directory == tmp_path / "user" / "OfficeToolkit" / "logs"
+    assert (app / "logs").read_text(encoding="utf-8") == "keep"
+
+
+def test_nuitka_onefile_separates_external_data_and_internal_resources(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    executable_dir = tmp_path / "portable"
+    extracted_dir = tmp_path / "unpacked"
+    monkeypatch.setattr(
+        resource_path, "__compiled__",
+        SimpleNamespace(containing_dir=str(executable_dir)), raising=False,
+    )
+    monkeypatch.setattr(
+        resource_path, "__file__", str(extracted_dir / "core" / "utils" / "resource_path.py"),
+    )
+
+    assert resource_path.get_app_root() == str(executable_dir)
+    assert resource_path.get_resource_path("VERSION") == str(extracted_dir / "VERSION")
+
+
+def test_logger_uses_user_directory_when_primary_resolution_fails(monkeypatch, tmp_path):
+    import logging
+    from contextlib import closing
+    from core.utils import logger as logger_module
+
+    def denied():
+        raise PermissionError("primary directory denied")
+
+    monkeypatch.setattr(logger_module, "get_log_dir", denied)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    with closing(logger_module.AppLogger._open_handler("fallback.log")) as handler:
+        handler.handle(logging.LogRecord("audit", logging.INFO, "", 0, "kept", (), None))
+
+    assert (tmp_path / "OfficeToolkit" / "logs" / "fallback.log").read_text(encoding="utf-8").strip() == "kept"

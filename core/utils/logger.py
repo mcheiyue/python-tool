@@ -21,12 +21,13 @@ class AppLogger:
     def _open_handler(log_name):
         """依次尝试 日志目录 → 用户数据目录 → 临时目录，全部失败才用空处理器。"""
         candidates = (
-            get_log_dir(),
-            get_user_data_dir() / "logs",
-            Path(tempfile.gettempdir()) / "OfficeToolkit" / "logs",
+            get_log_dir,
+            lambda: get_user_data_dir() / "logs",
+            lambda: Path(tempfile.gettempdir()) / "OfficeToolkit" / "logs",
         )
-        for directory in candidates:
+        for get_directory in candidates:
             try:
+                directory = get_directory()
                 directory.mkdir(parents=True, exist_ok=True)
                 return logging.FileHandler(directory / log_name, encoding='utf-8')
             except OSError:
