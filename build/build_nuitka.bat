@@ -41,6 +41,7 @@ set COMMON_FLAGS=^
     --include-data-dir=assets=assets ^
     --include-data-dir=config=config ^
     --include-data-file=VERSION=VERSION ^
+    --include-data-file=plugins/manifest.json=plugins/manifest.json ^
     --nofollow-import-to=pymupdf.mupdf ^
     --include-module=pymupdf.mupdf ^
     --include-module=pymupdf._mupdf ^
@@ -115,7 +116,6 @@ echo [INFO] 开始编译 (首次: 15-30分钟 / 增量: 5-10分钟)...
 echo [INFO] onefile 模式会先生成 standalone 再打包成单文件
 call nuitka %COMMON_FLAGS% ^
     --onefile ^
-    --include-data-dir=plugins=plugins ^
     --output-dir=dist\onefile ^
     --output-filename=OfficeToolkit_Single.exe ^
     main.py || goto ERROR
