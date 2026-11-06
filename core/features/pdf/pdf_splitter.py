@@ -38,6 +38,7 @@ class PDFSplitter:
 
             base_name = os.path.splitext(os.path.basename(file_path))[0]
             
+            produced = 0
             for i, (start, end) in enumerate(ranges):
                 writer = PdfWriter()
                 
@@ -58,9 +59,13 @@ class PDFSplitter:
                     writer.write(f_out)
                 
                 log(f"✅ 已生成: {output_filename} ({len(target_pages)} 页)")
+                produced += 1
                 progress(i + 1, len(ranges), f"正在导出第 {i+1} 部分...")
 
-            finished(True, "拆分完成")
+            if produced == 0:
+                finished(False, f"没有可拆分的页面（文件共 {total_pages} 页，范围 {ranges_text}）")
+                return
+            finished(True, f"拆分完成，共生成 {produced} 个文件")
 
         except Exception as e:
             error_trace = traceback.format_exc()

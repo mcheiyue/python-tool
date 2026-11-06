@@ -12,13 +12,23 @@ def normalize_markdown(text: str) -> str:
     
     # 标题正则：匹配以1-6个#开头，且紧接着非空白字符的行
     header_pattern = re.compile(r'^(#{1,6})([^\s#])')
-    
+    fence_pattern = re.compile(r'^\s{0,3}(`{3,}|~{3,})')
+    fence = None
+
     for line in lines:
-        # 修复标题格式: #标题 -> # 标题
-        # 只有当行首是标题标记且后面没有空格时才处理
-        match = header_pattern.match(line)
+        marker = fence_pattern.match(line)
+        if marker:
+            symbol = marker.group(1)[0]
+            if fence is None:
+                fence = symbol
+            elif fence == symbol:
+                fence = None
+            result.append(line)
+            continue
+
+        # 代码块内的 # 是代码（如 shebang、注释），不能按标题改写
+        match = header_pattern.match(line) if fence is None else None
         if match:
-            # 在#和内容之间插入空格
             line = f"{match.group(1)} {line[len(match.group(1)):]}"
             
         result.append(line)

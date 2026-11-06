@@ -11,12 +11,12 @@ class MathJaxPlugin(PluginBase):
     priority = 10
 
     def check_availability(self) -> Dict[str, Any]:
-        # 这是一个 Web 资源插件，假定总是可用（依赖网络）
+        # 预览用的是 QTextBrowser，不执行脚本；注入 CDN 代码不会产生任何渲染效果
         return {
-            "available": True,
-            "path": "CDN",
+            "available": False,
+            "path": None,
             "version": self.version,
-            "message": "使用 jsDelivr CDN"
+            "message": "预览控件不支持 JavaScript，公式无法渲染"
         }
     
     def get_header_code(self) -> str:

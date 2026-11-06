@@ -76,7 +76,8 @@ class TestPDFSplitterCharacterization:
             on_finished=lambda ok, msg: events.append((ok, msg)),
         )
 
-        assert events == [(True, "拆分完成")]
+        assert events[0][0] is True
+        assert "拆分完成" in events[0][1]
         parts = list(tmp_path.glob("doc_part*"))
         assert sorted(p.name for p in parts) == ["doc_part1_1-2.pdf", "doc_part2_4-4.pdf"]
         counts = {p.name: len(PdfReader(str(p)).pages) for p in parts}
@@ -95,6 +96,19 @@ class TestPDFSplitterCharacterization:
         )
 
         assert events == [(False, "无效的页码范围")]
+
+    def test_split_out_of_range_produces_nothing_and_fails(self, tmp_path):
+        src = tmp_path / "doc.pdf"
+        _make_pdf(str(src), 1)
+
+        events = []
+        PDFSplitter().split(
+            str(src), "99", str(tmp_path),
+            on_finished=lambda ok, msg: events.append((ok, msg)),
+        )
+
+        assert events[0][0] is False, f"零产出不能算成功：{events}"
+        assert not list(tmp_path.glob("doc_part*"))
 
     def test_parse_ranges_variants(self):
         splitter = PDFSplitter()

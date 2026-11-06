@@ -125,11 +125,15 @@ class ImageToPdfConverter:
                 except Exception as e:
                     log(f"转换 {os.path.basename(path)} 失败: {str(e)}")
 
-            if success_count > 0:
+            fail_count = len(image_paths) - success_count
+            if success_count == 0:
+                finished(False, f"所有文件转换失败（共 {len(image_paths)} 个）")
+            elif fail_count > 0:
+                log(f"完成转换: 成功 {success_count}/{len(image_paths)}")
+                finished(False, f"成功 {success_count} 个，失败 {fail_count} 个")
+            else:
                 log(f"完成转换: 成功 {success_count}/{len(image_paths)}")
                 finished(True, f"成功转换 {success_count} 个文件")
-            else:
-                finished(False, "所有文件转换失败")
 
         except Exception as e:
             raise e

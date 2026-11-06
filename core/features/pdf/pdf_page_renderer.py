@@ -302,7 +302,9 @@ class PDFPageRenderer:
                         if output_format in ['jpg', 'jpeg']:
                             pix.save(output_path, output='jpeg', jpg_quality=95)
                         elif output_format == 'webp':
-                             pix.save(output_path)
+                            from PIL import Image
+                            image = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                            image.save(output_path, "WEBP")
                         else:
                             pix.save(output_path)
                         success = True
