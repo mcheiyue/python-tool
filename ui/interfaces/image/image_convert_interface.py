@@ -19,7 +19,7 @@ class ConvertTaskSignals(QObject):
 class ConvertTask(QRunnable):
     """单个转换任务"""
     
-    def __init__(self, converter, input_path, output_path, target_format, quality, rotate_angle, flip_mode):
+    def __init__(self, converter, input_path, output_path, target_format, quality, rotate_angle, flip_mode, should_cancel=None):
         super().__init__()
         self.converter = converter
         self.input_path = input_path
@@ -28,10 +28,14 @@ class ConvertTask(QRunnable):
         self.quality = quality
         self.rotate_angle = rotate_angle
         self.flip_mode = flip_mode
+        self.should_cancel = should_cancel
         self.signals = ConvertTaskSignals()
     
     def run(self):
         try:
+            if self.should_cancel and self.should_cancel():
+                self.signals.finished.emit(self.input_path, None, "")
+                return
             outcome = {"success": False}
 
             def on_finished(ok, msg):
@@ -183,8 +187,8 @@ class ImageConvertInterface(QWidget):
             self._is_cancelling = True
             self.log_text.append("\n用户请求取消任务...")
             self.log_text.append("正在等待当前任务完成...")
-            # 清空线程池队列中未执行的任务
-            self.thread_pool.clear()
+            # 不清空线程池队列：被清掉的任务不会回调，计数永远到不了总数。
+            # 排队任务在 run() 开头自行跳过并回报，取消才能真正收口。
 
     def _get_all_paths(self) -> list:
         """从列表控件获取所有文件路径"""
@@ -251,6 +255,7 @@ class ImageConvertInterface(QWidget):
         self.finished_count = 0
         self.success_count = 0
         self.error_count = 0
+        self.cancelled_count = 0
         self._is_cancelling = False  # 重置取消标志
         
         self.progress.start(self.total)
@@ -267,7 +272,8 @@ class ImageConvertInterface(QWidget):
             # 创建任务
             task = ConvertTask(
                 self.converter, input_path, output_path,
-                target_format, quality, rotate_angle, flip_mode
+                target_format, quality, rotate_angle, flip_mode,
+                should_cancel=lambda: self._is_cancelling,
             )
             task.signals.finished.connect(self.on_task_finished)
             task.signals.error.connect(self.on_task_error)
@@ -277,6 +283,11 @@ class ImageConvertInterface(QWidget):
 
     def on_task_finished(self, input_path, success, message):
         self.finished_count += 1
+
+        if success is None:
+            self.cancelled_count += 1
+            self._check_all_done()
+            return
         
         if not self._is_cancelling:
             self.progress.update_progress(self.finished_count, self.total, f"正在转换: {os.path.basename(input_path)}")
@@ -309,10 +320,9 @@ class ImageConvertInterface(QWidget):
             
             # 检查是否被取消
             if self._is_cancelling:
-                cancelled_count = self.total - self.finished_count
-                self.log_text.append(f"\n任务已取消: 已完成 {self.finished_count}/{self.total}, 成功 {self.success_count}, 失败 {self.error_count}")
+                self.log_text.append(f"\n任务已取消: 已完成 {self.finished_count - self.cancelled_count}/{self.total - self.cancelled_count}, 成功 {self.success_count}, 失败 {self.error_count}")
                 self.progress.set_complete(success=False)
-                InfoBar.warning("已取消", f"任务已取消，已处理 {self.finished_count} 个文件", duration=5000, parent=self)
+                InfoBar.warning("已取消", f"任务已取消，已处理 {self.finished_count - self.cancelled_count} 个文件", duration=5000, parent=self)
                 self._is_cancelling = False
             else:
                 self.log_text.append(f"\n任务完成: 成功 {self.success_count}, 失败 {self.error_count}")

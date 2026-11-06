@@ -3,13 +3,13 @@ from PIL import Image
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
                             QFileDialog, QLabel, QScrollArea, QFrame)
 from PyQt6.QtGui import QFont, QAction, QKeySequence, QPixmap, QImage
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThreadPool
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, 
                             PushButton, PrimaryPushButton, TextEdit, InfoBar, 
                             FluentIcon as FIF, ImageLabel)
 
 from core.features.image.gemini_watermark_remover import GeminiWatermarkRemover
-from ui.threads import WorkerThread
+from ui.threads import PoolTask
 from ui.widgets import DragDropListWidget
 
 class WatermarkRemoveInterface(QWidget):
@@ -125,7 +125,8 @@ class WatermarkRemoveInterface(QWidget):
         
         # 初始化状态
         self.files = []
-        self.threads = []
+        self.pool = QThreadPool(self)
+        self.pool.setMaxThreadCount(2)
         
         # 连接信号
         self._log_bridged.connect(self.log_text.append)
@@ -205,15 +206,15 @@ class WatermarkRemoveInterface(QWidget):
         self.log_text.append("开始处理任务...")
         
         for path in self.files:
-            # 使用 QThread 避免阻塞 UI
-            thread = WorkerThread(
-                self.remover.process_image, path,
-                on_log=self._log_bridged.emit,
-                on_finished=self._finished_bridged.emit,
+            task_kwargs = {
+                "on_log": self._log_bridged.emit,
+                "on_finished": self._finished_bridged.emit,
+            }
+            task = PoolTask(
+                self.remover.process_image, (path,), task_kwargs,
+                on_error=lambda msg: self.on_one_finished(False, msg),
             )
-            thread.error.connect(lambda msg: self.on_one_finished(False, msg))
-            thread.start()
-            self.threads.append(thread) # 防止垃圾回收
+            self.pool.start(task)
 
     def on_one_finished(self, success, result):
         self.finished_count += 1
@@ -227,4 +228,3 @@ class WatermarkRemoveInterface(QWidget):
             fail = self.total_count - self.success_count
             if fail > 0: InfoBar.warning(title="处理完成", content=f"成功 {self.success_count}, 失败 {fail}", duration=3000, parent=self)
             else: InfoBar.success(title="处理完成", content=f"成功处理 {self.total_count} 个图片", duration=3000, parent=self)
-            self.threads.clear()

@@ -9,7 +9,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
 from core.engines.pdf.ghostscript import GhostscriptCompressor
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 from ui.design_system import Margins, Spacing
 
 class PDFCompressInterface(QWidget):
@@ -201,7 +201,7 @@ class PDFCompressInterface(QWidget):
     def check_state(self):
         has_files = len(self.files) > 0
         has_gs = self.gs_tool and self.gs_tool.is_available()
-        self.start_btn.setEnabled(has_files and has_gs)
+        self.start_btn.setEnabled(not is_busy(self) and has_files and has_gs)
 
     def append_log(self, text):
         self.log_text.append(text)

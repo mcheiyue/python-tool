@@ -241,21 +241,23 @@ def test_image_vector_counts_failures_and_reports(qapp, monkeypatch):
     page.deleteLater()
 
 
-def test_image_vector_wires_converter_result_callback(qapp):
-    """接线检查：converter 的 (ok, msg) 必须到界面；thread.finished 载荷是 None。"""
-    import inspect
+def test_image_vector_wires_converter_result_callback(qapp, qtbot, tmp_path):
+    """converter 的 (ok, msg) 必须真正到达界面计数，而不是等线程返回值。"""
+    module = importlib.import_module("ui.interfaces.image.image_vector_interface")
+    page = module.ImageVectorInterface()
+    qtbot.addWidget(page)
+    svg = tmp_path / "a.svg"
 
-    src = inspect.getsource(
-        importlib.import_module(
-            "ui.interfaces.image.image_vector_interface"
-        ).ImageVectorInterface.start_conversion
-    )
-    assert "on_finished=self._finished_bridged.emit" in src, (
-        "start_conversion 未把 converter 的 on_finished 接进 WorkerThread"
-    )
-    assert "thread.finished.connect" not in src, (
-        "thread.finished 载荷是 convert() 返回值 None → 槽内 basename(None) 抛异常 → 计数卡死"
-    )
+    def fake_convert(input_path, output_path, **kwargs):
+        kwargs["on_finished"](True, str(svg))
+
+    page.vectorizer.convert = fake_convert
+    page.files = [str(tmp_path / "a.png")]
+    page.start_conversion()
+
+    qtbot.waitUntil(lambda: page.finished_count == 1, timeout=5000)
+    assert page.success_count == 1
+    page.deleteLater()
 
 
 def test_vectorizer_captures_panic_as_failure(tmp_path):

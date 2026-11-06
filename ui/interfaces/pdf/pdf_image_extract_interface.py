@@ -7,7 +7,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushBut
 
 from core.features.pdf.pdf_image_extractor import PDFImageExtractor
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 
 class PDFImageExtractInterface(QWidget):
     # 桥接信号：提取回调在工作线程触发，经此排队回主线程
@@ -108,7 +108,7 @@ class PDFImageExtractInterface(QWidget):
         self.check_state()
 
     def check_state(self):
-        self.start_btn.setEnabled(bool(self.files) and bool(self.out_edit.text()))
+        self.start_btn.setEnabled(not is_busy(self) and bool(self.files) and bool(self.out_edit.text()))
     
     def on_cancel_task(self):
         """处理取消任务请求"""

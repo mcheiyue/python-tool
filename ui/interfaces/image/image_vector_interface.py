@@ -3,14 +3,14 @@ import subprocess
 from functools import partial
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog
 from PyQt6.QtGui import QFont, QAction, QKeySequence
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThreadPool
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slider,
                             CheckBox, PushButton, PrimaryPushButton, TextEdit, InfoBar,
                             FluentIcon as FIF)
 
 from core.features.image.image_vectorizer import ImageVectorizer
 from ui.widgets import DragDropListWidget
-from ui.threads import WorkerThread
+from ui.threads import PoolTask
 
 class ImageVectorInterface(QWidget):
     _log_bridged = pyqtSignal(str)
@@ -141,7 +141,8 @@ class ImageVectorInterface(QWidget):
         self.addAction(self.del_action)
 
         self.files = []
-        self.threads = [] # Keep references
+        self.pool = QThreadPool(self)
+        self.pool.setMaxThreadCount(2)
         self._log_bridged.connect(self.log_text.append)
         self._finished_bridged.connect(self.on_one_finished)
 
@@ -184,8 +185,6 @@ class ImageVectorInterface(QWidget):
             'filter_speckle': self.speckle_slider.value()
         }
 
-        # 简单的串行处理或批量创建线程
-        # 为简单起见，这里我们逐个启动转换，实际项目中可以用线程池
         self.total = len(self.files)
         self.finished_count = 0
         self.success_count = 0
@@ -193,14 +192,16 @@ class ImageVectorInterface(QWidget):
 
         for input_path in self.files:
             output_path = os.path.splitext(input_path)[0] + ".svg"
-            thread = WorkerThread(
+            task_kwargs = {
+                "on_log": self._log_bridged.emit,
+                "on_finished": self._finished_bridged.emit,
+            }
+            task = PoolTask(
                 partial(self.vectorizer.convert, input_path, output_path, **kwargs),
-                on_log=self._log_bridged.emit,
-                on_finished=self._finished_bridged.emit,
+                (), task_kwargs,
+                on_error=lambda msg: self.on_one_finished(False, msg),
             )
-            thread.error.connect(lambda msg: self.on_one_finished(False, msg))
-            thread.start()
-            self.threads.append(thread) # 防止被垃圾回收
+            self.pool.start(task)
 
     def on_one_finished(self, success, result):
         if success:
@@ -236,4 +237,3 @@ class ImageVectorInterface(QWidget):
                 bar.addWidget(open_folder_btn)
             
             bar.show()
-            self.threads.clear()

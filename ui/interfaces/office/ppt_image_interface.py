@@ -8,7 +8,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox,
 
 from core.features.office.ppt_image_exporter import PPTImageExporter
 from ui.widgets import DragDropListWidget
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 
 class PPTImageInterface(QWidget):
     # 桥接信号：导出回调在工作线程触发，经此排队回主线程
@@ -129,7 +129,7 @@ class PPTImageInterface(QWidget):
         self.check_state()
 
     def check_state(self):
-        self.start_btn.setEnabled(bool(self.files) and bool(self.out_edit.text()))
+        self.start_btn.setEnabled(not is_busy(self) and bool(self.files) and bool(self.out_edit.text()))
 
     def start_export(self):
         out_dir = self.out_edit.text()

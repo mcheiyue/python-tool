@@ -13,7 +13,7 @@ from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.widgets.enhanced_progress import EnhancedProgressBar
 from ui.design_system import Margins, Spacing
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 
 
 class LibreOfficeBatchInterface(QWidget):
@@ -287,7 +287,7 @@ class LibreOfficeBatchInterface(QWidget):
         """检查状态并更新按钮"""
         has_files = len(self.files) > 0
         has_lo = self.lo_tool and self.lo_tool.is_available()
-        self.start_btn.setEnabled(has_files and has_lo)
+        self.start_btn.setEnabled(not is_busy(self) and has_files and has_lo)
     
     def append_log(self, text):
         """追加日志"""

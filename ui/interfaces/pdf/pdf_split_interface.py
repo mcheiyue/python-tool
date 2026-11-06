@@ -7,7 +7,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
                             FluentIcon as FIF)
 
 from core.features.pdf.pdf_splitter import PDFSplitter
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 from ui.widgets import CancellableProgressWidget
 from ui.design_system import Margins, Spacing
 
@@ -105,7 +105,8 @@ class PDFSplitInterface(QWidget):
 
     def check_state(self):
         self.start_btn.setEnabled(
-            bool(self.file_edit.text()) and 
+            not is_busy(self) and
+            bool(self.file_edit.text()) and
             bool(self.out_edit.text())
         )
 

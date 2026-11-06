@@ -116,11 +116,16 @@ class SettingsInterface(QWidget):
 
         # 安装中的 worker 必须持有到 finished（运行中的 QThread 被回收会崩进程）
         self._install_workers = []
+        self._tool_cards = {}
+        self._refresh_generation = 0
 
         self.refresh_tools_ui()
 
     def refresh_tools_ui(self):
-        """Refresh the external tools list"""
+        """先展示准备态，再由后台逐项刷新组件状态。"""
+        self._refresh_generation += 1
+        generation = self._refresh_generation
+        self._tool_cards.clear()
         # Clear existing items
         while self.tools_layout.count():
             item = self.tools_layout.takeAt(0)
@@ -128,13 +133,27 @@ class SettingsInterface(QWidget):
             if widget:
                 widget.deleteLater()
         
-        # Get tool status
         manager = AppContainer().external_tool_manager
-        tools_status = manager.get_status_all()
-        
-        for status in tools_status:
+        for tool in manager.get_all():
+            status = {key: getattr(tool, key) for key in ("name", "display_name", "features", "download_url")}
+            status.update(installed=False, disabled=tool.is_disabled, checking=True)
             card = self._create_tool_card(status)
+            self._tool_cards[tool.name] = card
             self.tools_layout.addWidget(card)
+
+            def ready(result, name=tool.name, pending=status, request=generation):
+                if request != self._refresh_generation:
+                    return
+                old_card = self._tool_cards[name]
+                index = self.tools_layout.indexOf(old_card)
+                self.tools_layout.takeAt(index)
+                old_card.deleteLater()
+                resolved = result if result is not None else dict(pending, checking=False, error=True)
+                new_card = self._create_tool_card(resolved)
+                self._tool_cards[name] = new_card
+                self.tools_layout.insertWidget(index, new_card)
+
+            tool.refresh_status_async(ready)
 
     def _create_tool_card(self, status):
         """Create a card widget for a tool"""
@@ -151,6 +170,14 @@ class SettingsInterface(QWidget):
             icon = FIF.CANCEL
             color = "#737373" # Grey
             status_text = "已禁用"
+        elif status.get("checking"):
+            icon = FIF.SYNC
+            color = "#737373"
+            status_text = "正在检测组件…"
+        elif status.get("error"):
+            icon = FIF.INFO
+            color = "#C42B1C"
+            status_text = "检测失败，请重新检测"
         elif is_installed:
             icon = FIF.ACCEPT
             color = "#107C10" # Green
@@ -194,7 +221,9 @@ class SettingsInterface(QWidget):
         # Actions
         manager = AppContainer().external_tool_manager
 
-        if is_disabled:
+        if status.get("checking") and not is_disabled:
+            layout.addWidget(BodyLabel("正在准备…", card))
+        elif is_disabled:
             # Enable Button
             enable_btn = PushButton(FIF.RINGER, "启用", self)
             enable_btn.clicked.connect(lambda: self._enable_tool(status["name"]))
@@ -307,6 +336,9 @@ class SettingsInterface(QWidget):
         tool = manager.get_tool(tool_name)
         if tool is None:
             return
+        previous = getattr(tool, "_install_worker", None)
+        if previous is not None and previous.isRunning():
+            return
         tool.clear_cache()
 
         entry = self._manifest_entry(tool_name)
@@ -343,7 +375,11 @@ class SettingsInterface(QWidget):
         worker.signals.finished.connect(_finish)
         # 持有到 finished：运行中的 QThread 被回收会崩进程
         self._install_workers.append(worker)
+        worker.finished.connect(lambda: self._install_workers.remove(worker))
         worker.start()
+        card = self._tool_cards.get(tool_name)
+        if card is not None:
+            card.setEnabled(False)
 
     def _open_libs_folder(self):
         """Open the libs folder"""

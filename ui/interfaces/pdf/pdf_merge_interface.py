@@ -9,7 +9,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushBut
 
 from core.features.pdf.pdf_merger import PDFMerger
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 from ui.design_system import Margins, Spacing
 
 class PDFMergeInterface(QWidget):
@@ -217,7 +217,7 @@ class PDFMergeInterface(QWidget):
     def check_state(self):
         has_files = self.list_widget.count() > 0
         has_out = bool(self.out_edit.text().strip())
-        self.start_btn.setEnabled(has_files and has_out)
+        self.start_btn.setEnabled(not is_busy(self) and has_files and has_out)
         
         if has_files and not has_out and not self.out_edit.text():
             # 自动生成一个默认路径

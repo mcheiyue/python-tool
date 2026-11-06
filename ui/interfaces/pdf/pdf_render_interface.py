@@ -8,7 +8,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushBut
 
 from core.features.pdf.pdf_page_renderer import PDFPageRenderer
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 from core.external_tools.manager import ExternalToolManager
 
 class PDFRenderInterface(QWidget):
@@ -216,7 +216,7 @@ class PDFRenderInterface(QWidget):
 
     def check_state(self):
         """检查按钮状态"""
-        self.start_btn.setEnabled(bool(self.files) and bool(self.out_edit.text()))
+        self.start_btn.setEnabled(not is_busy(self) and bool(self.files) and bool(self.out_edit.text()))
     
     def on_cancel_task(self):
         """处理取消任务请求"""

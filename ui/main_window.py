@@ -13,6 +13,7 @@ from core.utils.lazy_loader import UILazyLoader
 from core.utils.resource_path import get_resource_path
 from core.utils.icon_provider import ThemedSvgIconEngine
 from ui.widgets import CategoryHomePage
+from ui.threads import active_threads
 
 class MainWindow(FluentWindow):
     def __init__(self, container=None):
@@ -66,6 +67,14 @@ class MainWindow(FluentWindow):
         # 居中显示
         screen = QApplication.primaryScreen().geometry()
         self.move((screen.width()-self.width())//2, (screen.height()-self.height())//2)
+
+    def closeEvent(self, event):
+        """取消并等待活动任务：窗口析构时回收运行中的 QThread 会让进程直接崩溃。"""
+        for thread in active_threads():
+            thread.cancel()
+        for thread in active_threads():
+            thread.wait(5000)
+        super().closeEvent(event)
 
     def get_icon(self, path):
         """获取主题感知的 SVG 图标"""

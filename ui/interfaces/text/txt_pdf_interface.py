@@ -6,7 +6,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushBut
 
 from core.features.text.txt_converter import TxtConverter
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 
 class TxtPdfInterface(QWidget):
     _log_bridged = pyqtSignal(str)
@@ -104,7 +104,7 @@ class TxtPdfInterface(QWidget):
         self.check_state()
 
     def check_state(self):
-        self.start_btn.setEnabled(bool(self.files) and bool(self.out_edit.text()))
+        self.start_btn.setEnabled(not is_busy(self) and bool(self.files) and bool(self.out_edit.text()))
     
     def on_cancel_task(self):
         """处理取消任务请求"""

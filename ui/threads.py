@@ -1,5 +1,43 @@
-from PyQt6.QtCore import QThread, pyqtSignal
-from typing import Callable, Any, Optional
+import threading
+
+from PyQt6.QtCore import QRunnable, QThread, pyqtSignal
+from typing import Callable, Any, Optional, List
+
+_ACTIVE = set()
+_ACTIVE_LOCK = threading.Lock()
+
+
+def active_threads() -> List["WorkerThread"]:
+    with _ACTIVE_LOCK:
+        return [thread for thread in _ACTIVE if thread.isRunning()]
+
+
+def cancel_active_threads():
+    for thread in active_threads():
+        thread.cancel()
+
+
+def is_busy(owner) -> bool:
+    """owner.thread 是否仍在运行；界面用它避免运行期重新放开开始按钮。"""
+    thread = getattr(owner, "thread", None)
+    return thread is not None and thread.isRunning()
+
+
+class PoolTask(QRunnable):
+    """提交到 QThreadPool 的单个任务：并发上限由池控制，异常转交 on_error。"""
+
+    def __init__(self, func: Callable[..., Any], args, kwargs, on_error: Callable[[str], None]):
+        super().__init__()
+        self._func = func
+        self._args = args
+        self._kwargs = kwargs
+        self._on_error = on_error
+
+    def run(self):
+        try:
+            self._func(*self._args, **self._kwargs)
+        except Exception as e:
+            self._on_error(str(e))
 
 
 class WorkerThread(QThread):
@@ -56,13 +94,27 @@ class WorkerThread(QThread):
         except Exception as e:
             if not self._is_cancelled:
                 self.error.emit(str(e))
-    
+        finally:
+            with _ACTIVE_LOCK:
+                _ACTIVE.discard(self)
+
+    def start(self, *args, **kwargs):
+        with _ACTIVE_LOCK:
+            _ACTIVE.add(self)
+        super().start(*args, **kwargs)
+
     def cancel(self):
         """
-        标记任务为已取消
-        
-        注意: 这不会立即停止正在执行的任务，只是设置取消标志。
-        任务函数需要自己检查取消状态（如果支持的话）。
+        请求取消任务
+
+        置位标志后调用任务所属对象的 stop()：批处理功能都以 stop() 作为协作
+        停止点，仅置位本线程标志不会让它们停下来。
         """
         self._is_cancelled = True
+        stop = getattr(getattr(self.task_func, "__self__", None), "stop", None)
+        if callable(stop):
+            try:
+                stop()
+            except Exception:
+                pass
 

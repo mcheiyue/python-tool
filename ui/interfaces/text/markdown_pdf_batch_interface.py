@@ -14,7 +14,7 @@ from core.features.text.markdown_pdf_pandoc import PandocMarkdownToPdf
 from app.container import AppContainer
 from ui.widgets import DragDropListWidget
 from ui.widgets.enhanced_progress import EnhancedProgressBar
-from ui.threads import WorkerThread
+from ui.threads import WorkerThread, is_busy
 from ui.design_system import Margins, Spacing
 
 
@@ -259,7 +259,7 @@ class MarkdownPdfBatchInterface(QWidget):
         has_pandoc = self.pandoc_tool and self.pandoc_tool.is_available()
         has_output = bool(self.out_edit.text())
         # 必须同时满足: 有文件 + Pandoc可用 + 输出路径 + 有PDF引擎
-        self.start_btn.setEnabled(has_files and has_pandoc and has_output and self._has_pdf_engine)
+        self.start_btn.setEnabled(not is_busy(self) and has_files and has_pandoc and has_output and self._has_pdf_engine)
 
     def append_log(self, text):
         self.log_text.append(text)
