@@ -10,6 +10,8 @@ class LibreOfficeTool(ExternalTool):
     """LibreOffice 办公套件检测工具"""
     
     name = "libreoffice"
+    executable_names = ("soffice.exe", "soffice.com") if os.name == "nt" else ("soffice", "libreoffice")
+    portable_subdirs = ("program", "")
     display_name = "LibreOffice"
     description = "开源办公套件，可作为 Microsoft Office 的免费替代品"
     features = "支持 Word、Excel、PowerPoint 文档转换和处理"
@@ -51,11 +53,9 @@ class LibreOfficeTool(ExternalTool):
             return result
         
         system = platform.system().lower()
-        exe_names = ["soffice.exe", "soffice.com"] if system == 'windows' else ["soffice", "libreoffice"]
-
         # 1-3. 便携目录（program/ 子目录优先）/ 上游包装配 / PATH
         path, source = self._resolve_executable(
-            exe_names, portable_subdirs=("program", "")
+            self.executable_names, portable_subdirs=self.portable_subdirs
         )
 
         # 4. 平台特定的常见安装位置

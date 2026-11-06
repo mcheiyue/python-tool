@@ -28,8 +28,10 @@ class _StubLoader:
         self.result = result
         self.calls = []
 
-    def extract_zip(self, zip_path, persistent=False, subdir=None):
+    def extract_zip(self, zip_path, persistent=False, subdir=None, *, prepare=None):
         self.calls.append((zip_path, persistent, subdir))
+        if prepare is not None:
+            prepare(self.result)
         return self.result
 
 
@@ -390,14 +392,29 @@ def test_cancel_stops_url_fallback(app_root):
     ]})
     loader = _StubLoader("/extracted/dir")
     seen = []
+    cancelled = False
 
     def fetch(url, timeout):
+        nonlocal cancelled
         seen.append(url)
+        cancelled = True
         raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
 
     store = PackageStore(loader=loader, downloader=Downloader(fetch=fetch))
-    assert store.install("pandoc", should_cancel=lambda: True) is None
+    assert store.install("pandoc", should_cancel=lambda: cancelled) is None
     assert seen == ["https://one.example/pandoc.zip"]
+
+
+def test_already_cancelled_install_does_not_start_download(app_root):
+    from core.tools.downloader import Downloader
+
+    _write_manifest(app_root, {"url": "https://example.invalid/p.zip"})
+
+    def fetch(url, timeout):
+        pytest.fail("取消后不应开始网络请求")
+
+    store = PackageStore(downloader=Downloader(fetch=fetch))
+    assert store.install("pandoc", should_cancel=lambda: True) is None
 
 
 def test_read_manifest_entry_accepts_urls_array(app_root):
@@ -406,3 +423,52 @@ def test_read_manifest_entry_accepts_urls_array(app_root):
     entry = PackageStore(loader=_StubLoader("/x")).read_manifest_entry("pandoc")
     assert entry is not None
     assert entry["urls"] == ["https://one.example/pandoc.zip"]
+
+
+def test_concurrent_downloads_use_distinct_staging_directories(app_root):
+    from concurrent.futures import ThreadPoolExecutor
+    from pathlib import Path
+    from threading import Barrier
+    from core.tools.downloader import Downloader
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("pandoc/pandoc.exe", b"complete executable")
+    payload = archive.getvalue()
+    _write_manifest(app_root, {"url": "https://example.invalid/p.zip",
+                               "sha256": hashlib.sha256(payload).hexdigest()})
+    barrier, stages = Barrier(2), []
+
+    class ConcurrentDownloader(Downloader):
+        def download(self, url, destination, **kwargs):
+            stages.append(destination)
+            barrier.wait(timeout=5)
+            return super().download(url, destination, **kwargs)
+
+    store = PackageStore(downloader=ConcurrentDownloader(fetch=lambda url, timeout: _FakeResponse(payload)))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: store.install("pandoc"), range(2)))
+
+    assert len({Path(path).parent for path in stages}) == 2
+    assert all(not Path(path).exists() for path in stages)
+    assert all((Path(path) / "pandoc.exe").read_bytes() == b"complete executable" for path in results)
+
+
+def test_invalid_update_keeps_existing_executable_and_marker(app_root):
+    from pathlib import Path
+
+    installed = app_root / "libs" / "pandoc"
+    installed.mkdir(parents=True)
+    (installed / "pandoc.exe").write_bytes(b"working version")
+    (installed / ".source-id").write_text("previous source", encoding="utf-8")
+    (app_root / "plugins").mkdir()
+    _make_zip(app_root / "plugins" / "pandoc.zip", {"README.txt": b"wrong package"})
+
+    result = PackageStore().install(
+        "pandoc", persistent=True,
+        validate=lambda directory: (Path(directory) / "pandoc.exe").is_file(),
+    )
+
+    assert result is None
+    assert (installed / "pandoc.exe").read_bytes() == b"working version"
+    assert (installed / ".source-id").read_text(encoding="utf-8") == "previous source"

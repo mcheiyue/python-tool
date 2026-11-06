@@ -10,6 +10,7 @@ class GhostscriptTool(ExternalTool):
     """Ghostscript PDF 处理引擎"""
     
     name = "ghostscript"
+    executable_names = ("gswin64c.exe", "gswin32c.exe", "gs")
     display_name = "Ghostscript"
     description = "用于 PDF 压缩和处理的解释器"
     features = "提供 PDF 压缩功能"
@@ -60,7 +61,7 @@ class GhostscriptTool(ExternalTool):
 
         # 1-3. 便携目录 / 上游包装配 / PATH
         path, source = self._resolve_executable(
-            ["gswin64c.exe", "gswin32c.exe", "gs"],
+            self.executable_names,
             which_names=["gswin64c", "gswin32c"] if is_windows else ["gs"],
             on_portable=_set_gs_lib,
         )

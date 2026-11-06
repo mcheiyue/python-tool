@@ -8,6 +8,7 @@
 """
 import json
 import os
+import tempfile
 
 from core.utils.logger import AppLogger
 from core.tools.downloader import Downloader, sha256_file
@@ -29,49 +30,47 @@ class PackageStore:
         self._logger = AppLogger()
 
     def install(self, tool_name, persistent=False,
-                on_progress=None, should_cancel=None):
+                on_progress=None, should_cancel=None, validate=None):
         """安装工具包，返回解压出的目录；任何失败返回 None。"""
-        zip_path = self.locate_zip(tool_name)
-        if zip_path and self._preplaced_trusted(zip_path, tool_name):
-            return self._extract_and_mark(zip_path, persistent, tool_name)
-
-        entry = self.read_manifest_entry(tool_name)
-        if not entry:
+        if should_cancel is not None and should_cancel():
             return None
-
-        from core.utils.resource_path import get_data_root
-        stage = os.path.join(get_data_root(), "libs", ".temp", f"stage_{tool_name}.zip")
-        os.makedirs(os.path.dirname(stage), exist_ok=True)
-
-        # urls 为镜像列表逐个尝试，单源失败（传输/HTTP/hash）换下一个，全部失败才降级。
-        # 取消须立即放弃不换源：DownloadError 不带取消标记，不重查 should_cancel 会把
-        # 用户取消当成源失败而换镜像继续下载
-        urls = entry.get("urls") or ([entry["url"]] if entry.get("url") else [])
-        for url in urls:
-            try:
-                self._downloader.download(
-                    url, stage,
-                    expected_sha256=entry.get("sha256"),
-                    on_progress=on_progress,
-                    should_cancel=should_cancel,
-                )
-                break
-            except Exception as e:
-                if should_cancel is not None and should_cancel():
-                    self._logger.info(f"{tool_name} 下载已取消")
-                    return None
-                self._logger.error(f"下载 {tool_name} 失败（{url}）: {e}")
-        else:
-            return None
-
         try:
-            return self._extract_and_mark(stage, persistent, tool_name)
-        finally:
-            # zip 只是解压源：持久化解压后不再需要，临时模式退出即清
-            try:
-                os.remove(stage)
-            except OSError:
-                pass
+            zip_path = self.locate_zip(tool_name)
+            if zip_path and self._preplaced_trusted(zip_path, tool_name):
+                return self._extract_and_mark(zip_path, persistent, tool_name, validate, should_cancel)
+
+            entry = self.read_manifest_entry(tool_name)
+            if not entry:
+                return None
+
+            from core.utils.resource_path import get_data_root
+            temp_root = os.path.join(get_data_root(), "libs", ".temp")
+            os.makedirs(temp_root, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix=f"session_{os.getpid()}_", dir=temp_root) as directory:
+                stage = os.path.join(directory, f"stage_{tool_name}.zip")
+                urls = entry.get("urls") or ([entry["url"]] if entry.get("url") else [])
+                for url in urls:
+                    try:
+                        self._downloader.download(
+                            url, stage,
+                            expected_sha256=entry.get("sha256"),
+                            on_progress=on_progress,
+                            should_cancel=should_cancel,
+                        )
+                        break
+                    except Exception as error:
+                        if should_cancel is not None and should_cancel():
+                            self._logger.info(f"{tool_name} 下载已取消")
+                            return None
+                        self._logger.error(f"下载 {tool_name} 失败（{url}）: {error}")
+                else:
+                    return None
+                return self._extract_and_mark(
+                    stage, persistent, tool_name, validate, should_cancel,
+                )
+        except (OSError, ValueError) as error:
+            self._logger.error(f"安装 {tool_name} 失败: {error}")
+            return None
 
     def _preplaced_trusted(self, zip_path, tool_name):
         entry = self.read_manifest_entry(tool_name)
@@ -112,26 +111,30 @@ class PackageStore:
                     manifest = json.load(f)
             except (OSError, ValueError):
                 continue
+            if not isinstance(manifest, dict):
+                continue
             entry = manifest.get(tool_name)
             if isinstance(entry, dict) and (entry.get("url") or entry.get("urls")):
                 return entry
             return None
         return None
 
-    def _extract(self, zip_path, persistent, tool_name):
+    def _extract_and_mark(self, zip_path, persistent, tool_name, validate=None, should_cancel=None):
+        def prepare(directory):
+            if should_cancel is not None and should_cancel():
+                raise InterruptedError("安装已取消")
+            if validate is not None and not validate(directory):
+                raise FileNotFoundError(f"{tool_name} 包内没有可执行文件")
+            if persistent:
+                self._write_source_marker(directory, tool_name)
+
         try:
             return self._loader.extract_zip(
-                zip_path, persistent=persistent, subdir=tool_name
+                zip_path, persistent=persistent, subdir=tool_name, prepare=prepare,
             )
         except Exception as e:
             self._logger.error(f"解压 {os.path.basename(zip_path)} 失败: {e}")
             return None
-
-    def _extract_and_mark(self, zip_path, persistent, tool_name):
-        extracted = self._extract(zip_path, persistent, tool_name)
-        if extracted and persistent:
-            self._write_source_marker(extracted, tool_name)
-        return extracted
 
     def source_identity(self, tool_name):
         """当前源包的版本标识，用于判断持久解压目录是否过期。
@@ -155,11 +158,8 @@ class PackageStore:
         identity = self.source_identity(tool_name)
         if not identity:
             return
-        try:
-            with open(os.path.join(tool_dir, _SOURCE_MARKER), "w", encoding="utf-8") as f:
-                f.write(identity)
-        except OSError:
-            pass
+        with open(os.path.join(tool_dir, _SOURCE_MARKER), "w", encoding="utf-8") as f:
+            f.write(identity)
 
     def is_current(self, tool_dir, tool_name):
         """持久解压目录是否与当前源包一致。

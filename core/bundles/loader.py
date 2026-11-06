@@ -37,16 +37,42 @@ class BundleLoader:
         self.logger.info("BundleLoader 初始化完成")
 
     def _clean_stale_temps(self):
-        """清理上次未正常退出留下的临时目录"""
+        """只清理能确认所属进程已经退出的目录，保留活动和无法识别的会话。"""
         try:
             from core.utils.resource_path import get_data_root
             temp_root = os.path.join(get_data_root(), "libs", ".temp")
 
-            if os.path.exists(temp_root):
-                # 如果其他实例正在运行且锁定了文件，删除会失败（Windows下），这是预期的安全行为
-                shutil.rmtree(temp_root, ignore_errors=True)
-        except Exception:
-            pass
+            if not os.path.isdir(temp_root):
+                return
+            for name in os.listdir(temp_root):
+                parts = name.split("_", 2)
+                if (len(parts) == 3 and parts[0] in ("session", "previous")
+                        and parts[1].isdigit() and not self._process_exists(int(parts[1]))):
+                    shutil.rmtree(os.path.join(temp_root, name), ignore_errors=True)
+        except OSError as error:
+            self.logger.warning(f"临时目录清理失败: {error}")
+
+    @staticmethod
+    def _process_exists(pid):
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+            kernel.OpenProcess.restype = wintypes.HANDLE
+            kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+            handle = kernel.OpenProcess(0x1000, False, pid)
+            if not handle:
+                return ctypes.get_last_error() != 87
+            kernel.CloseHandle(handle)
+            return True
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
 
     def cleanup(self):
         """清理本次会话的临时目录"""
@@ -83,11 +109,12 @@ class BundleLoader:
 
         zip_file.extractall(target_base)
 
-    def extract_zip(self, zip_path, persistent=False, subdir=None):
+    def extract_zip(self, zip_path, persistent=False, subdir=None, *, prepare=None):
         """安全解压上游官方 zip，返回解压目录。
 
-        temporary → libs/.temp/session_*（atexit 清理）；
-        persistent → libs/<subdir>/（subdir=工具名时）。
+        temporary → libs/.temp/session_<pid>_*（atexit 清理）；
+        persistent → libs/<subdir>/，必须提供工具名，准备成功后替换旧目录。
+        prepare 在发布目录前执行，可校验工具并写入来源信息；失败保留旧版。
         SecurityError 向外抛给调用方。
 
         解压后把「唯一顶层目录」的内容提升到目标根：官方 zip 顶层名带版本
@@ -97,22 +124,43 @@ class BundleLoader:
         from core.utils.resource_path import get_data_root
         base = get_data_root()
 
-        if persistent:
-            target_base = os.path.join(base, "libs", subdir) if subdir \
-                else os.path.join(base, "libs")
-        else:
-            target_base = tempfile.mkdtemp(prefix="session_", dir=self._temp_root())
-            self._temp_dirs.append(target_base)
+        if persistent and (not subdir or subdir in (".", "..")
+                           or any(character in subdir for character in "/\\:")):
+            raise ValueError("持久安装必须提供单个工具目录名")
+        staging = tempfile.mkdtemp(prefix=f"session_{os.getpid()}_", dir=self._temp_root())
+        self._temp_dirs.append(staging)
+        try:
+            with zipfile.ZipFile(zip_path) as zf:
+                self._safe_extract_zip(zf, staging)
+                names = zf.namelist()
+            self._flatten_single_toplevel(staging, names)
+            if prepare is not None:
+                prepare(staging)
+            if not persistent:
+                return staging
 
-        if not os.path.exists(target_base):
-            os.makedirs(target_base, exist_ok=True)
-
-        with zipfile.ZipFile(zip_path) as zf:
-            self._safe_extract_zip(zf, target_base)
-            names = zf.namelist()
-
-        self._flatten_single_toplevel(target_base, names)
-        return target_base
+            target_base = os.path.join(base, "libs", subdir)
+            previous = None
+            if os.path.exists(target_base):
+                previous = tempfile.mkdtemp(prefix=f"previous_{os.getpid()}_", dir=self._temp_root())
+                self._temp_dirs.append(previous)
+                os.rmdir(previous)
+                os.replace(target_base, previous)
+            try:
+                os.replace(staging, target_base)
+            except OSError:
+                if previous is not None:
+                    os.replace(previous, target_base)
+                raise
+            if previous is not None:
+                shutil.rmtree(previous, ignore_errors=True)
+            self._temp_dirs.remove(staging)
+            return target_base
+        except Exception:
+            shutil.rmtree(staging, ignore_errors=True)
+            if not os.path.exists(staging):
+                self._temp_dirs.remove(staging)
+            raise
 
     @staticmethod
     def _flatten_single_toplevel(target_base, names):

@@ -8,6 +8,7 @@ class PandocTool(ExternalTool):
     """Pandoc 文档转换工具"""
     
     name = "pandoc"
+    executable_names = ("pandoc.exe", "pandoc")
     display_name = "Pandoc"
     description = "专业文档转换工具，支持数学公式和高级排版"
     features = "提供 Markdown 转 PDF 功能（支持数学公式）"
@@ -48,7 +49,7 @@ class PandocTool(ExternalTool):
         if self.is_disabled:
             return result
         
-        path, source = self._resolve_executable(["pandoc.exe", "pandoc"])
+        path, source = self._resolve_executable(self.executable_names)
         if path:
             result.update(
                 found=True,

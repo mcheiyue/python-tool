@@ -7,6 +7,7 @@
 import os
 import stat
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -72,3 +73,60 @@ def test_persistent_mode_lands_on_discovery_layout(tmp_path, monkeypatch):
     result = loader.extract_zip(z, persistent=True, subdir="pandoc")
     assert result == str(tmp_path / "libs" / "pandoc")
     assert os.path.isfile(os.path.join(result, "pandoc.exe"))
+
+
+def test_failed_extraction_preserves_previous_tool(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.utils.resource_path.get_app_root", lambda: str(tmp_path))
+    installed = tmp_path / "libs" / "pandoc" / "pandoc.exe"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes(b"working version")
+    archive = _make_zip(tmp_path / "update.zip", {"pandoc.exe": (b"new version", 0)})
+
+    def interrupted(zip_file, destination):
+        (Path(destination) / "pandoc.exe").write_bytes(b"partial")
+        raise OSError("interrupted extraction")
+
+    monkeypatch.setattr(loader, "_safe_extract_zip", interrupted)
+
+    with pytest.raises(OSError, match="interrupted extraction"):
+        loader.extract_zip(archive, persistent=True, subdir="pandoc")
+
+    assert installed.read_bytes() == b"working version"
+
+
+def test_failed_publish_restores_previous_tool(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.utils.resource_path.get_app_root", lambda: str(tmp_path))
+    installed = tmp_path / "libs" / "pandoc" / "pandoc.exe"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes(b"working version")
+    archive = _make_zip(tmp_path / "update.zip", {"pandoc.exe": (b"new version", 0)})
+    original_replace = os.replace
+
+    def cannot_publish(source, destination):
+        if Path(source).name.startswith("session_") and Path(destination) == installed.parent:
+            raise PermissionError("publish denied")
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", cannot_publish)
+
+    with pytest.raises(PermissionError, match="publish denied"):
+        loader.extract_zip(archive, persistent=True, subdir="pandoc")
+
+    assert installed.read_bytes() == b"working version"
+
+
+def test_stale_cleanup_keeps_live_and_unknown_sessions(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.utils.resource_path.get_app_root", lambda: str(tmp_path))
+    root = tmp_path / "libs" / ".temp"
+    live = root / f"session_{os.getpid()}_active"
+    unknown = root / "session_legacy"
+    stale = root / "session_999999999_stale"
+    for directory in (live, unknown, stale):
+        directory.mkdir(parents=True)
+        (directory / "resource.dat").write_bytes(b"data")
+
+    loader._clean_stale_temps()
+
+    assert (live / "resource.dat").read_bytes() == b"data"
+    assert (unknown / "resource.dat").read_bytes() == b"data"
+    assert not stale.exists()

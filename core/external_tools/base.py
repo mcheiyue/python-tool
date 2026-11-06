@@ -27,6 +27,13 @@ class _StatusResolver(QThread):
         self._tool = tool
         self._waiters: List[Callable[[Optional[Dict[str, Any]]], None]] = []
         self._waiters_lock = threading.Lock()
+        self.finished.connect(self._restart_pending)
+
+    def _restart_pending(self):
+        with self._waiters_lock:
+            pending = bool(self._waiters)
+        if pending and not self.isRunning():
+            self.start()
 
     def add_callback(self, callback: Callable[[Optional[Dict[str, Any]]], None]):
         with self._waiters_lock:
@@ -66,10 +73,19 @@ class _ToolInstallWorker(QThread):
     """
 
     def __init__(self, tool, parent=None):
+        previous = getattr(tool, "_install_worker", None)
+        if previous is not None and previous.isRunning():
+            raise RuntimeError(f"{tool.display_name} 正在安装")
         super().__init__(parent)
         self._tool = tool
         self.signals = _InstallSignals()
         self._cancelled = False
+        tool._install_worker = self
+        self.finished.connect(self._release)
+
+    def _release(self):
+        if self._tool._install_worker is self:
+            self._tool._install_worker = None
 
     def cancel(self):
         self._cancelled = True
@@ -77,19 +93,17 @@ class _ToolInstallWorker(QThread):
     def run(self):
         logger = AppLogger()
         try:
-            from core.tools.package_store import PackageStore
-
-            store = PackageStore()
-            extracted = store.install(
-                self._tool.name,
-                persistent=False,
-                on_progress=lambda d, t: self.signals.progress.emit(d, t),
-                should_cancel=lambda: self._cancelled,
-            )
-            if not extracted:
-                self.signals.finished.emit(False, None)
-                return
-            info = self._tool._find()
+            with _RESOLVE_LOCK:
+                extracted = self._tool._install_from_package(
+                    self._tool.executable_names, self._tool.portable_subdirs,
+                    on_progress=lambda d, t: self.signals.progress.emit(d, t),
+                    should_cancel=lambda: self._cancelled,
+                )
+                if not extracted or self._cancelled:
+                    self.signals.finished.emit(False, None)
+                    return
+                self._tool.clear_cache()
+                info = self._tool._find()
             self.signals.finished.emit(bool(info.get("found")), info.get("version"))
         except Exception as e:
             logger.error(f"安装 {self._tool.name} 失败: {e}")
@@ -119,6 +133,8 @@ class ExternalTool(ABC):
     
     # 引用管理器实例
     _manager = None
+    executable_names = ()
+    portable_subdirs = ("",)
 
     def clear_cache(self):
         """清除缓存，强制重新检测"""
@@ -160,9 +176,11 @@ class ExternalTool(ABC):
             return None
 
         if config is not None and fingerprint is not None and version is not None:
-            cache[self.name] = {"path": exe_path, "fp": fingerprint, "version": version}
-            config.set("dependencies.tool_version_cache", cache)
-            config.save()
+            try:
+                config.set(f"dependencies.tool_version_cache.{self.name}",
+                           {"path": exe_path, "fp": fingerprint, "version": version})
+            except OSError as error:
+                AppLogger().warning(f"保存 {self.name} 版本缓存失败: {error}")
         return version
 
     @staticmethod
@@ -181,7 +199,7 @@ class ExternalTool(ABC):
             directory = os.path.join(base_dir, sub) if sub else base_dir
             for exe_name in exe_names:
                 candidate = os.path.join(directory, exe_name)
-                if os.path.exists(candidate):
+                if os.path.isfile(candidate):
                     return candidate
         return None
 
@@ -194,16 +212,17 @@ class ExternalTool(ABC):
         pandoc 无），由调用方自行追加。
         on_portable(exe_path) 在便携命中时回调（gs 借它注入 GS_LIB）。
         """
-        tool_dir = os.path.join(self.get_libs_path(), self.name)
-        found = self._exe_in_dirs(tool_dir, exe_names, portable_subdirs)
-        if found:
-            from core.tools.package_store import PackageStore
-            if not PackageStore().is_current(tool_dir, self.name):
-                # 源包已升级：先删旧目录再重装，否则新包会与旧文件混装
-                shutil.rmtree(tool_dir, ignore_errors=True)
-                found = None
-        if not found:
-            found = self._install_from_package(exe_names, portable_subdirs)
+        from core.tools.package_store import PackageStore
+        store = PackageStore()
+        prepared = getattr(self, "_package_dir", None)
+        prepared_exe = self._exe_in_dirs(prepared, exe_names, portable_subdirs) if prepared else None
+        if prepared_exe and getattr(self, "_package_identity", None) == store.source_identity(self.name):
+            found = prepared_exe
+        else:
+            tool_dir = os.path.join(self.get_libs_path(), self.name)
+            found = self._exe_in_dirs(tool_dir, exe_names, portable_subdirs)
+            if not found or not store.is_current(tool_dir, self.name):
+                found = self._install_from_package(exe_names, portable_subdirs) or found or prepared_exe
         if found:
             if on_portable:
                 on_portable(found)
@@ -215,7 +234,7 @@ class ExternalTool(ABC):
                 return path, "env"
         return None, None
 
-    def _install_from_package(self, exe_names, portable_subdirs):
+    def _install_from_package(self, exe_names, portable_subdirs, *, on_progress=None, should_cancel=None):
         """从上游官方包装配可执行文件：预置 zip 优先，manifest 下载兜底。
 
         全部失败（无 zip/manifest/网络/校验）静默降级返回 None，由调用方继续
@@ -232,8 +251,14 @@ class ExternalTool(ABC):
             persistent = False
 
         store = PackageStore()
-        extracted = store.install(self.name, persistent=persistent)
+        extracted = store.install(
+            self.name, persistent=persistent,
+            on_progress=on_progress, should_cancel=should_cancel,
+            validate=lambda directory: self._exe_in_dirs(directory, exe_names, portable_subdirs) is not None,
+        )
         if extracted:
+            self._package_dir = extracted
+            self._package_identity = store.source_identity(self.name)
             return self._exe_in_dirs(extracted, exe_names, portable_subdirs)
         return None
 

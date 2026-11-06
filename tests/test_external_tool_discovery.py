@@ -154,6 +154,20 @@ def test_current_portable_dir_skips_reinstall(tool_env, monkeypatch):
     assert tool.get_source() == "portable"
 
 
+def test_failed_update_preserves_and_uses_existing_tool(tool_env, monkeypatch):
+    tool, tmp_path = tool_env
+    installed = _make_extracted_gs(tmp_path)
+    _write_manifest(tmp_path, "ghostscript", "ab" * 32)
+    marker = installed / ".source-id"
+    marker.write_text("sha256:" + "cd" * 32, encoding="utf-8")
+    monkeypatch.setattr("core.tools.package_store.PackageStore.install", lambda *args, **kwargs: None)
+
+    assert tool.check_installed() is True
+    assert tool.get_path() == str(installed / "gswin64c.exe")
+    assert (installed / "gswin64c.exe").read_bytes() == b"fake"
+    assert marker.read_text(encoding="utf-8") == "sha256:" + "cd" * 32
+
+
 class TestLibreOfficeDiscovery:
     """LibreOffice 发现链（便携目录 → 预置包/上游安装 → PATH → 系统路径）"""
 
@@ -465,24 +479,58 @@ class TestToolInstallWorker:
     而不是崩线程。
     """
 
-    def test_success_reports_version(self, qtbot, monkeypatch):
+    @pytest.mark.parametrize("persistent", [False, True])
+    def test_success_reports_version(self, qtbot, monkeypatch, pandoc_env, persistent):
         from core.external_tools.base import _ToolInstallWorker
+        from core.tools.package_store import PackageStore
 
-        tool = _StubTool()
-        monkeypatch.setattr(
-            "core.tools.package_store.PackageStore.install",
-            lambda self, name, **kw: "/fake/extracted",
-        )
-        monkeypatch.setattr(
-            _StubTool, "_find",
-            lambda self: {"found": True, "version": "1.2.3"},
-        )
+        tool, root = pandoc_env
+        (root / "plugins").mkdir()
+        _make_preplaced_zip(root / "plugins" / "pandoc.zip", {"pandoc/pandoc.exe": b"installed executable"})
+        config = _FakeConfig()
+        config.set("app.plugin_mode", "persistent" if persistent else "temporary")
+        monkeypatch.setattr("config.loader.ConfigLoader", lambda: config)
+        monkeypatch.setattr(tool, "_get_version_from_exe", lambda path: "1.2.3")
+        install = PackageStore.install
+        modes = []
+
+        def counted_install(self, name, **kwargs):
+            modes.append(kwargs.get("persistent"))
+            return install(self, name, **kwargs)
+
+        monkeypatch.setattr(PackageStore, "install", counted_install)
 
         worker = _ToolInstallWorker(tool)
         got = []
         worker.signals.finished.connect(lambda ok, ver: got.append((ok, ver)))
         worker.run()
         assert got == [(True, "1.2.3")]
+        assert modes == [persistent]
+        from pathlib import Path
+        assert Path(tool.get_path()).read_bytes() == b"installed executable"
+
+    def test_repeated_install_worker_rejected_while_running(self, qtbot, monkeypatch, pandoc_env):
+        from threading import Event
+        from core.external_tools.base import _ToolInstallWorker
+
+        tool, _ = pandoc_env
+        started, release = Event(), Event()
+
+        def blocked_install(*args, **kwargs):
+            started.set()
+            release.wait(timeout=5)
+            return None
+
+        monkeypatch.setattr("core.tools.package_store.PackageStore.install", blocked_install)
+        worker = _ToolInstallWorker(tool)
+        worker.start()
+        try:
+            assert started.wait(timeout=2)
+            with pytest.raises(RuntimeError):
+                _ToolInstallWorker(tool)
+        finally:
+            release.set()
+            assert worker.wait(3000)
 
     def test_install_failure_degrades(self, qtbot, monkeypatch):
         from core.external_tools.base import _ToolInstallWorker
@@ -515,3 +563,31 @@ class TestToolInstallWorker:
         worker.cancel()
         worker.run()
         assert seen["cancel_fn"]() is True
+
+
+def test_resolver_restarts_for_request_added_after_result(qtbot, tool_env, monkeypatch):
+    from threading import Event
+    from core.external_tools.base import _StatusResolver
+
+    release = Event()
+    original_run = _StatusResolver.run
+
+    def delayed_exit(self):
+        original_run(self)
+        release.wait(timeout=3)
+
+    monkeypatch.setattr(_StatusResolver, "run", delayed_exit)
+    tool, _ = tool_env
+    results = []
+
+    def first_result(status):
+        tool.refresh_status_async(results.append)
+        release.set()
+
+    try:
+        tool.refresh_status_async(first_result)
+        qtbot.waitUntil(lambda: bool(results), timeout=3000)
+        assert results[0]["name"] == "ghostscript"
+    finally:
+        release.set()
+        assert tool._resolver.wait(3000)
