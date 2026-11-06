@@ -82,3 +82,51 @@ def test_set_persists_to_user_config(config_env):
 
     saved = json.loads((user_root / "config.json").read_text(encoding="utf-8"))
     assert saved["dependencies"]["disabled_tools"] == ["pandoc"]
+
+
+def test_independent_instances_merge_only_their_changes(config_env):
+    config_dir, _ = config_env
+    _write(config_dir / "default.json", {"app": {"theme": "Auto", "mode": "persistent"}})
+    first = ConfigLoader(str(config_dir))
+    second = ConfigLoader(str(config_dir))
+
+    first.set("app.theme", "Dark")
+    second.set("app.mode", "temporary")
+
+    saved = ConfigLoader(str(config_dir))
+    assert saved.get("app") == {"theme": "Dark", "mode": "temporary"}
+
+
+def test_failed_replace_preserves_previous_config_and_reports_error(config_env, monkeypatch):
+    config_dir, user_root = config_env
+    _write(config_dir / "default.json", {"app": {"theme": "Auto"}})
+    _write(user_root / "config.json", {"app": {"theme": "Dark"}})
+    config = ConfigLoader(str(config_dir))
+
+    def denied(source, target):
+        raise PermissionError("cannot replace configuration")
+
+    monkeypatch.setattr(loader_module.os, "replace", denied)
+
+    with pytest.raises(PermissionError):
+        config.set("app.theme", "Light")
+    assert json.loads((user_root / "config.json").read_text(encoding="utf-8")) == {"app": {"theme": "Dark"}}
+
+
+def test_concurrent_instances_preserve_all_updated_keys(config_env):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    config_dir, _ = config_env
+    _write(config_dir / "default.json", {"tools": {}})
+    configs = [ConfigLoader(str(config_dir)) for _ in range(8)]
+    barrier = Barrier(8)
+
+    def update(index):
+        barrier.wait(timeout=10)
+        configs[index].set(f"tools.tool{index}", index)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(update, range(8)))
+
+    assert ConfigLoader(str(config_dir)).get("tools") == {f"tool{index}": index for index in range(8)}

@@ -87,3 +87,6 @@ dist/onefile/main.build/
 # Nuitka 构建产物（这些会在 release/ 中重新打包）
 dist/standalone/main.dist/
 dist/onefile/*.exe
+
+# 运行期配置锁（ConfigLoader 原子保存用）
+config.lock

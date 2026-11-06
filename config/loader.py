@@ -1,13 +1,19 @@
 import os
 import json
-import shutil
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from threading import RLock
+from collections.abc import Iterator
 from typing import Any, Dict, Union
 from core.utils.resource_path import get_data_root, get_resource_path
+from core.utils.logger import AppLogger
 
 class ConfigLoader:
     """配置加载器，支持分层配置和递归更新"""
     
+    _lock = RLock()
+
     def __init__(self, config_dir: str = None):
         # 1. 确定默认配置文件路径 (只读，可能在EXE内部或源码目录)
         if config_dir is None:
@@ -20,10 +26,38 @@ class ConfigLoader:
         self.user_config_path = get_data_root() / "config.json"
         
         self._config = {}
+        self._pending = {}
         self.load()
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        with self._lock, open(self.user_config_path.with_suffix(".lock"), "a+b") as lock:
+            lock.seek(0, os.SEEK_END)
+            if lock.tell() == 0:
+                lock.write(b"\0")
+                lock.flush()
+            lock.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                lock.seek(0)
+                if os.name == "nt":
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
 
     def load(self):
         """加载配置：默认配置 -> 用户配置覆盖"""
+        with self._locked():
+            self._load()
+
+    def _load(self):
         # 1. 加载默认配置
         if not self.default_config_path.exists():
             raise FileNotFoundError(f"Default config not found at {self.default_config_path}")
@@ -37,8 +71,8 @@ class ConfigLoader:
             try:
                 with open(self.user_config_path, 'r', encoding='utf-8') as f:
                     user_config = json.load(f)
-            except Exception as e:
-                print(f"Error loading user config: {e}")
+            except (OSError, json.JSONDecodeError) as e:
+                AppLogger().warning(f"读取用户配置失败: {e}")
         
         # 3. 合并配置
         self._config = default_config
@@ -71,20 +105,30 @@ class ConfigLoader:
         设置配置项，支持点号路径访问
         例如: config.set("pdf.compress.quality", "/ebook")
         """
-        keys = key_path.split('.')
-        target = self._config
-        for key in keys[:-1]:
-            target = target.setdefault(key, {})
-        target[keys[-1]] = value
-        self.save()
+        with self._lock:
+            self._pending[key_path] = value
+            self.save()
 
     def save(self):
-        """保存当前配置到用户配置文件"""
-        try:
-            with open(self.user_config_path, 'w', encoding='utf-8') as f:
-                json.dump(self._config, f, indent=4, ensure_ascii=False)
-        except Exception as e:
-            print(f"Error saving config: {e}")
+        """在进程间锁内合并本实例修改的键，再原子替换配置。"""
+        with self._locked():
+            if not self._pending:
+                return
+            self._load()
+            for key_path, value in self._pending.items():
+                keys = key_path.split('.')
+                target = self._config
+                for key in keys[:-1]:
+                    target = target.setdefault(key, {})
+                target[keys[-1]] = value
+            with tempfile.TemporaryDirectory(dir=self.user_config_path.parent) as staging:
+                pending = Path(staging) / "config.json"
+                with pending.open('w', encoding='utf-8') as f:
+                    json.dump(self._config, f, indent=4, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(pending, self.user_config_path)
+            self._pending.clear()
 
     @property
     def all(self) -> Dict:
