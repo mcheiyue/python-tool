@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 class CodeExtractor:
     def extract(self, root_dir, extensions, output_path, *, on_log=None, on_finished=None):
@@ -20,9 +21,16 @@ class CodeExtractor:
             ]
             if not targets:
                 finished(False, "未找到匹配的文件，未写入任何内容")
-            else:
-                # 非空才开写：0 匹配/遍历早失败时不创建、不截断用户已有输出文件
-                with open(output_path, 'w', encoding='utf-8') as out:
+                return
+            if os.path.exists(output_path) and any(
+                os.path.samefile(output_path, source) for source in targets
+            ):
+                finished(False, "输出文件不能是待提取的输入文件")
+                return
+            # 同盘暂存并替换，读取中断时保留用户原有文件。
+            with tempfile.TemporaryDirectory(dir=os.path.dirname(os.path.abspath(output_path))) as staging:
+                pending = os.path.join(staging, "merged.txt")
+                with open(pending, 'w', encoding='utf-8') as out:
                     for file_path in targets:
                         log(f"处理: {file_path}")
 
@@ -32,13 +40,11 @@ class CodeExtractor:
                         out.write(f"{'='*50}\n\n")
 
                         # 写入内容
-                        try:
-                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                out.write(f.read())
-                        except Exception as e:
-                            out.write(f"Error reading file: {e}")
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            out.write(f.read())
 
                         out.write("\n\n")
-                finished(True, f"已合并 {len(targets)} 个文件到 {output_path}")
-        except Exception as e:
+                os.replace(pending, output_path)
+            finished(True, f"已合并 {len(targets)} 个文件到 {output_path}")
+        except OSError as e:
             finished(False, str(e))
