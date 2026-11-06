@@ -1,5 +1,6 @@
 import os
 import comtypes.client
+from core.utils.office_security import macros_disabled
 
 class DocToDocxConverter:
     """Doc 转 Docx 转换器"""
@@ -75,7 +76,8 @@ class DocToDocxConverter:
                     docx_path = os.path.join(out_dir, base_name + ".docx")
 
                     # 3. 打开文档
-                    doc = self._app.Documents.Open(abs_path)
+                    with macros_disabled(self._app):
+                        doc = self._app.Documents.Open(abs_path, False, True, False)
                     
                     # 4. 另存为 Docx
                     # SaveAs2(FileName, FileFormat, ...)

@@ -22,7 +22,7 @@ class WordEngine(BaseOfficeConverter):
         return app
 
     def _open_document(self, app, file_path: str):
-        return app.Documents.Open(file_path)
+        return app.Documents.Open(file_path, False, True, False)
 
     def _save_as_pdf(self, doc, output_path: str):
         # 使用 ExportAsFixedFormat 替代 SaveAs2，兼容性更好

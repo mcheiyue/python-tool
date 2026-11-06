@@ -117,7 +117,7 @@ class TestOfficeEngineOrchestration:
         assert len(engine.opened) == 1
         assert len(engine.saved) == 1
 
-    def test_app_creation_failure_emits_zero_counts(self, no_com, tmp_path):
+    def test_app_creation_failure_counts_unprocessed_files(self, no_com, tmp_path):
         files = _make_files(tmp_path, ["a.docx"])
 
         class ExplodingEngine(FakeOfficeEngine):
@@ -130,4 +130,56 @@ class TestOfficeEngineOrchestration:
         engine.convert(files)
 
         assert ("log", "🔥 严重错误: COM unavailable") in events
-        assert events[-1] == ("finished", 0, 0)
+        assert events[-1] == ("finished", 0, 1)
+
+    def test_open_disables_macros_and_restores_original_mode(self, no_com, tmp_path):
+        from types import SimpleNamespace
+
+        app = SimpleNamespace(AutomationSecurity=2)
+
+        class GuardedEngine(FakeOfficeEngine):
+            def _create_app(self):
+                return app
+
+            def _open_document(self, application, file_path):
+                if application.AutomationSecurity != 3:
+                    raise PermissionError("macros enabled")
+                return super()._open_document(application, file_path)
+
+        files = _make_files(tmp_path, ["safe.docx"])
+        engine = GuardedEngine()
+        events = _collect(engine)
+
+        engine.convert(files)
+
+        assert events[-1] == ("finished", 1, 0)
+        assert (tmp_path / "safe.pdf").read_text(encoding="utf-8") == "pdf"
+        assert app.AutomationSecurity == 2
+
+    def test_office_activation_failure_uses_libreoffice_in_conversion(self, no_com, tmp_path, monkeypatch):
+        from pathlib import Path
+        from subprocess import CompletedProcess
+        from types import SimpleNamespace
+        import subprocess
+        from core.engines.office.selector import create_office_engine
+
+        files = _make_files(tmp_path, ["input.docx"])
+        tool = SimpleNamespace(is_available=lambda: True, get_executable_path=lambda: "soffice.exe")
+        manager = SimpleNamespace(get_tool=lambda name: tool)
+
+        def missing_office(*args, **kwargs):
+            raise comtypes.COMError(-2147221164, "not registered", None)
+
+        def convert_with_cli(command, **kwargs):
+            Path(command[-1]).with_suffix(".pdf").write_bytes(b"fallback pdf")
+            return CompletedProcess(command, 0, "", "")
+
+        monkeypatch.setattr(comtypes.client, "CreateObject", missing_office)
+        monkeypatch.setattr(subprocess, "run", convert_with_cli)
+        engine = create_office_engine("word", manager)
+        events = _collect(engine)
+
+        engine.convert(files)
+
+        assert events[-1] == ("finished", 1, 0)
+        assert (tmp_path / "input.pdf").read_bytes() == b"fallback pdf"

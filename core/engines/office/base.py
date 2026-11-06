@@ -4,6 +4,7 @@ from abc import abstractmethod
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.batch import run as batch_run
+from core.utils.office_security import macros_disabled
 
 class BaseOfficeConverter(QObject):
     """Office 文档转换器基类 (Template Method Pattern)"""
@@ -12,10 +13,12 @@ class BaseOfficeConverter(QObject):
     finished = pyqtSignal(int, int)
     log = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self, tool_manager=None):
         super().__init__()
         self._is_running = False
         self._app = None
+        self._tool_manager = tool_manager
+        self._fallback = None
 
     def convert(self, file_paths):
         """执行转换任务的模板方法"""
@@ -30,7 +33,18 @@ class BaseOfficeConverter(QObject):
             self.log.emit(f"正在启动 {self.app_name}...")
             
             # 2. 创建应用实例
-            self._app = self._create_app()
+            try:
+                self._app = self._create_app()
+            except (OSError, comtypes.COMError):
+                if self._tool_manager is None:
+                    raise
+                from .libreoffice import LibreOfficeEngine
+                self._fallback = LibreOfficeEngine(self._tool_manager)
+                self._fallback.log.connect(self.log.emit)
+                self._fallback.progress.connect(self.progress.emit)
+                self.log.emit("MS Office 不可用，尝试 LibreOffice")
+                success, fail = self._fallback.convert(file_paths)
+                return
 
             def worker(path):
                 file_name = os.path.basename(path)
@@ -41,7 +55,8 @@ class BaseOfficeConverter(QObject):
                     pdf_path = os.path.splitext(abs_path)[0] + ".pdf"
 
                     # 3. 打开文档
-                    doc = self._open_document(self._app, abs_path)
+                    with macros_disabled(self._app):
+                        doc = self._open_document(self._app, abs_path)
                     
                     # 4. 另存为 PDF
                     self._save_as_pdf(doc, pdf_path)
@@ -65,6 +80,7 @@ class BaseOfficeConverter(QObject):
 
         except Exception as e:
             self.log.emit(f"🔥 严重错误: {str(e)}")
+            fail = total - success
         
         finally:
             # 6. 清理应用实例
@@ -82,10 +98,13 @@ class BaseOfficeConverter(QObject):
             
             self.finished.emit(success, fail)
             self._is_running = False
+            self._fallback = None
 
     def stop(self):
         """停止当前任务"""
         self._is_running = False
+        if self._fallback is not None:
+            self._fallback.stop()
 
     @property
     @abstractmethod

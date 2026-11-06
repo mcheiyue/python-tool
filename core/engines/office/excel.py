@@ -22,7 +22,7 @@ class ExcelEngine(BaseOfficeConverter):
 
     def _open_document(self, app, file_path: str):
         # Open(Filename, ReadOnly)
-        return app.Workbooks.Open(file_path, ReadOnly=True)
+        return app.Workbooks.Open(file_path, 0, True)
 
     def _save_as_pdf(self, doc, output_path: str):
         doc.ExportAsFixedFormat(self.XL_TYPE_PDF, output_path)

@@ -13,10 +13,10 @@ class LibreOfficeEngine(QObject):
     finished = pyqtSignal(int, int)
     log = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self, tool_manager=None):
         super().__init__()
         self._is_running = False
-        self._tool_manager = ExternalToolManager()
+        self._tool_manager = tool_manager if tool_manager is not None else ExternalToolManager()
 
     def is_available(self) -> bool:
         """检查 LibreOffice 是否可用"""
@@ -47,7 +47,8 @@ class LibreOfficeEngine(QObject):
         if not soffice_path:
             self.log.emit("❌ LibreOffice 未安装或不可用")
             self.finished.emit(0, total)
-            return
+            self._is_running = False
+            return 0, total
 
         self.log.emit(f"使用 LibreOffice: {soffice_path}")
 
@@ -111,6 +112,7 @@ class LibreOfficeEngine(QObject):
         self.log.emit(f"\n转换完成！成功: {success}, 失败: {fail}")
         self.finished.emit(success, fail)
         self._is_running = False
+        return success, fail
 
     def stop(self):
         """停止当前任务"""

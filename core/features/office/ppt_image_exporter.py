@@ -1,5 +1,6 @@
 import os
 import comtypes.client
+from core.utils.office_security import macros_disabled
 
 class PPTImageExporter:
 
@@ -70,7 +71,8 @@ class PPTImageExporter:
                     if not os.path.exists(file_out_dir):
                         os.makedirs(file_out_dir)
 
-                    presentation = ppt_app.Presentations.Open(abs_path, True, False, False)
+                    with macros_disabled(ppt_app):
+                        presentation = ppt_app.Presentations.Open(abs_path, True, False, False)
                     
                     try:
                         # 导出所有幻灯片

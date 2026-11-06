@@ -150,15 +150,16 @@ def test_ppt_export_slides_to_png(pptx_file, tmp_path):
 
 
 def test_doc_converted_to_docx(doc_file, tmp_path):
-    events = []
+    events, logs = [], []
     converter = DocToDocxConverter()
     converter.convert(
         [doc_file],
         str(tmp_path),
+        on_log=logs.append,
         on_finished=lambda ok, fail: events.append((ok, fail)),
     )
 
-    assert events == [(1, 0)], f"转换载荷异常：{events}"
+    assert events == [(1, 0)], f"转换载荷异常：{events}; 日志：{logs}"
     out = tmp_path / "sample.docx"
     assert out.exists(), "未产出 docx"
     assert out.read_bytes()[:2] == b"PK", "docx 魔数应为 PK"
