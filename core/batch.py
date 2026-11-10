@@ -12,6 +12,7 @@ Qt 信号协议由调用方用回调桥接（见 UI 层 WorkerThread 模式）�
 worker(item) 抛出异常计为 fail 且不中断循环；返回值语义由 worker 自定，本层忽略。
 """
 from typing import Callable, Iterable, Optional, Tuple
+from concurrent.futures import CancelledError
 
 
 def run(
@@ -42,6 +43,8 @@ def run(
         try:
             worker(item)
             success += 1
+        except CancelledError:
+            raise
         except Exception as e:
             fail += 1
             log(f"失败 {item}: {e}")

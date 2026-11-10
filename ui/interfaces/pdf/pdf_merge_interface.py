@@ -16,7 +16,6 @@ class PDFMergeInterface(QWidget):
     # 桥接信号：合并回调在工作线程触发，经此排队回主线程
     _log_bridged = pyqtSignal(str)
     _progress_bridged = pyqtSignal(int, int, str)
-    _finished_bridged = pyqtSignal(bool, str)
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -28,7 +27,8 @@ class PDFMergeInterface(QWidget):
 
         # 标题区域
         self.title = SubtitleLabel("PDF 合并工具", self)
-        self.desc = BodyLabel("将多个 PDF 文件合并为一个，支持拖拽排序", self)
+        self.desc = BodyLabel("将多个 PDF 文件合并为一个，支持拖拽排序。同名输出仅在成功后替换，输入文件不会被覆盖。", self)
+        self.desc.setWordWrap(True)
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)
@@ -153,9 +153,10 @@ class PDFMergeInterface(QWidget):
 
         self._log_bridged.connect(self.append_log)
         self._progress_bridged.connect(self.update_progress)
-        self._finished_bridged.connect(self.on_finished)
+        self.out_edit.textChanged.connect(self.check_state)
 
     def add_files(self):
+        if is_busy(self): return
         paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF 文件", "", "PDF (*.pdf)")
         if paths: self.on_files_dropped(paths)
 
@@ -170,6 +171,7 @@ class PDFMergeInterface(QWidget):
         return paths
 
     def on_files_dropped(self, paths):
+        if is_busy(self): return
         current_paths = self._get_all_paths()
         for p in paths:
             if p not in current_paths:
@@ -181,12 +183,14 @@ class PDFMergeInterface(QWidget):
         self.check_state()
 
     def clear_files(self):
+        if is_busy(self): return
         self.list_widget.clear()
         self.log_text.clear()
         self.progress.hide()
         self.check_state()
 
     def remove_selected(self):
+        if is_busy(self): return
         # 从后往前删，避免索引偏移
         rows = sorted([item.row() for item in self.list_widget.selectedIndexes()], reverse=True)
         for row in rows:
@@ -194,6 +198,7 @@ class PDFMergeInterface(QWidget):
         self.check_state()
 
     def move_up(self):
+        if is_busy(self): return
         row = self.list_widget.currentRow()
         if row > 0:
             item = self.list_widget.takeItem(row)
@@ -201,6 +206,7 @@ class PDFMergeInterface(QWidget):
             self.list_widget.setCurrentRow(row-1)
 
     def move_down(self):
+        if is_busy(self): return
         row = self.list_widget.currentRow()
         count = self.list_widget.count()
         if row < count - 1 and row != -1:
@@ -225,7 +231,7 @@ class PDFMergeInterface(QWidget):
             if first_path:
                 dir_name = os.path.dirname(first_path)
                 self.out_edit.setText(os.path.join(dir_name, "merged_output.pdf"))
-                self.start_btn.setEnabled(True)
+                self.start_btn.setEnabled(not is_busy(self))
 
     def append_log(self, text):
         self.log_text.append(text)
@@ -242,6 +248,7 @@ class PDFMergeInterface(QWidget):
             self.thread.cancel()
 
     def start_merge(self):
+        if is_busy(self): return
         output_path = self.out_edit.text().strip()
         files = self._get_all_paths()
         if not output_path or not files: return
@@ -250,34 +257,44 @@ class PDFMergeInterface(QWidget):
         self.list_widget.setEnabled(False)
         self.add_btn.setEnabled(False)
         self.clear_btn.setEnabled(False)
+        for control in (self.out_edit, self.browse_btn, self.up_btn, self.down_btn, self.remove_btn):
+            control.setEnabled(False)
         self.log_text.clear()
         
         self.progress.start(len(files))
         self.progress.show()
         
-        self.thread = WorkerThread(
+        thread = WorkerThread(
             self.merger.merge, files, output_path,
             on_log=self._log_bridged.emit,
             on_progress=self._progress_bridged.emit,
-            on_finished=self._finished_bridged.emit,
+            should_cancel=lambda: thread.is_cancelled,
         )
+        self.thread = thread
+        self.thread.finished.connect(lambda result: self.on_finished(*result))
         self.thread.error.connect(lambda msg: self.on_finished(False, msg))
+        self.thread.cancelled.connect(self.on_cancelled)
         self.thread.start()
 
-    def on_finished(self, success, msg):
-        self.start_btn.setEnabled(True)
+    def on_cancelled(self):
+        self.on_finished(False, "合并任务已取消", cancelled=True)
+
+    def on_finished(self, success, msg, *, cancelled=False):
+        self.check_state()
         self.list_widget.setEnabled(True)
         self.add_btn.setEnabled(True)
         self.clear_btn.setEnabled(True)
+        for control in (self.out_edit, self.browse_btn, self.up_btn, self.down_btn, self.remove_btn):
+            control.setEnabled(True)
         self.start_btn.setText("开始合并")
         
         # 检查是否被取消
-        if self.progress.is_cancelled:
-            self.progress.set_complete(success=False)
+        if cancelled:
+            self.progress.set_complete(success=False, cancelled=True)
             InfoBar.warning("已取消", "合并任务已取消", duration=3000, parent=self)
             return
         
-        self.progress.set_complete(success=success)
+        self.progress.set_complete(success=success, cancelled=False)
         
         if success:
             bar = InfoBar.success(

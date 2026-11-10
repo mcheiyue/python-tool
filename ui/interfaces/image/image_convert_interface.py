@@ -8,12 +8,13 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slid
                             FluentIcon as FIF)
 
 from core.features.image.image_converter import ImageConverter
+from core import task_registry
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
 from ui.design_system import Margins, Spacing
 
 class ConvertTaskSignals(QObject):
     """任务信号类"""
-    finished = pyqtSignal(str, bool, str)  # input_path, success, message
+    finished = pyqtSignal(str, object, str)  # input_path, success (None 为取消), message
     error = pyqtSignal(str, str)  # input_path, error_message
 
 class ConvertTask(QRunnable):
@@ -172,7 +173,7 @@ class ImageConvertInterface(QWidget):
         self.del_action.triggered.connect(self.remove_selection)
         self.addAction(self.del_action)
 
-        self.thread_pool = QThreadPool()
+        self.thread_pool = QThreadPool(self)
         self.thread_pool.setMaxThreadCount(4)  # 限制最大并发数为 4
         
         self.finished_count = 0
@@ -220,7 +221,7 @@ class ImageConvertInterface(QWidget):
                 item.setData(Qt.ItemDataRole.UserRole, p)
                 self.list_widget.addItem(item)
         if self.list_widget.count() > 0:
-            self.start_btn.setEnabled(True)
+            self.start_btn.setEnabled(self.thread_pool.waitForDone(0))
 
     def clear_files(self):
         self.list_widget.clear()
@@ -228,6 +229,8 @@ class ImageConvertInterface(QWidget):
         self.start_btn.setEnabled(False)
 
     def start_conversion(self):
+        if task_registry.registry.closing or not self.thread_pool.waitForDone(0):
+            return
         files = self._get_all_paths()
         if not files: return
         
@@ -257,10 +260,13 @@ class ImageConvertInterface(QWidget):
         self.error_count = 0
         self.cancelled_count = 0
         self._is_cancelling = False  # 重置取消标志
+        for control in (self.list_widget, self.add_btn, self.clear_btn, self.add_action, self.del_action):
+            control.setEnabled(False)
         
         self.progress.start(self.total)
         self.progress.show()
         
+        task_registry.registry.add_pool(self.thread_pool, self.on_cancel_task)
         for input_path in files:
             # 构建输出路径
             dir_name = os.path.dirname(input_path)
@@ -317,6 +323,8 @@ class ImageConvertInterface(QWidget):
     def _check_all_done(self):
         if self.finished_count >= self.total:
             self.start_btn.setEnabled(True)
+            for control in (self.list_widget, self.add_btn, self.clear_btn, self.add_action, self.del_action):
+                control.setEnabled(True)
             
             # 检查是否被取消
             if self._is_cancelling:

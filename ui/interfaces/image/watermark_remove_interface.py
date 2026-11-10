@@ -10,6 +10,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget,
 
 from core.features.image.gemini_watermark_remover import GeminiWatermarkRemover
 from ui.threads import PoolTask
+from core import task_registry
 from ui.widgets import DragDropListWidget
 
 class WatermarkRemoveInterface(QWidget):
@@ -146,7 +147,7 @@ class WatermarkRemoveInterface(QWidget):
                 self.list_widget.addItem(os.path.basename(p))
         
         if self.files:
-            self.start_btn.setEnabled(True)
+            self.start_btn.setEnabled(self.pool.waitForDone(0))
             # 自动选择第一个文件预览
             if self.list_widget.count() > 0:
                 self.list_widget.setCurrentRow(0)
@@ -196,6 +197,8 @@ class WatermarkRemoveInterface(QWidget):
         self.processed_image.clear()
 
     def start_processing(self):
+        if task_registry.registry.closing or not self.pool.waitForDone(0):
+            return
         if not self.files:
             return
             
@@ -212,9 +215,9 @@ class WatermarkRemoveInterface(QWidget):
             }
             task = PoolTask(
                 self.remover.process_image, (path,), task_kwargs,
-                on_error=lambda msg: self.on_one_finished(False, msg),
+                on_error=lambda msg: self._finished_bridged.emit(False, msg),
             )
-            self.pool.start(task)
+            task.start(self.pool)
 
     def on_one_finished(self, success, result):
         self.finished_count += 1

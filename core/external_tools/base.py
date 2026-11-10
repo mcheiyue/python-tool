@@ -7,13 +7,15 @@ import threading
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
+from core import task_registry
+from core.task_registry import ManagedThread
 from core.utils.logger import AppLogger
 # 解析串行化：惰性解压是重 IO 操作，并发解压会叠加内存/磁盘峰值，
 # 故所有工具共用一把锁。_find() 不会回调其他工具，因此不存在死锁面。
 _RESOLVE_LOCK = threading.Lock()
 
 
-class _StatusResolver(QThread):
+class _StatusResolver(ManagedThread):
     """工具的常驻状态解析线程：run() 一次解析，结果扇出给所有等待中的回调。
 
     线程由工具持有（不随调用结束回收），因此不存在"运行中被析构"的致命错误；
@@ -31,6 +33,9 @@ class _StatusResolver(QThread):
 
     def _restart_pending(self):
         with self._waiters_lock:
+            if task_registry.registry.closing:
+                self._waiters.clear()
+                return
             pending = bool(self._waiters)
         if pending and not self.isRunning():
             self.start()
@@ -42,14 +47,19 @@ class _StatusResolver(QThread):
     def run(self):
         try:
             with _RESOLVE_LOCK:
+                if self.isInterruptionRequested():
+                    return
                 result = self._tool.get_status_info()
         except Exception:
             result = None
-        self.resolved.emit(result)
+        if not self.isInterruptionRequested():
+            self.resolved.emit(result)
 
     def _fan_out(self, result):
         with self._waiters_lock:
             waiters, self._waiters = self._waiters, []
+        if task_registry.registry.closing:
+            return
         for callback in waiters:
             try:
                 callback(result)
@@ -64,7 +74,7 @@ class _InstallSignals(QObject):
     finished = pyqtSignal(bool, object)
 
 
-class _ToolInstallWorker(QThread):
+class _ToolInstallWorker(ManagedThread):
     """工具安装工作线程：下载（带进度/取消）+ 安全解压 + 重新探测版本。
 
     与 _StatusResolver 的分工：这是「安装」动作（用户显式触发、有进度），
@@ -89,6 +99,7 @@ class _ToolInstallWorker(QThread):
 
     def cancel(self):
         self._cancelled = True
+        super().cancel()
 
     def run(self):
         logger = AppLogger()
@@ -242,6 +253,8 @@ class ExternalTool(ABC):
         """
         from core.tools.package_store import PackageStore
 
+        if should_cancel is None:
+            should_cancel = QThread.currentThread().isInterruptionRequested
         try:
             from config.loader import ConfigLoader
             persistent = ConfigLoader().get(
@@ -310,6 +323,8 @@ class ExternalTool(ABC):
         get_status_info()。解析进行中再次调用会复用同一次结果（回调排队扇出），
         线程由工具持有，调用方无需（也不应）保存线程引用。
         """
+        if task_registry.registry.closing:
+            return None
         resolver = getattr(self, "_resolver", None)
         if resolver is None:
             resolver = _StatusResolver(self)

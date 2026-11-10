@@ -1,9 +1,13 @@
 import os
 import traceback
+from concurrent.futures import CancelledError
 from pypdf import PdfReader, PdfWriter
 
+from core.cancellation import check_cancelled
+from core.utils.atomic_output import atomic_output
+
 class PDFSplitter:
-    def split(self, file_path, ranges_text, output_dir, *, on_log=None, on_progress=None, on_finished=None):
+    def split(self, file_path, ranges_text, output_dir, *, on_log=None, on_progress=None, on_finished=None, should_cancel=None):
         """
         根据范围拆分 PDF
         :param file_path: 源 PDF 文件路径
@@ -22,10 +26,12 @@ class PDFSplitter:
         def finished(ok, msg):
             if on_finished:
                 on_finished(ok, msg)
+            return ok, msg
 
         log(f"开始处理文件: {os.path.basename(file_path)}")
         
         try:
+            check_cancelled(should_cancel)
             reader = PdfReader(file_path)
             total_pages = len(reader.pages)
             log(f"文件总页数: {total_pages}")
@@ -33,17 +39,18 @@ class PDFSplitter:
             # 解析范围
             ranges = self._parse_ranges(ranges_text, total_pages, on_log)
             if not ranges:
-                finished(False, "无效的页码范围")
-                return
+                return finished(False, "无效的页码范围")
 
             base_name = os.path.splitext(os.path.basename(file_path))[0]
             
             produced = 0
             for i, (start, end) in enumerate(ranges):
+                check_cancelled(should_cancel)
                 writer = PdfWriter()
                 
                 target_pages = []
                 for p_idx in range(start - 1, end):
+                    check_cancelled(should_cancel)
                     if 0 <= p_idx < total_pages:
                         writer.add_page(reader.pages[p_idx])
                         target_pages.append(p_idx + 1)
@@ -55,7 +62,9 @@ class PDFSplitter:
                 output_filename = f"{base_name}_part{i+1}_{start}-{end}.pdf"
                 output_path = os.path.join(output_dir, output_filename)
                 
-                with open(output_path, "wb") as f_out:
+                if os.path.exists(output_path) and os.path.samefile(output_path, file_path):
+                    return finished(False, "输出文件不能覆盖输入 PDF")
+                with atomic_output(output_path, should_cancel=should_cancel) as f_out:
                     writer.write(f_out)
                 
                 log(f"✅ 已生成: {output_filename} ({len(target_pages)} 页)")
@@ -63,14 +72,17 @@ class PDFSplitter:
                 progress(i + 1, len(ranges), f"正在导出第 {i+1} 部分...")
 
             if produced == 0:
-                finished(False, f"没有可拆分的页面（文件共 {total_pages} 页，范围 {ranges_text}）")
-                return
-            finished(True, f"拆分完成，共生成 {produced} 个文件")
+                return finished(False, f"没有可拆分的页面（文件共 {total_pages} 页，范围 {ranges_text}）")
+            check_cancelled(should_cancel)
+            return finished(True, f"拆分完成，共生成 {produced} 个文件")
 
+        except CancelledError:
+            log("拆分已取消，已完成的文件予以保留")
+            raise
         except Exception as e:
             error_trace = traceback.format_exc()
             log(f"❌ 错误:\n{error_trace}")
-            finished(False, str(e))
+            return finished(False, str(e))
 
     def _parse_ranges(self, text, total_pages, on_log=None):
         """

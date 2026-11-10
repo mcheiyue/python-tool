@@ -1,10 +1,13 @@
 import os
+from concurrent.futures import CancelledError
 from pypdf import PdfReader
 
 from core.batch import run as batch_run
+from core.cancellation import check_cancelled
+from core.utils.atomic_output import atomic_output
 
 class PDFImageExtractor:
-    def extract(self, files, output_dir, *, on_log=None, on_progress=None, on_finished=None):
+    def extract(self, files, output_dir, *, on_log=None, on_progress=None, on_finished=None, should_cancel=None):
         """
         从 PDF 中提取图片
         :param files: PDF 文件列表
@@ -16,6 +19,7 @@ class PDFImageExtractor:
                 on_log(msg)
 
         def worker(file_path):
+            check_cancelled(should_cancel)
             file_name = os.path.basename(file_path)
             if not file_path.lower().endswith('.pdf'):
                 raise ValueError("不是有效的 PDF 文件")
@@ -29,16 +33,20 @@ class PDFImageExtractor:
 
             img_count = 0
             for p_idx, page in enumerate(reader.pages):
+                check_cancelled(should_cancel)
                 try:
                     for img_idx, image in enumerate(page.images):
+                        check_cancelled(should_cancel)
                         img_name = f"page{p_idx+1}_img{img_idx+1}_{image.name}"
                         img_path = os.path.join(file_out_dir, img_name)
 
-                        with open(img_path, "wb") as f_img:
+                        with atomic_output(img_path, should_cancel=should_cancel) as f_img:
                             f_img.write(image.data)
 
                         img_count += 1
                         log(f"  提取: {img_name}")
+                except CancelledError:
+                    raise
                 except Exception as e:
                     log(f"  ⚠️ 第 {p_idx+1} 页提取警告: {str(e)}")
 
@@ -50,6 +58,9 @@ class PDFImageExtractor:
                     os.rmdir(file_out_dir)
 
         log(f"开始任务: 处理 {len(files)} 个文件")
-        success, fail = batch_run(files, worker, on_progress=on_progress, on_log=log)
+        check_cancelled(should_cancel)
+        success, fail = batch_run(files, worker, on_progress=on_progress, on_log=log, should_stop=should_cancel)
+        check_cancelled(should_cancel)
         if on_finished:
             on_finished(success, fail)
+        return success, fail

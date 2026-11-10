@@ -114,13 +114,15 @@ class CancellableProgressWidget(QWidget):
         self.progress_bar.stop()
         self.cancel_btn.setEnabled(False)
     
-    def set_complete(self, success: bool = True):
+    def set_complete(self, success: bool = True, *, cancelled: bool | None = None):
         """
         设置任务完成状态
         
         Args:
             success: 是否成功完成
         """
+        if cancelled is not None:
+            self._is_cancelled = cancelled
         self.stop()
         
         if self._is_cancelled:
@@ -140,7 +142,7 @@ class CancellableProgressWidget(QWidget):
         self.cancel_btn.setText("取消")
         self.progress_bar.reset()
         self.hide()
-    
+
     @property
     def is_cancelled(self) -> bool:
         """

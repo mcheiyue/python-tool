@@ -4,7 +4,7 @@ from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QCompleter
 from qfluentwidgets import (FluentWindow, NavigationItemPosition,
                           isDarkTheme, TitleLabel, qconfig, NavigationAvatarWidget,
-                          NavigationDisplayMode)
+                          NavigationDisplayMode, InfoBar)
 
 from core.utils.fuzzy_search import FuzzySearchEngine
 from ui.navigation_extras import NavigationSearchLineEdit, SearchController, refresh_navigation_icons
@@ -13,12 +13,13 @@ from core.utils.lazy_loader import UILazyLoader
 from core.utils.resource_path import get_resource_path
 from core.utils.icon_provider import ThemedSvgIconEngine
 from ui.widgets import CategoryHomePage
-from ui.threads import active_threads
+from core import task_registry
 
 class MainWindow(FluentWindow):
     def __init__(self, container=None):
         super().__init__()
         self.container = container
+        self._closing = False
         self.initWindow()
         
         # 存储所有功能界面，用于搜索 {name: interface}
@@ -69,12 +70,27 @@ class MainWindow(FluentWindow):
         self.move((screen.width()-self.width())//2, (screen.height()-self.height())//2)
 
     def closeEvent(self, event):
-        """取消并等待活动任务：窗口析构时回收运行中的 QThread 会让进程直接崩溃。"""
-        for thread in active_threads():
-            thread.cancel()
-        for thread in active_threads():
-            thread.wait(5000)
+        """保持事件循环运行，直到所有后台执行器退出后再关闭窗口。"""
+        registry = task_registry.registry
+        if registry.has_active():
+            event.ignore()
+            if not self._closing:
+                self._closing = True
+                self.stackedWidget.setEnabled(False)
+                self.navigationInterface.setEnabled(False)
+                InfoBar.info(
+                    "正在退出", "正在结束后台任务，完成后将自动关闭。",
+                    duration=-1, isClosable=False, parent=self,
+                )
+                registry.idle.connect(self._finish_close)
+                registry.begin_shutdown()
+            return
+        registry.begin_shutdown()
         super().closeEvent(event)
+
+    def _finish_close(self):
+        if self._closing:
+            QTimer.singleShot(0, self.close)
 
     def get_icon(self, path):
         """获取主题感知的 SVG 图标"""

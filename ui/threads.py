@@ -1,26 +1,18 @@
-import threading
+from concurrent.futures import CancelledError
+from functools import partial
+from threading import Event
 
-from PyQt6.QtCore import QRunnable, QThread, pyqtSignal
-from typing import Callable, Any, Optional, List
+from PyQt6.QtCore import QRunnable, QThread, QThreadPool, QTimer, pyqtSignal
+from typing import Callable, Any
 
-_ACTIVE = set()
-_ACTIVE_LOCK = threading.Lock()
-
-
-def active_threads() -> List["WorkerThread"]:
-    with _ACTIVE_LOCK:
-        return [thread for thread in _ACTIVE if thread.isRunning()]
-
-
-def cancel_active_threads():
-    for thread in active_threads():
-        thread.cancel()
+from core import task_registry
+from core.task_registry import ManagedThread
 
 
 def is_busy(owner) -> bool:
     """owner.thread 是否仍在运行；界面用它避免运行期重新放开开始按钮。"""
     thread = getattr(owner, "thread", None)
-    return thread is not None and thread.isRunning()
+    return thread is not None and not thread.wait(0)
 
 
 class PoolTask(QRunnable):
@@ -32,15 +24,24 @@ class PoolTask(QRunnable):
         self._args = args
         self._kwargs = kwargs
         self._on_error = on_error
+        self._cancelled = Event()
+
+    def start(self, pool: QThreadPool) -> None:
+        if task_registry.registry.add_pool(pool, self.cancel):
+            pool.start(self)
+
+    def cancel(self) -> None:
+        self._cancelled.set()
 
     def run(self):
         try:
-            self._func(*self._args, **self._kwargs)
+            if not self._cancelled.is_set():
+                self._func(*self._args, **self._kwargs)
         except Exception as e:
             self._on_error(str(e))
 
 
-class WorkerThread(QThread):
+class WorkerThread(ManagedThread):
     """
     通用工作线程，支持任意可调用任务
     
@@ -68,6 +69,7 @@ class WorkerThread(QThread):
     """
     finished = pyqtSignal(object)  # 返回结果（任何类型）
     error = pyqtSignal(str)        # 返回错误信息
+    cancelled = pyqtSignal()
     
     def __init__(self, task_func: Callable[..., Any], *args, **kwargs):
         """
@@ -83,25 +85,38 @@ class WorkerThread(QThread):
         self.args = args
         self.kwargs = kwargs
         self._is_cancelled = False
+        self._cancelled_outcome = False
+        self._result = None
+        self._error = None
+        QThread.finished.__get__(self).connect(self._publish_result)
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._is_cancelled
 
     def run(self):
         """执行任务"""
         try:
-            if not self._is_cancelled:
-                result = self.task_func(*self.args, **self.kwargs)
-                if not self._is_cancelled:
-                    self.finished.emit(result)
+            if self._is_cancelled:
+                raise CancelledError()
+            self._result = self.task_func(*self.args, **self.kwargs)
+            self._cancelled_outcome = self._is_cancelled
+        except CancelledError:
+            self._cancelled_outcome = True
         except Exception as e:
-            if not self._is_cancelled:
-                self.error.emit(str(e))
-        finally:
-            with _ACTIVE_LOCK:
-                _ACTIVE.discard(self)
+            self._error = str(e)
 
-    def start(self, *args, **kwargs):
-        with _ACTIVE_LOCK:
-            _ACTIVE.add(self)
-        super().start(*args, **kwargs)
+    def _publish_result(self):
+        # finished 信号可能早于原生线程清理结束；确认退出后才允许界面启动下一项。
+        if not self.wait(0):
+            QTimer.singleShot(10, self._publish_result)
+            return
+        if self._error is not None:
+            self.error.emit(self._error)
+        elif self._cancelled_outcome:
+            self.cancelled.emit()
+        else:
+            self.finished.emit(self._result)
 
     def cancel(self):
         """
@@ -111,10 +126,11 @@ class WorkerThread(QThread):
         停止点，仅置位本线程标志不会让它们停下来。
         """
         self._is_cancelled = True
-        stop = getattr(getattr(self.task_func, "__self__", None), "stop", None)
+        super().cancel()
+        task = self.task_func
+        while isinstance(task, partial):
+            task = task.func
+        stop = getattr(getattr(task, "__self__", None), "stop", None)
         if callable(stop):
-            try:
-                stop()
-            except Exception:
-                pass
+            stop()
 

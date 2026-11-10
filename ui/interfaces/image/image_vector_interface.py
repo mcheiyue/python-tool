@@ -11,6 +11,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slid
 from core.features.image.image_vectorizer import ImageVectorizer
 from ui.widgets import DragDropListWidget
 from ui.threads import PoolTask
+from core import task_registry
 
 class ImageVectorInterface(QWidget):
     _log_bridged = pyqtSignal(str)
@@ -165,7 +166,7 @@ class ImageVectorInterface(QWidget):
             if p not in self.files:
                 self.files.append(p)
                 self.list_widget.addItem(os.path.basename(p))
-        if self.files: self.start_btn.setEnabled(True)
+        if self.files: self.start_btn.setEnabled(self.pool.waitForDone(0))
 
     def clear_files(self):
         self.files = []
@@ -174,6 +175,8 @@ class ImageVectorInterface(QWidget):
         self.start_btn.setEnabled(False)
 
     def start_conversion(self):
+        if task_registry.registry.closing or not self.pool.waitForDone(0):
+            return
         if not self.files: return
         self.start_btn.setEnabled(False)
         self.log_text.append("开始转换任务...")
@@ -199,9 +202,9 @@ class ImageVectorInterface(QWidget):
             task = PoolTask(
                 partial(self.vectorizer.convert, input_path, output_path, **kwargs),
                 (), task_kwargs,
-                on_error=lambda msg: self.on_one_finished(False, msg),
+                on_error=lambda msg: self._finished_bridged.emit(False, msg),
             )
-            self.pool.start(task)
+            task.start(self.pool)
 
     def on_one_finished(self, success, result):
         if success:

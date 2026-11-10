@@ -15,7 +15,6 @@ class PDFSplitInterface(QWidget):
     # 桥接信号：拆分回调在工作线程触发，经此排队回主线程
     _log_bridged = pyqtSignal(str)
     _progress_bridged = pyqtSignal(int, int, str)
-    _finished_bridged = pyqtSignal(bool, str)
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -27,7 +26,8 @@ class PDFSplitInterface(QWidget):
         self.vbox.setSpacing(Spacing.LG)
 
         self.title = SubtitleLabel("PDF 拆分/提取", self)
-        self.desc = BodyLabel("按范围拆分 PDF 或提取特定页面 (如: 1-5, 8, 10-end)", self)
+        self.desc = BodyLabel("按范围拆分 PDF 或提取页面（如 1-5, 8, 10-end）。同名文件仅在写入成功后替换。", self)
+        self.desc.setWordWrap(True)
         self.desc.setTextColor("#606060", "#d0d0d0")
         self.vbox.addWidget(self.title)
         self.vbox.addWidget(self.desc)
@@ -86,8 +86,9 @@ class PDFSplitInterface(QWidget):
 
         self.thread = None
         self._log_bridged.connect(self.log_text.append)
-        self._finished_bridged.connect(self.on_finished)
         self._progress_bridged.connect(self.update_progress)
+        self.file_edit.textChanged.connect(self.check_state)
+        self.out_edit.textChanged.connect(self.check_state)
 
     def browse_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择 PDF", "", "PDF (*.pdf)")
@@ -117,6 +118,7 @@ class PDFSplitInterface(QWidget):
             self.thread.cancel()
     
     def start_split(self):
+        if is_busy(self): return
         file_path = self.file_edit.text()
         ranges = self.range_edit.text()
         output_dir = self.out_edit.text()
@@ -126,33 +128,41 @@ class PDFSplitInterface(QWidget):
             return
 
         self.start_btn.setEnabled(False)
+        self.card.setEnabled(False)
         self.log_text.clear()
         self.progress.start(100)  # 拆分任务数量未知，使用默认值
         self.progress.show()
         
-        self.thread = WorkerThread(
+        thread = WorkerThread(
             self.splitter.split, file_path, ranges, output_dir,
             on_log=self._log_bridged.emit,
             on_progress=self._progress_bridged.emit,
-            on_finished=self._finished_bridged.emit,
+            should_cancel=lambda: thread.is_cancelled,
         )
+        self.thread = thread
+        self.thread.finished.connect(lambda result: self.on_finished(*result))
         self.thread.error.connect(lambda msg: self.on_finished(False, msg))
+        self.thread.cancelled.connect(self.on_cancelled)
         self.thread.start()
+
+    def on_cancelled(self):
+        self.on_finished(False, "拆分任务已取消", cancelled=True)
 
     def update_progress(self, curr, total, msg):
         self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"处理中... {curr}/{total}")
 
-    def on_finished(self, success, msg):
-        self.start_btn.setEnabled(True)
+    def on_finished(self, success, msg, *, cancelled=False):
+        self.check_state()
+        self.card.setEnabled(True)
         self.start_btn.setText("开始拆分")
         
         # 检查是否被取消
-        if self.progress.is_cancelled:
-            self.progress.set_complete(success=False)
+        if cancelled:
+            self.progress.set_complete(success=False, cancelled=True)
             InfoBar.warning("已取消", "拆分任务已取消", duration=3000, parent=self)
         else:
-            self.progress.set_complete(success=success)
+            self.progress.set_complete(success=success, cancelled=False)
             if success:
                 InfoBar.success("完成", msg, parent=self)
             else:

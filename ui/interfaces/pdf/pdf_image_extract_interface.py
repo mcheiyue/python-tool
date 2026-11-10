@@ -13,7 +13,6 @@ class PDFImageExtractInterface(QWidget):
     # 桥接信号：提取回调在工作线程触发，经此排队回主线程
     _log_bridged = pyqtSignal(str)
     _progress_bridged = pyqtSignal(int, int, str)
-    _finished_bridged = pyqtSignal(int, int)
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -78,14 +77,15 @@ class PDFImageExtractInterface(QWidget):
         self.files = []
         self.thread = None
         self._log_bridged.connect(self.log_text.append)
-        self._finished_bridged.connect(self.on_finished)
         self._progress_bridged.connect(self.update_progress)
+        self.out_edit.textChanged.connect(self.check_state)
 
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF (*.pdf)")
         if paths: self.on_files_dropped(paths)
 
     def on_files_dropped(self, paths):
+        if is_busy(self): return
         for p in paths:
             if p.lower().endswith('.pdf') and p not in self.files:
                 self.files.append(p)
@@ -102,6 +102,7 @@ class PDFImageExtractInterface(QWidget):
             self.check_state()
 
     def clear_files(self):
+        if is_busy(self): return
         self.files = []
         self.list_widget.clear()
         self.log_text.clear()
@@ -117,36 +118,47 @@ class PDFImageExtractInterface(QWidget):
             self.thread.cancel()
 
     def start_extract(self):
+        if is_busy(self): return
         out_dir = self.out_edit.text()
         if not self.files or not out_dir: return
         
         self.start_btn.setEnabled(False)
+        for control in (self.list_widget, self.add_btn, self.clear_btn, self.out_edit, self.browse_btn):
+            control.setEnabled(False)
         self.log_text.clear()
         self.progress.start(len(self.files))
         self.progress.show()
         
-        self.thread = WorkerThread(
-            self.extractor.extract, self.files, out_dir,
+        thread = WorkerThread(
+            self.extractor.extract, list(self.files), out_dir,
             on_log=self._log_bridged.emit,
             on_progress=self._progress_bridged.emit,
-            on_finished=self._finished_bridged.emit,
+            should_cancel=lambda: thread.is_cancelled,
         )
+        self.thread = thread
+        self.thread.finished.connect(lambda result: self.on_finished(*result))
         self.thread.error.connect(lambda msg: self.on_finished(0, 1))
+        self.thread.cancelled.connect(self.on_cancelled)
         self.thread.start()
+
+    def on_cancelled(self):
+        self.on_finished(0, 0, cancelled=True)
 
     def update_progress(self, curr, total, msg):
         self.progress.update_progress(curr, total, msg)
         self.start_btn.setText(f"处理中... {curr}/{total}")
 
-    def on_finished(self, success, fail):
-        self.start_btn.setEnabled(True)
+    def on_finished(self, success, fail, *, cancelled=False):
+        self.check_state()
+        for control in (self.list_widget, self.add_btn, self.clear_btn, self.out_edit, self.browse_btn):
+            control.setEnabled(True)
         self.start_btn.setText("开始提取")
         
         # 检查是否被取消
-        if self.progress.is_cancelled:
-            self.progress.set_complete(success=False)
+        if cancelled:
+            self.progress.set_complete(success=False, cancelled=True)
             InfoBar.warning("已取消", "提取任务已取消", duration=3000, parent=self)
         else:
-            self.progress.set_complete(success=fail == 0)
+            self.progress.set_complete(success=fail == 0, cancelled=False)
             if fail > 0: InfoBar.warning("完成", f"成功 {success}, 失败 {fail}", duration=3000, parent=self)
             else: InfoBar.success("完成", f"成功处理 {success} 个文件", duration=3000, parent=self)
