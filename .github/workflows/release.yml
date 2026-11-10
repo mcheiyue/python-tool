@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 350
     env:
       PYTHONUTF8: "1"
@@ -18,9 +18,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
+        id: python
         with:
-          python-version: "3.12"
+          python-version: "3.12.10"
           cache: pip
+          cache-dependency-path: |
+            requirements.lock
+            build/requirements-bootstrap.txt
 
       # 复用 Nuitka/scons 的编译中间产物：中途失败重跑时只需续编剩余文件
       - uses: actions/cache@v4
@@ -28,16 +32,17 @@ jobs:
           path: |
             dist/standalone/main.build
             dist/onefile/main.build
-          # key 只含依赖与构建脚本：改业务代码不应让依赖（PyQt6/PyMuPDF 占九成编译量）的缓存全部失效
-          key: nuitka-${{ hashFiles('requirements.txt', 'build/build_nuitka.bat') }}
+          # 按解释器、依赖锁和构建参数隔离缓存；业务代码改动仍复用依赖的编译结果。
+          key: nuitka-${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{ hashFiles('requirements.lock', 'build/requirements-bootstrap.txt', 'build/build_nuitka.bat') }}
 
       - name: 安装依赖（含 Nuitka）
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt nuitka
+          python -m pip install -r build/requirements-bootstrap.txt
+          python -m pip install --no-build-isolation --no-deps -r requirements.lock
+          python -m pip check
 
       - name: 安装 Inno Setup
-        run: choco install innosetup --no-progress -y
+        run: choco install innosetup --version=6.7.1 --allow-downgrade --no-progress -y
 
       # choco 的 Inno Setup 不带中文语言文件，installer.iss 引用它后 ISCC 会失败
       - name: 补装 Inno 中文语言文件
@@ -45,10 +50,8 @@ jobs:
         run: |
           $dir = "C:\Program Files (x86)\Inno Setup 6\Languages"
           $lang = Join-Path $dir "ChineseSimplified.isl"
-          if (-not (Test-Path $lang)) {
-            New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl" -OutFile $lang
-          }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/6ef32198ef1f7b7b375cd4b6b90896c2a58eb4c2/Files/Languages/ChineseSimplified.isl" -OutFile $lang
           Get-Item $lang | Select-Object FullName, Length
 
       - name: 校验 tag 与 VERSION 一致

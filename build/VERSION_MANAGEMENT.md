@@ -57,12 +57,33 @@ MAJOR.MINOR.PATCH
 
 ## 发布检查清单
 
+- [ ] 使用 Python 3.12.10 x64 和 Inno Setup 6.7.1
+- [ ] 在独立虚拟环境按下方锁定命令安装依赖
 - [ ] `VERSION` 已改为目标版本
 - [ ] `docs/CHANGELOG.md` 已记录该版本
 - [ ] 本地跑过测试：`python -m pytest`
 - [ ] `git tag vX.Y.Z` 与 `VERSION` 一致
 - [ ] 推送 tag 后，在 Actions 页面确认 Release 工作流通过
 - [ ] 到 Releases 页确认三个产物（安装包 / 绿化 zip / 单文件）均已上传
+
+## 发布依赖锁定
+
+`requirements.txt` 保留直接依赖范围，`requirements.lock` 固定 Windows 发布所用的直接和传递依赖，以及 pip、Nuitka、setuptools、wheel、toml。普通安装同样通过约束文件使用这些固定版本。CI 和 Release 均执行下列安装命令；本地构建须在 Python 3.12.10 x64 的独立虚拟环境中执行：
+
+```powershell
+python -m pip install -r build/requirements-bootstrap.txt
+python -m pip install --no-build-isolation --no-deps -r requirements.lock
+python -m pip check
+python -m pytest
+build\build_nuitka.bat
+build\build_release.bat
+```
+
+先安装锁定的构建基础包，再禁用隔离构建和隐式依赖安装，避免安装 Nuitka 时又引入未固定的构建依赖。安装器使用 Inno Setup 6.7.1；工作流的中文语言文件固定到上游提交。
+
+升级依赖时，在干净环境解析并更新锁定文件的完整依赖集合，运行上述检查及可写/只读目录产物冒烟后再发布，不在 CI 中自动升级。初始锁定采用本机已验证的 PyMuPDF 1.28.2 / Qt 6.11 组合；v0.0.13 的未锁定构建曾自动升级为 PyMuPDF 2.1 / Qt 6.12。缓存随锁定文件、解释器版本和构建参数变化而失效；业务代码变化不使依赖缓存整体失效。
+
+这是依赖版本可重复的构建流程，不承诺生成逐字节一致的 exe；GitHub 托管系统镜像仍会接收系统更新。
 
 ## 常见问题
 

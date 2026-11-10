@@ -78,7 +78,7 @@ if exist dist\standalone\main.build (
 )
 
 echo [INFO] 开始编译 (首次: 15-30分钟 / 增量: 5-10分钟)...
-call nuitka %COMMON_FLAGS% ^
+python -m nuitka %COMMON_FLAGS% ^
     --standalone ^
     --output-dir=dist\standalone ^
     --output-filename=OfficeToolkit.exe ^
@@ -114,7 +114,7 @@ if exist dist\onefile\main.build (
 
 echo [INFO] 开始编译 (首次: 15-30分钟 / 增量: 5-10分钟)...
 echo [INFO] onefile 模式会先生成 standalone 再打包成单文件
-call nuitka %COMMON_FLAGS% ^
+python -m nuitka %COMMON_FLAGS% ^
     --onefile ^
     --output-dir=dist\onefile ^
     --output-filename=OfficeToolkit_Single.exe ^
