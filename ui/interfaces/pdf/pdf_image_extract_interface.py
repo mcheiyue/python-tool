@@ -6,6 +6,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, PrimaryPushButton, PushBut
                             TextEdit, LineEdit, InfoBar, FluentIcon as FIF)
 
 from core.features.pdf.pdf_image_extractor import PDFImageExtractor
+from core.operation_result import OperationStatus
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
 from ui.threads import WorkerThread, is_busy
 
@@ -136,13 +137,19 @@ class PDFImageExtractInterface(QWidget):
             should_cancel=lambda: thread.is_cancelled,
         )
         self.thread = thread
-        self.thread.finished.connect(lambda result: self.on_finished(*result))
+        self.thread.finished.connect(self._on_result)
         self.thread.error.connect(lambda msg: self.on_finished(0, 1))
         self.thread.cancelled.connect(self.on_cancelled)
         self.thread.start()
 
     def on_cancelled(self):
         self.on_finished(0, 0, cancelled=True)
+
+    def _on_result(self, result):
+        if result.status is OperationStatus.CANCELLED:
+            self.on_cancelled()
+        else:
+            self.on_finished(result.succeeded, result.failed)
 
     def update_progress(self, curr, total, msg):
         self.progress.update_progress(curr, total, msg)

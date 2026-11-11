@@ -1,8 +1,14 @@
-from PIL import Image
 import os
+from concurrent.futures import CancelledError
+
+from PIL import Image
+
+from core.cancellation import check_cancelled
+from core.operation_result import OperationResult
+from core.utils.atomic_output import atomic_output
 
 class ImageConverter:
-    def convert(self, input_path, output_path, output_format, quality=90, rotate_angle=0, flip_mode=None, *, on_log=None, on_finished=None):
+    def convert(self, input_path, output_path, output_format, quality=90, rotate_angle=0, flip_mode=None, *, on_log=None, on_finished=None, should_cancel=None):
         """
         :param rotate_angle: 旋转角度 (90, 180, 270)
         :param flip_mode: 翻转模式 ('H' for Horizontal, 'V' for Vertical)
@@ -11,12 +17,14 @@ class ImageConverter:
             if on_log:
                 on_log(msg)
 
-        def finished(ok, msg):
+        def finished(result):
             if on_finished:
-                on_finished(ok, msg)
+                on_finished(result.ok, result.message)
+            return result
 
         try:
             log(f"正在处理: {os.path.basename(input_path)}")
+            check_cancelled(should_cancel)
 
             with Image.open(input_path) as img:
                 # 旋转处理
@@ -32,13 +40,13 @@ class ImageConverter:
                 # 预处理：根据目标格式处理颜色模式
                 save_kwargs = {}
                 target_format = output_format.upper()
+                save_format = "JPEG" if target_format == "JPG" else target_format
 
                 # ICO 特殊处理
                 if target_format == 'ICO':
                     if img.size[0] > 256 or img.size[1] > 256:
                         log("ICO 最大尺寸限制为 256x256，正在调整尺寸...")
                         img.thumbnail((256, 256), Image.Resampling.LANCZOS)
-                    save_kwargs['format'] = 'ICO'
 
                 # JPG/BMP 不支持透明度 (RGBA)，需要转换为 RGB
                 elif target_format in ['JPEG', 'JPG', 'BMP']:
@@ -67,12 +75,18 @@ class ImageConverter:
                 if output_dir and not os.path.exists(output_dir):
                     os.makedirs(output_dir)
 
-                img.save(output_path, **save_kwargs)
+                with atomic_output(output_path, should_cancel=should_cancel) as stream:
+                    img.save(stream, format=save_format, **save_kwargs)
 
             log(f"转换成功: {os.path.basename(output_path)}")
-            finished(True, output_path)
+            return finished(OperationResult.success(
+                output_path, outputs=(output_path,), succeeded=1,
+            ))
 
+        except CancelledError:
+            log(f"已取消: {os.path.basename(input_path)}")
+            return OperationResult.cancelled("图片转换已取消")
         except Exception as e:
             error_msg = f"转换失败 {os.path.basename(input_path)}: {str(e)}"
             log(error_msg)
-            finished(False, str(e))
+            return finished(OperationResult.failure(str(e)))

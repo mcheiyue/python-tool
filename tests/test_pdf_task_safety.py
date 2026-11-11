@@ -1,4 +1,3 @@
-from concurrent.futures import CancelledError
 from threading import Event
 
 import pytest
@@ -65,11 +64,11 @@ def test_cancel_during_pages_stops_before_writing(pdf_job, monkeypatch):
 
     monkeypatch.setattr(PdfWriter, "add_page", cancel_after_page)
 
-    with pytest.raises(CancelledError):
-        execute(should_cancel=cancelled.is_set)
+    result = execute(should_cancel=cancelled.is_set)
 
     assert len(added) == 1
     assert output.read_bytes() == b"previous output"
+    assert result.status.value == "cancelled"
 
 
 @pytest.mark.parametrize("pdf_job", ["merge", "split"], indirect=True)
@@ -86,11 +85,11 @@ def test_cancel_during_write_does_not_publish_partial_result(pdf_job, monkeypatc
 
     monkeypatch.setattr(PdfWriter, "write", cancel_after_write)
 
-    with pytest.raises(CancelledError):
-        execute(should_cancel=cancelled.is_set)
+    result = execute(should_cancel=cancelled.is_set)
 
     assert output.read_bytes() == b"previous output"
     assert set(output.parent.iterdir()) == previous_entries
+    assert result.status.value == "cancelled"
 
 
 @pytest.mark.parametrize("pdf_job", ["merge", "split"], indirect=True)
@@ -143,15 +142,15 @@ def test_extract_cancel_keeps_completed_image_and_skips_following_pages(tmp_path
         if output.exists() and any(output.iterdir()):
             cancelled.set()
 
-    with pytest.raises(CancelledError):
-        PDFImageExtractor().extract(
-            [str(source)], str(tmp_path), should_cancel=cancelled.is_set,
-            on_log=cancel_after_image,
-            on_finished=lambda ok, fail: outcomes.append((ok, fail)),
-        )
+    result = PDFImageExtractor().extract(
+        [str(source)], str(tmp_path), should_cancel=cancelled.is_set,
+        on_log=cancel_after_image,
+        on_finished=lambda ok, fail: outcomes.append((ok, fail)),
+    )
 
     images = list(output.iterdir())
     assert len(images) == 1
     with Image.open(images[0]) as image:
         assert image.size == (24, 24)
     assert outcomes == []
+    assert result.status.value == "cancelled"

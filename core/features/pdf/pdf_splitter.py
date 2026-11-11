@@ -4,6 +4,7 @@ from concurrent.futures import CancelledError
 from pypdf import PdfReader, PdfWriter
 
 from core.cancellation import check_cancelled
+from core.operation_result import OperationResult
 from core.utils.atomic_output import atomic_output
 
 class PDFSplitter:
@@ -23,10 +24,10 @@ class PDFSplitter:
             if on_progress:
                 on_progress(curr, total, message)
 
-        def finished(ok, msg):
+        def finished(result):
             if on_finished:
-                on_finished(ok, msg)
-            return ok, msg
+                on_finished(result.ok, result.message)
+            return result
 
         log(f"开始处理文件: {os.path.basename(file_path)}")
         
@@ -39,11 +40,13 @@ class PDFSplitter:
             # 解析范围
             ranges = self._parse_ranges(ranges_text, total_pages, on_log)
             if not ranges:
-                return finished(False, "无效的页码范围")
+                return finished(OperationResult.failure("无效的页码范围"))
 
             base_name = os.path.splitext(os.path.basename(file_path))[0]
+            os.makedirs(output_dir, exist_ok=True)
             
             produced = 0
+            outputs = []
             for i, (start, end) in enumerate(ranges):
                 check_cancelled(should_cancel)
                 writer = PdfWriter()
@@ -63,26 +66,45 @@ class PDFSplitter:
                 output_path = os.path.join(output_dir, output_filename)
                 
                 if os.path.exists(output_path) and os.path.samefile(output_path, file_path):
-                    return finished(False, "输出文件不能覆盖输入 PDF")
+                    return finished(OperationResult.failure(
+                        "输出文件不能覆盖输入 PDF",
+                        outputs=tuple(outputs),
+                        succeeded=produced,
+                    ))
                 with atomic_output(output_path, should_cancel=should_cancel) as f_out:
                     writer.write(f_out)
                 
                 log(f"✅ 已生成: {output_filename} ({len(target_pages)} 页)")
                 produced += 1
+                outputs.append(output_path)
                 progress(i + 1, len(ranges), f"正在导出第 {i+1} 部分...")
 
             if produced == 0:
-                return finished(False, f"没有可拆分的页面（文件共 {total_pages} 页，范围 {ranges_text}）")
+                return finished(OperationResult.failure(
+                    f"没有可拆分的页面（文件共 {total_pages} 页，范围 {ranges_text}）",
+                    outputs=tuple(outputs),
+                ))
             check_cancelled(should_cancel)
-            return finished(True, f"拆分完成，共生成 {produced} 个文件")
+            return finished(OperationResult.success(
+                f"拆分完成，共生成 {produced} 个文件",
+                outputs=tuple(outputs),
+                succeeded=produced,
+            ))
 
         except CancelledError:
             log("拆分已取消，已完成的文件予以保留")
-            raise
+            return OperationResult.cancelled(
+                "拆分已取消，已完成的文件予以保留",
+                outputs=tuple(outputs) if "outputs" in locals() else (),
+                succeeded=produced if "produced" in locals() else 0,
+            )
         except Exception as e:
             error_trace = traceback.format_exc()
             log(f"❌ 错误:\n{error_trace}")
-            return finished(False, str(e))
+            return finished(OperationResult.failure(
+                str(e), outputs=tuple(outputs) if "outputs" in locals() else (),
+                succeeded=produced if "produced" in locals() else 0,
+            ))
 
     def _parse_ranges(self, text, total_pages, on_log=None):
         """

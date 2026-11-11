@@ -1,5 +1,6 @@
 import os
 import subprocess
+from concurrent.futures import CancelledError
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFileDialog, QListWidgetItem
 from PyQt6.QtGui import QFont, QAction, QKeySequence
 from PyQt6.QtCore import Qt, QTimer, QThreadPool, QRunnable, QObject, pyqtSignal
@@ -8,6 +9,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, ComboBox, Slid
                             FluentIcon as FIF)
 
 from core.features.image.image_converter import ImageConverter
+from core.operation_result import OperationStatus
 from core import task_registry
 from ui.widgets import DragDropListWidget, CancellableProgressWidget
 from ui.design_system import Margins, Spacing
@@ -37,21 +39,22 @@ class ConvertTask(QRunnable):
             if self.should_cancel and self.should_cancel():
                 self.signals.finished.emit(self.input_path, None, "")
                 return
-            outcome = {"success": False}
-
-            def on_finished(ok, msg):
-                outcome["success"] = ok
-
-            self.converter.convert(
+            result = self.converter.convert(
                 self.input_path,
                 self.output_path,
                 self.target_format,
                 self.quality,
                 self.rotate_angle,
                 self.flip_mode,
-                on_finished=on_finished,
+                should_cancel=self.should_cancel,
             )
-            self.signals.finished.emit(self.input_path, outcome["success"], "")
+            self.signals.finished.emit(
+                self.input_path,
+                result.ok if result.status is not OperationStatus.CANCELLED else None,
+                result.message,
+            )
+        except CancelledError:
+            self.signals.finished.emit(self.input_path, None, "")
         except Exception as e:
             self.signals.error.emit(self.input_path, str(e))
 

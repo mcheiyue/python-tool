@@ -7,6 +7,7 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CardWidget, PushButton,
                             FluentIcon as FIF)
 
 from core.features.pdf.pdf_splitter import PDFSplitter
+from core.operation_result import OperationStatus
 from ui.threads import WorkerThread, is_busy
 from ui.widgets import CancellableProgressWidget
 from ui.design_system import Margins, Spacing
@@ -140,13 +141,19 @@ class PDFSplitInterface(QWidget):
             should_cancel=lambda: thread.is_cancelled,
         )
         self.thread = thread
-        self.thread.finished.connect(lambda result: self.on_finished(*result))
+        self.thread.finished.connect(self._on_result)
         self.thread.error.connect(lambda msg: self.on_finished(False, msg))
         self.thread.cancelled.connect(self.on_cancelled)
         self.thread.start()
 
     def on_cancelled(self):
         self.on_finished(False, "拆分任务已取消", cancelled=True)
+
+    def _on_result(self, result):
+        if result.status is OperationStatus.CANCELLED:
+            self.on_cancelled()
+        else:
+            self.on_finished(result.ok, result.message)
 
     def update_progress(self, curr, total, msg):
         self.progress.update_progress(curr, total, msg)

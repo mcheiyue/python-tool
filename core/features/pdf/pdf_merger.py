@@ -4,6 +4,7 @@ from concurrent.futures import CancelledError
 from pypdf import PdfWriter, PdfReader
 
 from core.cancellation import check_cancelled
+from core.operation_result import OperationResult
 from core.utils.atomic_output import atomic_output
 
 class PDFMerger:
@@ -22,22 +23,22 @@ class PDFMerger:
             if on_progress:
                 on_progress(curr, total, message)
 
-        def finished(ok, msg):
+        def finished(result):
             if on_finished:
-                on_finished(ok, msg)
-            return ok, msg
+                on_finished(result.ok, result.message)
+            return result
 
-        check_cancelled(should_cancel)
         if not files:
-            return finished(False, "文件列表为空")
+            return finished(OperationResult.failure("文件列表为空"))
 
         total = len(files)
         log(f"开始任务: 合并 {total} 个文件")
         log(f"输出路径: {output_path}")
 
         try:
+            check_cancelled(should_cancel)
             if os.path.exists(output_path) and any(os.path.samefile(output_path, path) for path in files):
-                return finished(False, "输出文件不能覆盖输入 PDF")
+                return finished(OperationResult.failure("输出文件不能覆盖输入 PDF"))
             writer = PdfWriter()
             
             for i, file_path in enumerate(files):
@@ -58,7 +59,7 @@ class PDFMerger:
                     err_msg = f"读取文件 {file_name} 失败: {str(e)}"
                     log(f"❌ {err_msg}")
                     # 可以选择跳过或报错，这里选择报错停止
-                    return finished(False, err_msg)
+                    return finished(OperationResult.failure(err_msg))
 
             log("正在写入输出文件...")
             progress(total, total, "正在保存...")
@@ -67,12 +68,16 @@ class PDFMerger:
                 writer.write(f_out)
                 
             log(f"✅ 合并成功！已保存至: {output_path}")
-            return finished(True, f"成功合并 {total} 个文件")
+            return finished(OperationResult.success(
+                f"成功合并 {total} 个文件",
+                outputs=(output_path,),
+                succeeded=total,
+            ))
 
         except CancelledError:
             log("合并已取消，原有输出保持不变")
-            raise
+            return OperationResult.cancelled("合并已取消，原有输出保持不变")
         except Exception as e:
             error_trace = traceback.format_exc()
             log(f"❌ 发生未知错误:\n{error_trace}")
-            return finished(False, str(e))
+            return finished(OperationResult.failure(str(e)))

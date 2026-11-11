@@ -4,6 +4,7 @@ from pypdf import PdfReader
 
 from core.batch import run as batch_run
 from core.cancellation import check_cancelled
+from core.operation_result import OperationResult
 from core.utils.atomic_output import atomic_output
 
 class PDFImageExtractor:
@@ -17,6 +18,8 @@ class PDFImageExtractor:
         def log(msg):
             if on_log:
                 on_log(msg)
+
+        outputs = []
 
         def worker(file_path):
             check_cancelled(should_cancel)
@@ -44,6 +47,7 @@ class PDFImageExtractor:
                             f_img.write(image.data)
 
                         img_count += 1
+                        outputs.append(img_path)
                         log(f"  提取: {img_name}")
                 except CancelledError:
                     raise
@@ -58,9 +62,26 @@ class PDFImageExtractor:
                     os.rmdir(file_out_dir)
 
         log(f"开始任务: 处理 {len(files)} 个文件")
-        check_cancelled(should_cancel)
-        success, fail = batch_run(files, worker, on_progress=on_progress, on_log=log, should_stop=should_cancel)
-        check_cancelled(should_cancel)
+        try:
+            check_cancelled(should_cancel)
+            success, fail = batch_run(files, worker, on_progress=on_progress, on_log=log, should_stop=should_cancel)
+            check_cancelled(should_cancel)
+        except CancelledError:
+            return OperationResult.cancelled(
+                "提取已取消，已完成的图片予以保留",
+                outputs=tuple(outputs),
+            )
+        result = OperationResult.success(
+            f"成功处理 {success} 个文件" if fail == 0 else f"成功 {success} 个，失败 {fail} 个",
+            outputs=tuple(outputs),
+            succeeded=success,
+            failed=fail,
+        ) if fail == 0 else OperationResult.failure(
+            f"成功 {success} 个，失败 {fail} 个",
+            outputs=tuple(outputs),
+            succeeded=success,
+            failed=fail,
+        )
         if on_finished:
             on_finished(success, fail)
-        return success, fail
+        return result
