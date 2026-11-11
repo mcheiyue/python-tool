@@ -105,7 +105,7 @@ def _execute(args: argparse.Namespace, should_cancel: Callable[[], bool]) -> Ope
 
 def _emit_result(result: OperationResult, json_mode: bool) -> int:
     if json_mode:
-        print(json.dumps(result.to_dict(), ensure_ascii=False))
+        print(json.dumps(result.to_dict(), ensure_ascii=True))
     else:
         print(result.message)
         for output in result.outputs:

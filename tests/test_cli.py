@@ -48,6 +48,7 @@ def test_cli_merge_returns_json_and_publishes_output(tmp_path):
     )
 
     assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.isascii(), "JSON stdout must be independent of Windows code page"
     assert json.loads(completed.stdout) == {
         "status": "success",
         "message": "成功合并 2 个文件",
