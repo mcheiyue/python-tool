@@ -86,6 +86,8 @@ class WorkerThread(ManagedThread):
         self.kwargs = kwargs
         self._is_cancelled = False
         self._cancelled_outcome = False
+        self._task_completed = False
+        self._cancel_requested_before_completion = False
         self._result = None
         self._error = None
         QThread.finished.__get__(self).connect(self._publish_result)
@@ -100,7 +102,8 @@ class WorkerThread(ManagedThread):
             if self._is_cancelled:
                 raise CancelledError()
             self._result = self.task_func(*self.args, **self.kwargs)
-            self._cancelled_outcome = self._is_cancelled
+            self._task_completed = True
+            self._cancelled_outcome = self._cancel_requested_before_completion
         except CancelledError:
             self._cancelled_outcome = True
         except Exception as e:
@@ -126,6 +129,8 @@ class WorkerThread(ManagedThread):
         停止点，仅置位本线程标志不会让它们停下来。
         """
         self._is_cancelled = True
+        if not self._task_completed:
+            self._cancel_requested_before_completion = True
         super().cancel()
         task = self.task_func
         while isinstance(task, partial):

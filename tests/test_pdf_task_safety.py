@@ -8,6 +8,7 @@ from pypdf import PdfReader, PdfWriter
 from core.features.pdf.pdf_image_extractor import PDFImageExtractor
 from core.features.pdf.pdf_merger import PDFMerger
 from core.features.pdf.pdf_splitter import PDFSplitter
+from core.utils.atomic_output import atomic_output
 
 
 @pytest.fixture
@@ -118,6 +119,15 @@ def test_merge_rejects_output_aliasing_input(tmp_path):
 
     assert outcomes == [False]
     assert source.read_bytes() == original
+
+
+def test_atomic_output_supports_windows_maximum_filename(tmp_path):
+    target = tmp_path / ("a" * 244 + ".pdf")
+
+    with atomic_output(target) as stream:
+        stream.write(b"complete")
+
+    assert target.read_bytes() == b"complete"
 
 
 def test_extract_cancel_keeps_completed_image_and_skips_following_pages(tmp_path):

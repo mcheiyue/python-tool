@@ -45,6 +45,32 @@ def test_cancelled_worker_reports_one_terminal_event_after_work_stops(qtbot):
         assert worker.wait(2000)
 
 
+def test_cancel_after_success_is_reported_as_success(qtbot):
+    written = Event()
+    release = Event()
+    outcomes = []
+
+    def work():
+        written.set()
+        release.wait(15)
+        return (True, "published")
+
+    worker = WorkerThread(work)
+    worker.finished.connect(lambda result: outcomes.append(result))
+    worker.cancelled.connect(lambda: outcomes.append("cancelled"))
+    worker.start()
+    try:
+        qtbot.waitUntil(written.is_set)
+        release.set()
+        assert worker.wait(2000)
+        worker.cancel()
+        qtbot.waitUntil(lambda: bool(outcomes))
+        assert outcomes == [(True, "published")]
+    finally:
+        release.set()
+        assert worker.wait(2000)
+
+
 def test_cancel_before_start_does_not_run_task_and_reports_cancelled(qtbot):
     calls, outcomes = [], []
     worker = WorkerThread(lambda: calls.append("ran"))

@@ -15,8 +15,8 @@ def atomic_output(
     """同盘暂存，完整写入且未取消时才替换旧输出。"""
     target = Path(destination)
     check_cancelled(should_cancel)
-    with TemporaryDirectory(prefix=f".{target.name}-", dir=target.parent) as staging:
-        pending = Path(staging) / target.name
+    with TemporaryDirectory(prefix=".output-", dir=target.parent) as staging:
+        pending = Path(staging) / "payload"
         with pending.open("wb") as stream:
             yield stream
         check_cancelled(should_cancel)
