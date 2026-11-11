@@ -192,3 +192,27 @@ def test_cancel_after_last_extracted_image_keeps_success_result(tmp_path):
     assert result.succeeded == 1
     assert len(result.outputs) == 1
     assert Path(result.outputs[0]).is_file()
+
+
+def test_cancel_after_first_of_multiple_extracted_files_reports_partial_result(tmp_path):
+    first = tmp_path / "first.pdf"
+    second = tmp_path / "second.pdf"
+    for path, color in ((first, "red"), (second, "blue")):
+        with Image.new("RGB", (24, 24), color) as image:
+            image.save(path, "PDF")
+    cancelled = Event()
+
+    def cancel_after_file(message):
+        if message.startswith("✅ 完成:"):
+            cancelled.set()
+
+    result = PDFImageExtractor().extract(
+        [str(first), str(second)], str(tmp_path), should_cancel=cancelled.is_set,
+        on_log=cancel_after_file,
+    )
+
+    assert result.status.value == "cancelled"
+    assert result.succeeded == 1
+    assert result.failed == 0
+    assert len(result.outputs) == 1
+    assert Path(result.outputs[0]).is_file()
