@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
@@ -21,6 +22,18 @@ def _run_cli(*args):
         text=True,
         check=False,
     )
+
+
+def test_cli_import_does_not_load_qt():
+    completed = subprocess.run(
+        [sys.executable, "-c", "import sys; import app.cli; print('PyQt6' in sys.modules)"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == "False"
 
 
 def test_cli_merge_returns_json_and_publishes_output(tmp_path):
@@ -61,6 +74,24 @@ def test_cli_split_returns_output_paths(tmp_path):
     assert sorted(result["outputs"]) == sorted(
         str(path) for path in output_dir.glob("*.pdf")
     )
+
+
+def test_cli_extract_images_reports_created_files(tmp_path):
+    source = tmp_path / "photos.pdf"
+    output_dir = tmp_path / "images"
+    with Image.new("RGB", (24, 24), "red") as image:
+        image.save(source, "PDF")
+
+    completed = _run_cli(
+        "extract-images", str(source), "--output", str(output_dir), "--json"
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["status"] == "success"
+    assert result["succeeded"] == 1
+    assert result["outputs"]
+    assert all(Path(path).is_file() for path in result["outputs"])
 
 
 def test_cli_image_convert_returns_failure_for_missing_input(tmp_path):

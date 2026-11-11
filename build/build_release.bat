@@ -30,6 +30,13 @@ if not exist "dist\onefile\OfficeToolkit_Single.exe" (
     echo [✓] 单文件版构建产物: 存在
 )
 
+if not exist "dist\cli\OfficeToolkit_CLI.exe" (
+    echo [✗] 命令行版构建产物: dist\cli\OfficeToolkit_CLI.exe - 缺失！
+    set BUILD_OK=0
+) else (
+    echo [✓] 命令行版构建产物: 存在
+)
+
 if %BUILD_OK%==0 goto ERROR
 echo [OK] 所有构建产物验证通过
 echo.
@@ -89,6 +96,8 @@ if exist libs (
     xcopy libs release\temp_portable\OfficeToolkit\libs\ /E /I /Y >nul
 )
 
+copy dist\cli\OfficeToolkit_CLI.exe release\temp_portable\OfficeToolkit\OfficeToolkit_CLI.exe >nul
+
 echo [INFO] 正在压缩为 ZIP (使用最大压缩率)...
 powershell Compress-Archive -Path release\temp_portable\OfficeToolkit -DestinationPath release\OfficeToolkit_Portable_v%APP_VERSION%.zip -Force -CompressionLevel Optimal
 rmdir /s /q release\temp_portable
@@ -104,6 +113,21 @@ echo.
 echo [INFO] 复制单文件版...
 copy dist\onefile\OfficeToolkit_Single.exe release\OfficeToolkit_Single_v%APP_VERSION%.exe >nul
 echo [OK] 单文件版已就绪
+
+echo.
+echo ==========================================
+echo [Step 4/4] 复制命令行版
+echo ==========================================
+echo 输入源: dist\cli\OfficeToolkit_CLI.exe
+echo 输出: release\OfficeToolkit_CLI_v%APP_VERSION%.exe
+echo.
+copy dist\cli\OfficeToolkit_CLI.exe release\OfficeToolkit_CLI_v%APP_VERSION%.exe >nul
+if errorlevel 1 (
+    echo [ERROR] 命令行版复制失败
+    pause
+    exit /b 1
+)
+echo [OK] 命令行版已就绪
 
 echo.
 echo ==========================================
@@ -133,6 +157,12 @@ if exist release\OfficeToolkit_Single_v%APP_VERSION%.exe (
     for %%A in (release\OfficeToolkit_Single_v%APP_VERSION%.exe) do echo       大小: %%~zA 字节
 ) else (
     echo   [✗] OfficeToolkit_Single_v%APP_VERSION%.exe ^(失败^)
+)
+if exist release\OfficeToolkit_CLI_v%APP_VERSION%.exe (
+    echo   [✓] OfficeToolkit_CLI_v%APP_VERSION%.exe ^(命令行版^)
+    for %%A in (release\OfficeToolkit_CLI_v%APP_VERSION%.exe) do echo       大小: %%~zA 字节
+) else (
+    echo   [✗] OfficeToolkit_CLI_v%APP_VERSION%.exe ^(失败^)
 )
 echo ==========================================
 echo.

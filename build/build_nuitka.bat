@@ -124,6 +124,34 @@ echo [OK] 单文件版编译完成
 
 echo.
 echo ==========================================
+echo [Task 3/3] 构建命令行版 (CLI Onefile)
+echo ==========================================
+echo 用途: 无窗口批处理与脚本调用
+echo 输出: dist\cli\OfficeToolkit_CLI.exe
+echo.
+if not exist dist\cli mkdir dist\cli
+if exist dist\cli\OfficeToolkit_CLI.exe del /f /q dist\cli\OfficeToolkit_CLI.exe
+python -m nuitka ^
+    --mingw64 ^
+    --assume-yes-for-downloads ^
+    --windows-console-mode=force ^
+    --output-dir=dist\cli ^
+    --output-filename=OfficeToolkit_CLI.exe ^
+    --onefile ^
+    --include-package=PIL ^
+    --include-package=pypdf ^
+    --include-module=core.cancellation ^
+    --include-module=core.operation_result ^
+    --include-module=core.utils.atomic_output ^
+    --include-module=core.features.pdf.pdf_merger ^
+    --include-module=core.features.pdf.pdf_splitter ^
+    --include-module=core.features.pdf.pdf_image_extractor ^
+    --include-module=core.features.image.image_converter ^
+    cli_main.py || goto ERROR
+echo [OK] 命令行版编译完成
+
+echo.
+echo ==========================================
 echo [SUCCESS] 所有构建完成！
 echo ==========================================
 echo 版本: %APP_VERSION%
@@ -140,6 +168,10 @@ echo    - 适合快速分享和便携使用
 echo    - 大小: ~80MB (压缩后)
 echo ==========================================
 echo.
+echo 3. 命令行版 (CLI): dist\cli\OfficeToolkit_CLI.exe
+echo    - 不创建 GUI 窗口，适合脚本和批处理
+echo ==========================================
+echo.
 echo [提示] 验证构建产物是否存在...
 if exist dist\standalone\main.dist\OfficeToolkit.exe (
     echo [✓] 目录版: 存在
@@ -150,6 +182,11 @@ if exist dist\onefile\OfficeToolkit_Single.exe (
     echo [✓] 单文件版: 存在
 ) else (
     echo [✗] 单文件版: 缺失！
+)
+if exist dist\cli\OfficeToolkit_CLI.exe (
+    echo [✓] 命令行版: 存在
+) else (
+    echo [✗] 命令行版: 缺失！
 )
 echo.
 echo 下一步：运行 build_release.bat 制作完整发布包

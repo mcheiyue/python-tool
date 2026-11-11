@@ -64,6 +64,18 @@ def test_image_converter_reports_missing_input(tmp_path):
     assert not out.exists(), "失败时不应产出文件"
 
 
+def test_image_converter_can_replace_the_input_path(tmp_path):
+    source = tmp_path / "image.png"
+    _make_png(source, (30, 120, 210))
+
+    result = ImageConverter().convert(str(source), str(source), "PNG")
+
+    assert result.ok
+    with Image.open(source) as converted:
+        assert converted.format == "PNG"
+        assert converted.getpixel((0, 0)) == (30, 120, 210)
+
+
 # ---------- 11. ImageToPdfConverter：合并模式页数 = 图片数 ----------
 
 

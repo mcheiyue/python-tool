@@ -62,6 +62,23 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### 命令行模式
+
+核心 PDF 和图像转换也可在无窗口模式运行，适合批处理、脚本和服务器任务：
+
+```bash
+# 源码运行
+python -m app.cli merge input-a.pdf input-b.pdf --output merged.pdf
+python -m app.cli split input.pdf "1-3,5" --output parts --json
+python -m app.cli extract-images input.pdf --output images --json
+python -m app.cli image-convert input.png --output output.jpg --format JPG
+
+# Windows 发行包
+OfficeToolkit_CLI.exe merge input-a.pdf input-b.pdf --output merged.pdf
+```
+
+命令返回 `0` 表示成功，`1` 表示处理失败，`130` 表示用户取消；加 `--json` 可获得包含 `status`、`message`、`outputs`、`succeeded` 和 `failed` 的机器可读结果。
+
 ### 外部工具安装（可选）
 
 外部工具（Ghostscript/Pandoc/LibreOffice）由 `plugins/manifest.json` 驱动按需安装：

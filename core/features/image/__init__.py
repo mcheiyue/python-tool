@@ -1,2 +1,11 @@
 # Image features package
-from .gemini_watermark_remover import GeminiWatermarkRemover
+
+__all__ = ["GeminiWatermarkRemover"]
+
+
+def __getattr__(name):
+    if name == "GeminiWatermarkRemover":
+        from .gemini_watermark_remover import GeminiWatermarkRemover
+
+        return GeminiWatermarkRemover
+    raise AttributeError(name)

@@ -92,12 +92,20 @@ jobs:
             if ($out -notmatch "BENCHMARK_STARTUP_TIME_MS") { Write-Host $out; Write-Error "$dir 未真正启动"; exit 1 }
             Write-Host "$dir -> $(($out -split "`n" | Select-String 'BENCHMARK_STARTUP_TIME_MS') -join '')"
           }
+          $cli = (Resolve-Path "dist\cli\OfficeToolkit_CLI.exe").Path
+          $help = (& $cli --help 2>&1 | Out-String)
+          if ($LASTEXITCODE -ne 0 -or $help -notmatch "merge") {
+            Write-Host $help
+            Write-Error "CLI 启动冒烟失败"
+            exit 1
+          }
+          Write-Host "CLI -> help ok"
 
       - name: 校验三个产物齐全
         shell: pwsh
         run: |
           $missing = @()
-          foreach ($pat in @("OfficeToolkit_Setup_v*.exe","OfficeToolkit_Portable_v*.zip","OfficeToolkit_Single_v*.exe")) {
+          foreach ($pat in @("OfficeToolkit_Setup_v*.exe","OfficeToolkit_Portable_v*.zip","OfficeToolkit_Single_v*.exe","OfficeToolkit_CLI_v*.exe")) {
             $f = Get-ChildItem "release\$pat" -ErrorAction SilentlyContinue
             if ($f) { $f | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.Name } } else { $missing += $pat }
           }

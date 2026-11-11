@@ -2,10 +2,11 @@
 
 ## 概述
 
-本项目采用**双重构建方案**，生成三种发布格式：
+本项目采用 Nuitka 多目标构建方案，生成四种发布产物：
 1. **安装版**：传统 Windows 安装程序（基于 Standalone 模式）
 2. **绿化版**：免安装的 ZIP 压缩包（基于 Standalone 模式）
 3. **单文件版**：包含所有插件的独立 EXE（基于 Onefile 模式）
+4. **命令行版**：无窗口批处理入口（基于 CLI Onefile 模式）
 
 ---
 
@@ -21,6 +22,7 @@ build_nuitka.bat
 **输出产物：**
 - `dist\standalone\main.dist\` - 目录版（用于安装包和绿化版）
 - `dist\onefile\OfficeToolkit_Single.exe` - 单文件版
+- `dist\cli\OfficeToolkit_CLI.exe` - 命令行版
 
 **编译时间：** 首次约 10-15 分钟，后续增量编译约 2-5 分钟
 
@@ -36,6 +38,10 @@ build_release.bat
 1. `OfficeToolkit_Setup_v1.0.0.exe` - 安装包（需要安装 Inno Setup）
 2. `OfficeToolkit_Portable_v1.0.0.zip` - 绿化版
 3. `OfficeToolkit_Single_v1.0.0.exe` - 单文件版
+4. `OfficeToolkit_CLI_v1.0.0.exe` - 命令行版
+
+命令行版不创建 Qt 窗口，直接复用核心 PDF/图片功能。源码运行时可使用
+`python -m app.cli --help` 查看命令；发行包中使用 `OfficeToolkit_CLI.exe`。
 
 ---
 

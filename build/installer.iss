@@ -46,6 +46,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; 打包整个 standalone 目录（包含所有依赖）
 Source: "..\dist\standalone\main.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 无窗口批处理入口，与 GUI 共享同一 core 功能实现
+Source: "..\dist\cli\OfficeToolkit_CLI.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; 确保 plugins 目录存在并包含说明文件
 Source: "..\plugins\README.txt"; DestDir: "{app}\plugins"; Flags: ignoreversion skipifsourcedoesntexist
 
