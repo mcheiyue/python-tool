@@ -61,10 +61,24 @@ class PDFImageExtractor:
                 if os.path.exists(file_out_dir) and not os.listdir(file_out_dir):
                     os.rmdir(file_out_dir)
 
+        completed_success = 0
+        completed_fail = 0
+
+        def counted_worker(file_path):
+            nonlocal completed_success, completed_fail
+            try:
+                worker(file_path)
+            except CancelledError:
+                raise
+            except Exception:
+                completed_fail += 1
+                raise
+            completed_success += 1
+
         log(f"开始任务: 处理 {len(files)} 个文件")
         try:
             check_cancelled(should_cancel)
-            success, fail = batch_run(files, worker, on_progress=on_progress, on_log=log, should_stop=should_cancel)
+            success, fail = batch_run(files, counted_worker, on_progress=on_progress, on_log=log, should_stop=should_cancel)
             if success < len(files) and should_cancel and should_cancel():
                 return OperationResult.cancelled(
                     "提取已取消，已完成的图片予以保留",
@@ -76,6 +90,8 @@ class PDFImageExtractor:
             return OperationResult.cancelled(
                 "提取已取消，已完成的图片予以保留",
                 outputs=tuple(outputs),
+                succeeded=completed_success,
+                failed=completed_fail,
             )
         result = OperationResult.success(
             f"成功处理 {success} 个文件" if fail == 0 else f"成功 {success} 个，失败 {fail} 个",

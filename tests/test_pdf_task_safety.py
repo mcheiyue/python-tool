@@ -216,3 +216,37 @@ def test_cancel_after_first_of_multiple_extracted_files_reports_partial_result(t
     assert result.failed == 0
     assert len(result.outputs) == 1
     assert Path(result.outputs[0]).is_file()
+
+
+def test_cancel_during_later_file_preserves_completed_file_counts(tmp_path):
+    failed = tmp_path / "failed.pdf"
+    failed.write_bytes(b"not a PDF")
+    completed = tmp_path / "completed.pdf"
+    with Image.new("RGB", (24, 24), "red") as image:
+        image.save(completed, "PDF")
+    cancelled_file = tmp_path / "cancelled.pdf"
+    with Image.new("RGB", (24, 24), "blue") as first:
+        with Image.new("RGB", (24, 24), "green") as second:
+            first.save(cancelled_file, save_all=True, append_images=[second])
+    cancelled = Event()
+    current_file = None
+
+    def track_file(_current, _total, file_path):
+        nonlocal current_file
+        current_file = file_path
+
+    def cancel_after_image(message):
+        if current_file == str(cancelled_file) and message.startswith("  提取:"):
+            cancelled.set()
+
+    result = PDFImageExtractor().extract(
+        [str(failed), str(completed), str(cancelled_file)], str(tmp_path),
+        should_cancel=cancelled.is_set, on_progress=track_file,
+        on_log=cancel_after_image,
+    )
+
+    assert result.status.value == "cancelled"
+    assert result.succeeded == 1
+    assert result.failed == 1
+    assert len(result.outputs) == 2
+    assert all(Path(path).is_file() for path in result.outputs)
