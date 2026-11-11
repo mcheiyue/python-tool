@@ -1,4 +1,5 @@
 from threading import Event
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -92,6 +93,22 @@ def test_cancel_during_write_does_not_publish_partial_result(pdf_job, monkeypatc
     assert result.status.value == "cancelled"
 
 
+@pytest.mark.parametrize("pdf_job", ["split"], indirect=True)
+def test_cancel_after_last_split_output_keeps_success_result(pdf_job):
+    output, execute = pdf_job
+    cancelled = Event()
+
+    result = execute(
+        should_cancel=cancelled.is_set,
+        on_progress=lambda *_: cancelled.set(),
+    )
+
+    assert result.status.value == "success"
+    assert result.succeeded == 1
+    assert result.outputs == (str(output),)
+    assert len(PdfReader(output).pages) == 3
+
+
 @pytest.mark.parametrize("pdf_job", ["merge", "split"], indirect=True)
 def test_successful_pdf_replaces_previous_output(pdf_job):
     output, execute = pdf_job
@@ -154,3 +171,24 @@ def test_extract_cancel_keeps_completed_image_and_skips_following_pages(tmp_path
         assert image.size == (24, 24)
     assert outcomes == []
     assert result.status.value == "cancelled"
+
+
+def test_cancel_after_last_extracted_image_keeps_success_result(tmp_path):
+    source = tmp_path / "photo.pdf"
+    with Image.new("RGB", (24, 24), "red") as image:
+        image.save(source, "PDF")
+    cancelled = Event()
+
+    def cancel_after_file(message):
+        if message.startswith("✅ 完成:"):
+            cancelled.set()
+
+    result = PDFImageExtractor().extract(
+        [str(source)], str(tmp_path), should_cancel=cancelled.is_set,
+        on_log=cancel_after_file,
+    )
+
+    assert result.status.value == "success"
+    assert result.succeeded == 1
+    assert len(result.outputs) == 1
+    assert Path(result.outputs[0]).is_file()

@@ -65,7 +65,6 @@ class PDFImageExtractor:
         try:
             check_cancelled(should_cancel)
             success, fail = batch_run(files, worker, on_progress=on_progress, on_log=log, should_stop=should_cancel)
-            check_cancelled(should_cancel)
         except CancelledError:
             return OperationResult.cancelled(
                 "提取已取消，已完成的图片予以保留",

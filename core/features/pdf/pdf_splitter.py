@@ -84,7 +84,6 @@ class PDFSplitter:
                     f"没有可拆分的页面（文件共 {total_pages} 页，范围 {ranges_text}）",
                     outputs=tuple(outputs),
                 ))
-            check_cancelled(should_cancel)
             return finished(OperationResult.success(
                 f"拆分完成，共生成 {produced} 个文件",
                 outputs=tuple(outputs),
