@@ -94,12 +94,50 @@ jobs:
           }
           $cli = (Resolve-Path "dist\cli\OfficeToolkit_CLI.exe").Path
           $help = (& $cli --help 2>&1 | Out-String)
-          if ($LASTEXITCODE -ne 0 -or $help -notmatch "merge") {
+          if ($LASTEXITCODE -ne 0) {
             Write-Host $help
             Write-Error "CLI 启动冒烟失败"
             exit 1
           }
-          Write-Host "CLI -> help ok"
+          # 命令集合断言：--help 通过不代表各命令的核心模块都被打进产物
+          $expected = @(
+            "merge","split","extract-images","image-convert","image-colors",
+            "image-vectorize","image-to-pdf","text-extract-code","text-txt-to-pdf",
+            "files-rename-preview"
+          )
+          $missing = $expected | Where-Object { $help -notmatch [regex]::Escape($_) }
+          if ($missing) {
+            Write-Error "CLI 缺少命令: $($missing -join ', ')"
+            exit 1
+          }
+          Write-Host "CLI -> help ok（$($expected.Count) 条命令）"
+
+          $work = Join-Path $env:RUNNER_TEMP "cli_smoke"
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          python -c "from PIL import Image; from pathlib import Path; d=Path(r'$work'); Image.new('RGB',(32,32),(255,0,0)).save(d/'a.png'); Image.new('RGB',(32,32),(0,0,255)).save(d/'b.png'); (d/'n.txt').write_text('smoke', encoding='utf-8')"
+          $cases = @(
+            @("image-colors", (Join-Path $work "a.png"), "--json"),
+            @("image-vectorize", (Join-Path $work "a.png"), "-o", (Join-Path $work "o.svg"), "--json"),
+            @("image-to-pdf", (Join-Path $work "a.png"), (Join-Path $work "b.png"), "-o", (Join-Path $work "o.pdf"), "--json"),
+            @("text-txt-to-pdf", (Join-Path $work "n.txt"), "--json"),
+            @("files-rename-preview", (Join-Path $work "a.png"), "-t", "{index3}_{name}.{ext}", "--json"),
+            @("merge", (Join-Path $work "o.pdf"), (Join-Path $work "o.pdf"), "-o", (Join-Path $work "m.pdf"), "--json")
+          )
+          foreach ($case in $cases) {
+            $name = $case[0]
+            $out = (& $cli @case 2>&1 | Out-String)
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host $out
+              Write-Error "CLI 命令 $name 在产物中执行失败 exit=$LASTEXITCODE"
+              exit 1
+            }
+            if ($out -notmatch '"status": "success"') {
+              Write-Host $out
+              Write-Error "CLI 命令 $name 未返回成功结果"
+              exit 1
+            }
+            Write-Host "CLI -> $name ok"
+          }
 
       - name: 校验三个产物齐全
         shell: pwsh
