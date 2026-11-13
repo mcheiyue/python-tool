@@ -12,6 +12,7 @@ class BasePdfCompressor(QObject):
     def __init__(self):
         super().__init__()
         self._is_running = False
+        self._process = None
 
     @abstractmethod
     def compress(self, files: list, quality: str, **kwargs):
@@ -26,3 +27,12 @@ class BasePdfCompressor(QObject):
     def stop(self):
         """停止任务"""
         self._is_running = False
+        self._terminate_process()
+
+    def _terminate_process(self):
+        process = self._process
+        if process is not None and process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                pass

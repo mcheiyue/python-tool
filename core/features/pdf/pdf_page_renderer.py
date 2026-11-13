@@ -10,11 +10,15 @@ import platform
 from core.external_tools.manager import ExternalToolManager
 
 try:
-    import fitz  # PyMuPDF
+    import pymupdf as fitz
     PYMUPDF_AVAILABLE = True
 except ImportError:
-    PYMUPDF_AVAILABLE = False
-    fitz = None
+    try:
+        import fitz
+        PYMUPDF_AVAILABLE = True
+    except ImportError:
+        PYMUPDF_AVAILABLE = False
+        fitz = None
 
 
 class PDFPageRenderer:
@@ -43,6 +47,26 @@ class PDFPageRenderer:
     def is_gs_available(self) -> bool:
         """检查 Ghostscript 是否可用"""
         return self.gs_tool.check_installed() and not self.gs_tool.is_disabled
+
+    def _count_pages_with_ghostscript(self, pdf_path: str) -> int:
+        gs_path = self.gs_tool.get_path()
+        if not gs_path:
+            return 0
+        # PostScript 字符串里反斜杠是转义符，Windows 路径必须先加倍，否则 GS 报 ioerror
+        escaped = pdf_path.replace("\\", "\\\\")
+        cmd = [gs_path, "-q", "-dNODISPLAY", "-dNOSAFER", "-c",
+               f"({escaped}) (r) file runpdfbegin pdfpagecount = quit"]
+        startupinfo = None
+        if platform.system() == "Windows":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, timeout=60, startupinfo=startupinfo
+            )
+            return int((result.stdout or b"").decode("ascii", errors="ignore").strip() or 0)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return 0
     
     def stop(self):
         """停止当前任务"""
@@ -252,8 +276,9 @@ class PDFPageRenderer:
                 continue
             
             try:
-                doc = fitz.open(pdf_path)
-                page_count = len(doc)
+                # 纯 Ghostscript 路径不依赖 PyMuPDF；页数由 GS 侧渲染逐页递增得出
+                doc = fitz.open(pdf_path) if PYMUPDF_AVAILABLE else None
+                page_count = len(doc) if doc is not None else self._count_pages_with_ghostscript(pdf_path)
                 
                 # 确定页面范围
                 start_page = 0
@@ -274,30 +299,30 @@ class PDFPageRenderer:
                     if not self._is_running:
                         break
                     
-                    page = doc[page_num]
-                    
+                    page = doc[page_num] if doc is not None else None
+
                     # 计算缩放矩阵
                     zoom = dpi / 72.0
-                    mat = fitz.Matrix(zoom, zoom)
-                    
+                    mat = fitz.Matrix(zoom, zoom) if fitz is not None else None
+
                     # 生成输出文件名
                     output_name = f"page_{page_num + 1:04d}.{output_format}"
                     output_path = os.path.join(file_out_dir, output_name)
 
                     success = False
-                    
+
                     # 1. 尝试 Ghostscript (如果启用)
                     if use_ghostscript and self.is_gs_available():
                         success = self.render_with_ghostscript(pdf_path, page_num, output_path, dpi, output_format, on_log=on_log)
-                    
+
                     # 2. 回退到 PyMuPDF
-                    if not success:
+                    if not success and page is not None:
                         if use_ghostscript: # 只有在尝试过 GS 后才提示
                              pass # 静默回退，或者可以在日志里提一句
-                             
+
                         # 渲染页面
                         pix = page.get_pixmap(matrix=mat)
-                        
+
                         # 保存图片
                         if output_format in ['jpg', 'jpeg']:
                             pix.save(output_path, output='jpeg', jpg_quality=95)
@@ -312,8 +337,9 @@ class PDFPageRenderer:
                     if success:
                         rendered_count += 1
                         log(f"  渲染: 第 {page_num + 1} 页 -> {output_name}")
-                
-                doc.close()
+
+                if doc is not None:
+                    doc.close()
                 
                 if rendered_count > 0:
                     log(f"✅ 完成: 渲染了 {rendered_count} 页 -> {file_out_dir}")

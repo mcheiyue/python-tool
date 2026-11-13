@@ -15,18 +15,20 @@ class GhostscriptCompressor(BasePdfCompressor):
         """
         :param files: 文件列表
         :param quality: 压缩质量 (/screen, /ebook 等)
+        :return: 实际生成的压缩文件路径列表
         """
         gs_path = kwargs.get('gs_path')
 
         if not gs_path or not os.path.exists(gs_path):
             self.log.emit(f"❌ 未找到 Ghostscript 路径: {gs_path}")
             self.finished.emit(0, len(files))
-            return
+            return []
 
         self._is_running = True
         total = len(files)
         success = 0
         fail = 0
+        produced = []
 
         for idx, path in enumerate(files):
             if not self._is_running:
@@ -72,6 +74,7 @@ class GhostscriptCompressor(BasePdfCompressor):
                     stderr=subprocess.PIPE,
                     startupinfo=startupinfo
                 )
+                self._process = process
                 
                 # 添加超时控制：每个 PDF 最多处理 60 秒
                 try:
@@ -82,9 +85,12 @@ class GhostscriptCompressor(BasePdfCompressor):
                     fail += 1
                     self.log.emit(f"❌ 超时 {name}: 处理时间超过 60 秒")
                     continue
+                finally:
+                    self._process = None
                 
                 if process.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                     success += 1
+                    produced.append(output_path)
                     self.log.emit(f"✅ 成功: {os.path.basename(output_path)}")
                 else:
                     fail += 1
@@ -97,3 +103,4 @@ class GhostscriptCompressor(BasePdfCompressor):
 
         self.finished.emit(success, fail)
         self._is_running = False
+        return produced
