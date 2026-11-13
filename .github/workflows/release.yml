@@ -105,7 +105,9 @@ jobs:
             "image-vectorize","image-to-pdf","text-extract-code","text-txt-to-pdf",
             "files-rename-preview","pdf-compress","pdf-render",
             "text-markdown-batch-pdf","office-libreoffice-convert",
-            "office-word-markdown","text-markdown-html"
+            "office-word-markdown","text-markdown-html",
+            "office-ppt-to-pdf","office-word-to-pdf","office-excel-to-pdf",
+            "office-ppt-to-images","office-doc-to-docx"
           )
           $missing = $expected | Where-Object { $help -notmatch [regex]::Escape($_) }
           if ($missing) {

@@ -19,10 +19,12 @@ class BaseOfficeConverter(QObject):
         self._app = None
         self._tool_manager = tool_manager
         self._fallback = None
+        self.backend = None
 
     def convert(self, file_paths):
         """执行转换任务的模板方法"""
         self._is_running = True
+        self.backend = self.app_name
         total = len(file_paths)
         success = 0
         fail = 0
@@ -42,9 +44,10 @@ class BaseOfficeConverter(QObject):
                 self._fallback = LibreOfficeEngine(self._tool_manager)
                 self._fallback.log.connect(self.log.emit)
                 self._fallback.progress.connect(self.progress.emit)
+                self.backend = "LibreOffice"
                 self.log.emit("MS Office 不可用，尝试 LibreOffice")
                 success, fail = self._fallback.convert(file_paths)
-                return
+                return success, fail
 
             def worker(path):
                 file_name = os.path.basename(path)
@@ -99,6 +102,7 @@ class BaseOfficeConverter(QObject):
             self.finished.emit(success, fail)
             self._is_running = False
             self._fallback = None
+        return success, fail
 
     def stop(self):
         """停止当前任务"""

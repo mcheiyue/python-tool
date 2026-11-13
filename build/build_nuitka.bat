@@ -147,6 +147,13 @@ python -m nuitka ^
     --include-package=core.external_tools.ghostscript_tool ^
     --include-package=core.external_tools.pandoc_tool ^
     --include-package=core.external_tools.libreoffice_tool ^
+    --include-package=core.engines.office ^
+    --include-package=core.features.office ^
+    --include-package=docx ^
+    --include-package=pptx ^
+    --include-package=openpyxl ^
+    --include-package-data=docx ^
+    --include-package-data=pptx ^
     --include-package-data=fpdf ^
     --include-data-dir=config=config ^
     --include-data-file=VERSION=VERSION ^
@@ -173,6 +180,16 @@ python -m nuitka ^
     --include-module=core.features.text.markdown_converter ^
     --include-module=core.features.office.libreoffice_converter ^
     --include-module=core.features.office.word_converter ^
+    --include-module=core.features.office.ppt_image_exporter ^
+    --include-module=core.features.office.doc_to_docx_converter ^
+    --include-module=core.utils.office_security ^
+    --include-module=core.engines.office.base ^
+    --include-module=core.engines.office.word ^
+    --include-module=core.engines.office.excel ^
+    --include-module=core.engines.office.powerpoint ^
+    --include-module=core.engines.office.libreoffice ^
+    --include-module=core.engines.office.selector ^
+    --include-module=core.batch ^
     --include-module=core.engines.pdf.base ^
     --include-module=core.engines.pdf.ghostscript ^
     cli_main.py || goto ERROR

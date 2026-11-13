@@ -668,3 +668,236 @@ def test_cli_pdf_render_auto_reports_when_no_engine(monkeypatch, tmp_path):
 
     assert result.status.value == "failed"
     assert "渲染引擎" in result.message
+
+
+def _require_office():
+    import comtypes.client
+
+    try:
+        app = comtypes.client.CreateObject("Word.Application", dynamic=True)
+    except Exception:
+        pytest.skip("未安装 Microsoft Office")
+    try:
+        app.Quit()
+    except Exception:
+        pass
+
+
+def _make_docx(path):
+    import docx
+
+    document = docx.Document()
+    document.add_paragraph("cli office smoke")
+    document.save(path)
+
+
+def _make_xlsx(path):
+    import openpyxl
+
+    workbook = openpyxl.Workbook()
+    workbook.active["A1"] = "cli"
+    workbook.save(path)
+
+
+def _make_pptx(path, slides=2):
+    from pptx import Presentation
+
+    presentation = Presentation()
+    for _ in range(slides):
+        presentation.slides.add_slide(presentation.slide_layouts[1])
+    presentation.save(path)
+
+
+def test_cli_office_word_to_pdf(tmp_path):
+    _require_office()
+    source = tmp_path / "a.docx"
+    _make_docx(source)
+
+    completed = _run_cli("office-word-to-pdf", str(source), "--json")
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["status"] == "success"
+    assert result["outputs"] == [str(source.with_suffix(".pdf"))]
+    assert result["data"]["backend"] == "Microsoft Word"
+    assert source.with_suffix(".pdf").is_file()
+
+
+def test_cli_office_excel_to_pdf(tmp_path):
+    _require_office()
+    source = tmp_path / "b.xlsx"
+    _make_xlsx(source)
+
+    completed = _run_cli("office-excel-to-pdf", str(source), "--json")
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["status"] == "success"
+    assert result["data"]["backend"] == "Microsoft Excel"
+    assert source.with_suffix(".pdf").is_file()
+
+
+def test_cli_office_ppt_to_pdf(tmp_path):
+    _require_office()
+    source = tmp_path / "deck.pptx"
+    _make_pptx(source)
+
+    completed = _run_cli("office-ppt-to-pdf", str(source), "--json")
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["status"] == "success"
+    assert result["data"]["backend"] == "Microsoft PowerPoint"
+    assert source.with_suffix(".pdf").is_file()
+
+
+def test_cli_office_ppt_to_images(tmp_path):
+    _require_office()
+    source = tmp_path / "deck.pptx"
+    output_dir = tmp_path / "imgs"
+    _make_pptx(source, slides=2)
+
+    completed = _run_cli(
+        "office-ppt-to-images", str(source), "--output-dir", str(output_dir), "--json"
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["status"] == "success"
+    assert len(result["outputs"]) == 2
+    assert all(Path(path).is_file() for path in result["outputs"])
+
+
+def test_cli_office_doc_to_docx(tmp_path):
+    _require_office()
+    import comtypes.client
+
+    source = tmp_path / "a.docx"
+    _make_docx(source)
+    legacy = tmp_path / "legacy.doc"
+
+    comtypes.CoInitialize()
+    word = comtypes.client.CreateObject("Word.Application", dynamic=True)
+    try:
+        word.Visible = False
+        document = word.Documents.Open(str(source), False, True, False)
+        document.SaveAs2(str(legacy), 0)
+        document.Close(0)
+    finally:
+        word.Quit()
+        comtypes.CoUninitialize()
+
+    output_dir = tmp_path / "out"
+    completed = _run_cli(
+        "office-doc-to-docx", str(legacy), "--output-dir", str(output_dir), "--json"
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["status"] == "success"
+    assert result["outputs"] == [str(output_dir / "legacy.docx")]
+    assert (output_dir / "legacy.docx").is_file()
+
+
+def test_cli_office_to_pdf_reports_failure_when_no_backend(monkeypatch, tmp_path):
+    import app.cli as cli
+    from core.engines.office import word as word_module
+
+    def boom(self):
+        raise OSError("no office")
+
+    monkeypatch.setattr(word_module.WordEngine, "_create_app", boom)
+    source = tmp_path / "a.docx"
+    source.write_bytes(b"not a real docx")
+
+    result = cli._execute(
+        cli.build_parser().parse_args(
+            [
+                "office-word-to-pdf",
+                str(source),
+                "--no-libreoffice-fallback",
+                "--json",
+            ]
+        ),
+        lambda: False,
+    )
+
+    assert result.status.value == "failed"
+    assert result.succeeded == 0
+
+
+def test_cli_office_to_pdf_falls_back_to_libreoffice(monkeypatch, tmp_path):
+    import app.cli as cli
+    from core.engines.office import libreoffice as lo_module
+    from core.engines.office import word as word_module
+
+    def boom(self):
+        raise OSError("no office")
+
+    monkeypatch.setattr(word_module.WordEngine, "_create_app", boom)
+    monkeypatch.setattr(
+        lo_module.LibreOfficeEngine, "convert", lambda self, paths: (1, 0)
+    )
+    source = tmp_path / "a.docx"
+    source.write_bytes(b"not a real docx")
+
+    result = cli._execute(
+        cli.build_parser().parse_args(["office-word-to-pdf", str(source), "--json"]),
+        lambda: False,
+    )
+
+    assert result.data["backend"] == "LibreOffice"
+    assert result.succeeded == 1
+
+
+def test_cli_office_keeps_success_when_cancel_arrives_after_last_file(
+    monkeypatch, tmp_path
+):
+    import app.cli as cli
+    from core.engines.office import libreoffice as lo_module
+    from core.engines.office import word as word_module
+
+    def boom(self):
+        raise OSError("no office")
+
+    monkeypatch.setattr(word_module.WordEngine, "_create_app", boom)
+    monkeypatch.setattr(
+        lo_module.LibreOfficeEngine, "convert", lambda self, paths: (1, 0)
+    )
+    source = tmp_path / "a.docx"
+    source.write_bytes(b"not a real docx")
+
+    result = cli._execute(
+        cli.build_parser().parse_args(["office-word-to-pdf", str(source), "--json"]),
+        lambda: True,
+    )
+
+    assert result.status.value == "success"
+    assert result.succeeded == 1
+
+
+def test_cli_office_reports_cancelled_when_interrupted(monkeypatch, tmp_path):
+    import app.cli as cli
+    from core.engines.office import libreoffice as lo_module
+    from core.engines.office import word as word_module
+
+    def boom(self):
+        raise OSError("no office")
+
+    monkeypatch.setattr(word_module.WordEngine, "_create_app", boom)
+    # 两个输入只完成一个：留下未处理的文件，才是真正的中途中断
+    monkeypatch.setattr(
+        lo_module.LibreOfficeEngine, "convert", lambda self, paths: (1, 0)
+    )
+    sources = [tmp_path / name for name in ("a.docx", "b.docx")]
+    for source in sources:
+        source.write_bytes(b"not a real docx")
+
+    result = cli._execute(
+        cli.build_parser().parse_args(
+            ["office-word-to-pdf", *(str(p) for p in sources), "--json"]
+        ),
+        lambda: True,
+    )
+
+    assert result.status.value == "cancelled"

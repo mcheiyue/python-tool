@@ -87,13 +87,22 @@ python -m app.cli office-libreoffice-convert a.docx --to pdf --json
 python -m app.cli office-word-markdown a.docx --direction docx-to-md --json
 python -m app.cli text-markdown-html a.md --direction md-to-html --json
 
+# 依赖 Microsoft Office（本机需已安装）
+python -m app.cli office-word-to-pdf a.docx --json
+python -m app.cli office-excel-to-pdf b.xlsx --json
+python -m app.cli office-ppt-to-pdf deck.pptx --json
+python -m app.cli office-ppt-to-images deck.pptx --output-dir slides --json
+python -m app.cli office-doc-to-docx legacy.doc --output-dir out --json
+
 # Windows 发行包
 OfficeToolkit_CLI.exe merge input-a.pdf input-b.pdf --output merged.pdf
 ```
 
 命令返回 `0` 表示成功，`1` 表示处理失败，`130` 表示用户取消；加 `--json` 可获得包含 `status`、`message`、`outputs`、`succeeded`、`failed` 的机器可读结果，非文件产出（取色结果、重命名预览计划）另在 `data` 字段返回。失败时 `message` 会带上核心层的具体原因（例如「找不到 PDF 引擎 'xelatex'」），而不是只报失败计数。
 
-`merge`、`split`、`extract-images`、`image-convert`、`pdf-compress` 支持 Ctrl+C 中断；其中 `pdf-compress` 会直接终止 Ghostscript 子进程，其余命令在文件边界停止。其他命令当前不支持取消。
+`merge`、`split`、`extract-images`、`image-convert`、`pdf-compress` 和三条 `office-*-to-pdf` 支持 Ctrl+C 中断；其中 `pdf-compress` 会直接终止 Ghostscript 子进程，其余命令在文件边界停止。其他命令当前不支持取消。
+
+`office-*-to-pdf` 默认在 MS Office 不可用时回退 LibreOffice，`data.backend` 报告实际使用的后端；加 `--no-libreoffice-fallback` 可关闭回退。未安装 Office 时 `office-ppt-to-images` 与 `office-doc-to-docx` 直接失败（它们只走 COM，无回退）。
 
 `files-rename-preview` 只生成预览计划，不修改文件。
 

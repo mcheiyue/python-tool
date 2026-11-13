@@ -68,7 +68,7 @@ Qt 级别与桌面依赖是**两个正交维度**：#2 PPT 转图片、#4 Doc �
 
 ### 3.1 CLI 已实现
 
-`app/cli.py` 当前提供 16 条根层命令：
+`app/cli.py` 当前提供 21 条根层命令：
 
 | 命令 | 核心实现 | 结果协议 | 阶段 |
 | --- | --- | --- | --- |
@@ -88,12 +88,17 @@ Qt 级别与桌面依赖是**两个正交维度**：#2 PPT 转图片、#4 Doc �
 | `office-libreoffice-convert` | `LibreOfficeFormatConverter` | `on_finished(success, fail)` → `OperationResult` | 2 |
 | `office-word-markdown` | `WordConverter` | `on_finished(success, fail)` → `OperationResult` | 2 |
 | `text-markdown-html` | `MarkdownConverter` | `on_finished(success, fail)` → `OperationResult` | 2 |
+| `office-ppt-to-pdf` | `PowerPointEngine`（Qt 信号） | `log`/`finished` → `OperationResult` + `data.backend` | 3 |
+| `office-word-to-pdf` | `WordEngine`（Qt 信号） | `log`/`finished` → `OperationResult` + `data.backend` | 3 |
+| `office-excel-to-pdf` | `ExcelEngine`（Qt 信号） | `log`/`finished` → `OperationResult` + `data.backend` | 3 |
+| `office-ppt-to-images` | `PPTImageExporter` | `on_finished(success, fail)` → `OperationResult` | 3 |
+| `office-doc-to-docx` | `DocToDocxConverter` | `on_finished(success, fail)` → `OperationResult` | 3 |
 
-全部 16 条支持 `--json`、成功/失败/取消退出码。`app.cli` 导入后 `PyQt6` 不在 `sys.modules`（实测断言见 `tests/test_cli.py`），且真实 `OfficeToolkit_CLI.exe` 运行期未加载任何 Qt DLL——但该产物内含 `QtCore.pyd`/`QtGui.pyd`（PIL 的 `ImageQt` 被 Nuitka 推断带入），因此**“Qt-free”只能按运行期断言，不能按产物内容断言**。
+全部 21 条支持 `--json`、成功/失败/取消退出码。`app.cli` 导入后 `PyQt6` 不在 `sys.modules`（实测断言见 `tests/test_cli.py`），且真实 `OfficeToolkit_CLI.exe` 运行期未加载任何 Qt DLL——但该产物内含 `QtCore.pyd`/`QtGui.pyd`（PIL 的 `ImageQt` 被 Nuitka 推断带入），因此**“Qt-free”只能按运行期断言，不能按产物内容断言**。
 
 阶段 2 的 6 条命令按设计为 **Q1**：导入即加载 Qt，但既不创建 `QApplication` 也不建主窗口。实测依据：`ExternalToolManager()` 与 `GhostscriptCompressor()` 在无 `QApplication` 环境下可实例化，且 `pyqtSignal` 的 `emit` 在无事件循环时**同步**调用槽函数——`pdf-compress` 正是靠这一点把 `log`/`finished` 信号直接接到 CLI 输出。
 
-取消支持范围：`merge`、`split`、`extract-images`、`image-convert`、`pdf-compress` 接入 Ctrl+C（`pdf-compress` 经 `_register_stopper(compressor.stop)` 杀 GS 子进程）；其余 11 条无 `should_cancel`，见第 6.3 节。
+取消支持范围：`merge`、`split`、`extract-images`、`image-convert`、`pdf-compress`、三条 Office 转 PDF 接入 Ctrl+C（`pdf-compress` 经 `_register_stopper(compressor.stop)` 杀 GS 子进程，Office 转 PDF 只停后续文件）；其余 10 条无 `should_cancel`，见第 6.3 节。
 
 README 现状：`README.md:71-77` 只有 4 条源码调用示例和 1 条 `OfficeToolkit_CLI.exe` 示例，没有退出码、JSON 结构或失败语义说明。用户文档是待补项，不是既有资产。
 
@@ -174,32 +179,32 @@ README 现状：`README.md:71-77` 只有 4 条源码调用示例和 1 条 `Offic
 
 | # | GUI 菜单项 | 现有核心入口 | 建议命令 | Qt 级别 | 状态与运行边界 |
 | ---: | --- | --- | --- | --- | --- |
-| 1 | PPT 转 PDF | `core/engines/office/powerpoint.py`、`core/engines/office/base.py` | `office-toolkit office ppt-to-pdf` | Q1 | 待接入；Office COM 或 LibreOffice 后端，需按后端分别验证运行环境 |
-| 2 | PPT 转图片 | `core/features/office/ppt_image_exporter.py` | `office-toolkit office ppt-to-images` | Q0 | 待接入；纯 comtypes + 回调，实测不加载 Qt；但需 PowerPoint 且设 `Visible=1`，属桌面依赖 |
-| 3 | Word 转 PDF | `core/engines/office/word.py`、`core/engines/office/base.py` | `office-toolkit office word-to-pdf` | Q1 | 待接入；同 #1 |
-| 4 | Doc 转 Docx | `core/features/office/doc_to_docx_converter.py` | `office-toolkit office doc-to-docx` | Q0 | 待接入；纯 comtypes + 回调，实测不加载 Qt；仍需 Word 与 `Visible=False` |
-| 5 | Excel 转 PDF | `core/engines/office/excel.py`、`core/engines/office/base.py` | `office-toolkit office excel-to-pdf` | Q1 | 待接入；同 #1，且须保留宏禁用 |
-| 6 | Word ↔ Markdown | `core/features/office/word_converter.py` | `office-toolkit office word-markdown` | Q1 | 待接入；Pandoc 外部依赖，需映射转换方向与参考文档参数 |
-| 7 | LibreOffice 格式转换 | `core/features/office/libreoffice_converter.py` | `office-toolkit office libreoffice-convert` | Q1 | 待接入；子进程调用，headless 能力待实测 |
+| 1 | PPT 转 PDF | `core/engines/office/powerpoint.py`、`core/engines/office/base.py` | `office-ppt-to-pdf` | Q1 | 已接入；`data.backend` 报告实际后端，`--no-libreoffice-fallback` 可关闭回退 |
+| 2 | PPT 转图片 | `core/features/office/ppt_image_exporter.py` | `office-ppt-to-images` | Q0 | 已接入；纯 comtypes + 回调，实测不加载 Qt；需 PowerPoint 且设 `Visible=1`，属桌面依赖 |
+| 3 | Word 转 PDF | `core/engines/office/word.py`、`core/engines/office/base.py` | `office-word-to-pdf` | Q1 | 已接入；同 #1 |
+| 4 | Doc 转 Docx | `core/features/office/doc_to_docx_converter.py` | `office-doc-to-docx` | Q0 | 已接入；纯 comtypes + 回调，实测不加载 Qt；仍需 Word 与 `Visible=False` |
+| 5 | Excel 转 PDF | `core/engines/office/excel.py`、`core/engines/office/base.py` | `office-excel-to-pdf` | Q1 | 已接入；同 #1，且保留宏禁用 |
+| 6 | Word ↔ Markdown | `core/features/office/word_converter.py` | `office-word-markdown` | Q1 | 已接入（阶段 2）；Pandoc 外部依赖，`--direction` 与 `--reference-doc` 已映射 |
+| 7 | LibreOffice 格式转换 | `core/features/office/libreoffice_converter.py` | `office-libreoffice-convert` | Q1 | 已接入（阶段 2）；子进程 `--headless` 调用 |
 | 8 | PDF 合并 | `core/features/pdf/pdf_merger.py` | `office-toolkit merge`（保留；分组别名 `pdf merge`） | Q0 | 已接入 |
-| 9 | PDF 压缩 | `core/engines/pdf/ghostscript.py`、`core/engines/pdf/base.py` | `office-toolkit pdf compress` | Q1 | 待接入；须先把 `BasePdfCompressor(QObject)` 的处理逻辑与信号分开发布，不是简单加参数 |
+| 9 | PDF 压缩 | `core/engines/pdf/ghostscript.py`、`core/engines/pdf/base.py` | `pdf-compress` | Q1 | 已接入（阶段 2）；`stop()` 会 kill GS 子进程，取消不必等满 60 秒超时 |
 | 10 | PDF 拆分/提取 | `core/features/pdf/pdf_splitter.py` | `office-toolkit split`（保留；分组别名 `pdf split`） | Q0 | 已接入；页面只有 `start_split` 一条路径（`pdf_split_interface.py:121`），调用 `split(file_path, ranges, output_dir)`，不存在其他提取模式 |
 | 11 | PDF 图片提取 | `core/features/pdf/pdf_image_extractor.py` | `office-toolkit extract-images`（保留；分组别名 `pdf extract-images`） | Q0 | 已接入 |
-| 12 | PDF 页面渲染 | `core/features/pdf/pdf_page_renderer.py` | `office-toolkit pdf render` | Q1 | 待接入；PyMuPDF 与 Ghostscript 两条路径，后者经 `GhostscriptTool` 引入 Qt |
+| 12 | PDF 页面渲染 | `core/features/pdf/pdf_page_renderer.py` | `pdf-render` | Q1 | 已接入（阶段 2）；`--engine auto` 优先 PyMuPDF，不可用时回退 Ghostscript |
 | 13 | 图片取色 | `core/features/image/color_extractor.py` | `office-toolkit image-colors` | Q0 | 已接入；结果走 `data.colors`（`{rgb, hex, proportion}`） |
 | 14 | PNG 转 SVG | `core/features/image/image_vectorizer.py` | `office-toolkit image-vectorize` | Q0 | 已接入；vtracer 已在发行产物中实测可用 |
 | 15 | 图片格式转换 | `core/features/image/image_converter.py` | `office-toolkit image-convert`（保留；分组别名 `image convert`） | Q0 | 已接入 |
 | 16 | 图片转 PDF | `core/features/pdf/image_to_pdf_converter.py` | `office-toolkit image-to-pdf` | Q0 | 已接入；`--single` 切每图一个 PDF，默认合并 |
 | 17 | 图片去水印 | `core/features/image/gemini_watermark_remover.py` | `office-toolkit image remove-watermark` | Q0 | 需新建核心入口；`GeminiWatermarkRemover` 只有单文件 `process_image`，批处理靠 GUI 页面循环；依赖 `assets/watermark/bg_48.png`、`bg_96.png` 与 NumPy |
 | 18 | Markdown 转 PDF | 无核心入口，逻辑内联在 `ui/interfaces/text/markdown_interface.py:364-401` | `office-toolkit text markdown-to-pdf` | Q1 | 需新建核心入口；现为 GUI 内联逻辑 + `pdf_converter` 插件 + `has_pdf_engine` 检查 |
-| 19 | Markdown ↔ HTML | `core/features/text/markdown_converter.py` | `office-toolkit text markdown-html` | Q1 | 待接入；基础库路径与 Pandoc 路径需显式区分 |
-| 20 | Markdown 批量转 PDF | `core/features/text/markdown_pdf_pandoc.py` | `office-toolkit text markdown-batch-pdf` | Q1 | 待接入；Pandoc + PDF 引擎，需映射公式、高亮、模板参数 |
+| 19 | Markdown ↔ HTML | `core/features/text/markdown_converter.py` | `text-markdown-html` | Q1 | 已接入（阶段 2）；默认内置库，`--use-pandoc` 显式切换 |
+| 20 | Markdown 批量转 PDF | `core/features/text/markdown_pdf_pandoc.py` | `text-markdown-batch-pdf` | Q1 | 已接入（阶段 2）；`--pdf-engine`/`--template`/`--no-math`/`--no-highlight` 已映射 |
 | 21 | TXT 转 PDF | `core/features/text/txt_converter.py` | `office-toolkit text-txt-to-pdf` | Q0 | 已接入；FPDF + `FontFinder.find_cjk_font()`，缺字体时中文可能乱码（不报错，仅日志警告） |
 | 22 | 代码提取 | `core/features/text/code_extractor.py` | `office-toolkit text-extract-code` | Q0 | 已接入；同文件拒绝与临时目录替换保护均有回归覆盖 |
 | 23 | 批量重命名 | `core/features/utils/batch_rename.py` | `office-toolkit files-rename-preview` | Q0 | 已接入（预览子操作）；`apply` 与 plan 文件机制经决策不在本轮范围（第 12 节第 5 项） |
 | 24 | 剪贴板图片助手 | `ui/interfaces/utils/clipboard_interface.py`、`core/features/image/clipboard_handler.py` | 不定义 | — | 不接入；依赖活动桌面剪贴板，不属于文件处理命令 |
 
-覆盖统计：已接入 10 项（#8、#10、#11、#13、#14、#15、#16、#21、#22、#23），待接入 11 项，需新建核心入口 2 项（#17、#18），不接入 1 项（#24）。按 Qt 级别：Q0 共 13 项，Q1 共 10 项，GUI 专属 1 项。
+覆盖统计：已接入 21 项（#1–#16、#19–#23），待接入 0 项，需新建核心入口 2 项（#17、#18），不接入 1 项（#24）。按 Qt 级别：Q0 共 13 项，Q1 共 10 项，GUI 专属 1 项。
 
 Q0/Q1 判定方式：对每个功能模块在独立子进程中 import 并实例化核心类，检查 `PyQt6` 是否进入 `sys.modules`。已实测 21 个模块，`app.cli` 亦为 CLEAN。实测推翻了按目录推断的两处结论：#2 `ppt_image_exporter` 与 #4 `doc_to_docx_converter` 使用 comtypes + 回调，不经过 `ExternalToolManager`，实际为 Q0。
 
@@ -488,6 +493,33 @@ Qt 分级按第 5.4 节默认方案维持 Q1：接受加载 Qt，但不建 `QApp
 - 全部 Office 命令继续执行宏禁用、文档关闭与 COM 清理约束。
 - 5 项都有 `stop()`（`BaseOfficeConverter` 与两个 Q0 转换器），取消在文件边界生效；COM 转换中途不可安全打断，`stop()` 只保证后续文件不再开始，须在帮助与文档中如实说明这一粒度。
 
+**完成记录（阶段 3）**
+
+后端策略按第 5.4 节建议定案：**保留** Office→LibreOffice 自动回退，并在结果 `data.backend` 中暴露实际后端（`Microsoft Word`/`Microsoft Excel`/`Microsoft PowerPoint`/`LibreOffice`）。`--no-libreoffice-fallback` 可关闭回退，用于要求确定性后端的脚本。
+
+已落地 5 条命令：`office-ppt-to-pdf`、`office-word-to-pdf`、`office-excel-to-pdf`、`office-ppt-to-images`、`office-doc-to-docx`。
+
+核心层改动（`core/engines/office/base.py`）：
+
+1. `convert()` 原先返回 `None`，CLI 只能靠信号取计数。现返回 `(success, fail)`，与 `LibreOfficeEngine.convert` 一致；回退分支也返回其计数，不再 `return` 空值。
+2. 新增 `self.backend`，在 `convert()` 入口置为 `app_name`，回退时改为 `"LibreOffice"`。这是 CLI 报告实际后端的唯一可靠来源——构造阶段无法判断，因为 COM 要到转换时才连。
+
+实测中修掉一个真实缺陷：`_run_counts` 用 `on_finished=` 关键字调用，但 `BaseOfficeConverter.convert(file_paths)` 不接受该参数，导致计数永远取不到、PDF 已生成却报「核心操作未返回完成通知」。Office 三条命令改为直接连 `finished` 信号。
+
+`office-ppt-to-images` 的产物收集不能复用 `_rendered_outputs`（那是 `pdf-render` 的 `<name>_pages` 约定），PPT 导出用的是 `<name>` 目录，故新增 `_exported_images`。
+
+验证（本机 Office 16.0 三件套全部可用）：
+
+- 真实 COM 转换：Word/Excel/PPT 转 PDF 各 1 个文件成功，`data.backend` 分别为 `Microsoft Word`/`Microsoft Excel`/`Microsoft PowerPoint`。
+- `office-ppt-to-images`：2 页 PPT 导出 2 张 PNG。
+- `office-doc-to-docx`：`.doc` → `.docx` 成功。
+- 回退路径：monkeypatch 让 `_create_app` 抛 `OSError` 后，`data.backend` 变为 `LibreOffice`；本机未装 LibreOffice，故结果为失败并如实报「LibreOffice 未安装或不可用」。
+- `tests/test_cli.py` 新增 8 条测试（5 条真实 COM + 3 条回退/取消/无后端），全量 `291 passed + 3 skipped`。
+
+取消粒度：三条转 PDF 命令已接 `_register_stopper(engine.stop)`，但 COM 转换中途不可安全打断，`stop()` 只保证后续文件不再开始。`office-ppt-to-images` 与 `office-doc-to-docx` 同样只到文件边界。
+
+未完成：`assets`、`plugins/manifest.json`、`pypinyin` 三项依赖收集仍留待阶段 4；`pymupdf` 打包参数冲突未修。
+
 ### 阶段 4：新建入口、剪贴板决策与发行验收
 
 - **两个需新建核心入口的项在此收口**：
@@ -551,7 +583,7 @@ Qt 分级按第 5.4 节默认方案维持 Q1：接受加载 Qt，但不建 `QApp
 
 ### 10.4 发行与文档
 
-- 发布产物中的 `OfficeToolkit_CLI.exe --help` 成功、命令名断言齐全，且 9 条代表性命令在产物中真实执行返回 success（已实现于 `release.yml`）。
+- 发布产物中的 `OfficeToolkit_CLI.exe --help` 成功、命令名断言齐全，且代表性命令在产物中真实执行返回 success（已实现于 `release.yml`；Office 命令因 CI 无 Office 不实跑，只断言命令名）。
 - 对每个命令的选项和运行前提更新 README 或用户指南；`BUILD_GUIDE.md` 说明源码与发行版入口。
 - README 当前只有 5 行示例（`README.md:71-77`），缺少退出码表与 JSON 结构说明，属必修项。
 - 单文件中 Python 依赖和包数据按需显式包含；系统级依赖列为运行前提，不虚称已捆绑。每个新命令合入前，必须核对 3.1 对照表并补对应收集项——`build_nuitka.bat` 的 CLI target 不会自动跟随源码导入。

@@ -4,6 +4,7 @@ import os
 import signal
 import sys
 from concurrent.futures import CancelledError
+from dataclasses import replace
 from threading import Event
 from typing import Any, Callable
 
@@ -20,7 +21,7 @@ from core.features.utils.batch_rename import BatchRenamer
 from core.operation_result import OperationResult, OperationStatus
 
 CANCELLABLE = frozenset({"merge", "split", "extract-images", "image-convert"})
-INTERRUPTIBLE = CANCELLABLE | {"pdf-compress"}
+INTERRUPTIBLE = CANCELLABLE | {"pdf-compress", "office-ppt-to-pdf", "office-word-to-pdf", "office-excel-to-pdf"}
 COMPRESS_QUALITIES = ("/screen", "/ebook", "/printer", "/prepress", "/default")
 _ACTIVE_STOPPERS: list[Callable[[], None]] = []
 
@@ -211,6 +212,36 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_option(md_html)
     md_html.set_defaults(operation="text-markdown-html")
 
+    for name, help_text, formats in (
+        ("office-ppt-to-pdf", "将 PowerPoint 转 PDF", None),
+        ("office-word-to-pdf", "将 Word 转 PDF", None),
+        ("office-excel-to-pdf", "将 Excel 转 PDF", None),
+    ):
+        office_pdf = commands.add_parser(name, help=help_text)
+        office_pdf.add_argument("inputs", nargs="+", help="输入文件")
+        office_pdf.add_argument(
+            "--no-libreoffice-fallback",
+            action="store_true",
+            help="MS Office 不可用时直接失败，不回退 LibreOffice",
+        )
+        _add_json_option(office_pdf)
+        office_pdf.set_defaults(operation=name)
+
+    ppt_img = commands.add_parser("office-ppt-to-images", help="将 PowerPoint 幻灯片导出为图片")
+    ppt_img.add_argument("inputs", nargs="+", help="输入 PPT/PPTX 文件")
+    ppt_img.add_argument("-o", "--output-dir", required=True, help="输出目录")
+    ppt_img.add_argument(
+        "-f", "--format", choices=("PNG", "JPG", "BMP"), default="PNG", help="图片格式"
+    )
+    _add_json_option(ppt_img)
+    ppt_img.set_defaults(operation="office-ppt-to-images")
+
+    doc_docx = commands.add_parser("office-doc-to-docx", help="将旧版 .doc 转 .docx")
+    doc_docx.add_argument("inputs", nargs="+", help="输入 .doc 文件")
+    doc_docx.add_argument("-o", "--output-dir", default=None, help="输出目录")
+    _add_json_option(doc_docx)
+    doc_docx.set_defaults(operation="office-doc-to-docx")
+
     return parser
 
 
@@ -379,6 +410,21 @@ def _rendered_outputs(sources: list[str], output_dir: str) -> tuple[str, ...]:
     return tuple(paths)
 
 
+def _exported_images(sources: list[str], output_dir: str) -> tuple[str, ...]:
+    paths = []
+    for source in sources:
+        folder = os.path.join(output_dir, os.path.splitext(os.path.basename(source))[0])
+        if os.path.isdir(folder):
+            paths.extend(
+                sorted(
+                    os.path.join(folder, name)
+                    for name in os.listdir(folder)
+                    if os.path.isfile(os.path.join(folder, name))
+                )
+            )
+    return tuple(paths)
+
+
 def _ghostscript_path() -> str | None:
     from core.external_tools.manager import ExternalToolManager
 
@@ -470,6 +516,88 @@ def _run_pdf_render(args: argparse.Namespace, on_log) -> OperationResult:
         counts,
         _rendered_outputs(list(args.inputs), args.output),
         success_message="成功渲染 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+
+
+_OFFICE_ENGINES = {
+    "office-ppt-to-pdf": ("powerpoint", "PowerPoint"),
+    "office-word-to-pdf": ("word", "Word"),
+    "office-excel-to-pdf": ("excel", "Excel"),
+}
+
+
+def _run_office_to_pdf(
+    args: argparse.Namespace, on_log, should_cancel: Callable[[], bool]
+) -> OperationResult:
+    from core.engines.office.selector import create_office_engine
+    from core.external_tools.manager import ExternalToolManager
+
+    engine_type, display = _OFFICE_ENGINES[args.operation]
+    tool_manager = None if args.no_libreoffice_fallback else ExternalToolManager()
+    engine = create_office_engine(engine_type, tool_manager)
+    if on_log:
+        engine.log.connect(on_log)
+    _register_stopper(engine.stop)
+
+    counts: dict[str, int] = {}
+
+    def on_finished(success, fail):
+        counts["success"] = success
+        counts["fail"] = fail
+
+    engine.finished.connect(on_finished)
+    engine.convert(list(args.inputs))
+
+    result = _result_from_counts(
+        (counts["success"], counts["fail"]) if counts else None,
+        _with_extension(list(args.inputs), None, ".pdf"),
+        success_message="成功转换 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+    result = replace(result, data={"backend": engine.backend or f"MS {display}"})
+    # 全部文件已转换完成后的迟到取消不改变结果，与 PDF 各命令的判定保持一致
+    if should_cancel() and result.succeeded < len(args.inputs):
+        return replace(result, status=OperationStatus.CANCELLED, message="任务已取消")
+    return result
+
+
+def _run_office_ppt_to_images(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.features.office.ppt_image_exporter import PPTImageExporter
+
+    exporter = PPTImageExporter()
+    _register_stopper(exporter.stop)
+    counts = _run_counts(
+        lambda **kw: exporter.export(
+            list(args.inputs), args.output_dir, args.format, on_log=on_log, **kw
+        )
+    )
+    outputs = _exported_images(list(args.inputs), args.output_dir)
+    return _result_from_counts(
+        counts,
+        outputs,
+        success_message="成功导出 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+
+
+def _run_office_doc_to_docx(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.features.office.doc_to_docx_converter import DocToDocxConverter
+
+    converter = DocToDocxConverter()
+    _register_stopper(converter.stop)
+    counts = _run_counts(
+        lambda **kw: converter.convert(
+            list(args.inputs), args.output_dir, on_log=on_log, **kw
+        )
+    )
+    return _result_from_counts(
+        counts,
+        _with_extension(list(args.inputs), args.output_dir, ".docx"),
+        success_message="成功转换 {success} 个文件",
         failure_message="成功 {success} 个，失败 {fail} 个",
         hint=on_log.last_error(),
     )
@@ -729,6 +857,15 @@ def _execute(args: argparse.Namespace, should_cancel: Callable[[], bool]) -> Ope
 
     if args.operation == "text-markdown-html":
         return _run_markdown_html(args, on_log)
+
+    if args.operation in _OFFICE_ENGINES:
+        return _run_office_to_pdf(args, on_log, should_cancel)
+
+    if args.operation == "office-ppt-to-images":
+        return _run_office_ppt_to_images(args, on_log)
+
+    if args.operation == "office-doc-to-docx":
+        return _run_office_doc_to_docx(args, on_log)
 
     raise ValueError(f"未知命令: {args.operation}")
 
