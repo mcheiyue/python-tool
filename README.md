@@ -94,6 +94,10 @@ python -m app.cli office-ppt-to-pdf deck.pptx --json
 python -m app.cli office-ppt-to-images deck.pptx --output-dir slides --json
 python -m app.cli office-doc-to-docx legacy.doc --output-dir out --json
 
+# 其余两项
+python -m app.cli image-remove-watermark shot.png --json
+python -m app.cli text-markdown-to-pdf note.md --engine auto --json
+
 # Windows 发行包
 OfficeToolkit_CLI.exe merge input-a.pdf input-b.pdf --output merged.pdf
 ```
@@ -105,6 +109,8 @@ OfficeToolkit_CLI.exe merge input-a.pdf input-b.pdf --output merged.pdf
 `office-*-to-pdf` 默认在 MS Office 不可用时回退 LibreOffice，`data.backend` 报告实际使用的后端；加 `--no-libreoffice-fallback` 可关闭回退。未安装 Office 时 `office-ppt-to-images` 与 `office-doc-to-docx` 直接失败（它们只走 COM，无回退）。
 
 `files-rename-preview` 只生成预览计划，不修改文件。
+
+	ext-markdown-to-pdf 的 --engine auto 优先使用带 PDF 引擎的 Pandoc，不可用时回退内置单页渲染；内置渲染只支持 Latin-1 字符，中文会丢失，data.engine 会如实报告实际使用的引擎。image-remove-watermark 输出到源文件旁的 <name>_clean<ext>，加 -o 可指定目录。
 
 外部工具依赖：`pdf-compress` 需要 Ghostscript；`pdf-render` 默认 `--engine auto`，优先 PyMuPDF，不可用时回退 Ghostscript；`text-markdown-batch-pdf`、`office-word-markdown` 需要 Pandoc，转 PDF 还需 `--pdf-engine` 指定的引擎（如 xelatex）在 PATH 中；`office-libreoffice-convert` 需要 LibreOffice；`text-markdown-html` 默认用内置库，加 `--use-pandoc` 才需要 Pandoc。工具缺失时命令返回退出码 `1` 并说明缺什么。
 

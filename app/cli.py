@@ -242,6 +242,26 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_option(doc_docx)
     doc_docx.set_defaults(operation="office-doc-to-docx")
 
+    watermark = commands.add_parser(
+        "image-remove-watermark", help="移除 AI 生成图片的水印（当前支持 Gemini）"
+    )
+    watermark.add_argument("inputs", nargs="+", help="输入图片")
+    watermark.add_argument("-o", "--output-dir", default=None, help="输出目录，默认写在源文件旁")
+    _add_json_option(watermark)
+    watermark.set_defaults(operation="image-remove-watermark")
+
+    md_pdf = commands.add_parser("text-markdown-to-pdf", help="将 Markdown 内容导出为 PDF")
+    md_pdf.add_argument("inputs", nargs="+", help="输入 .md 文件")
+    md_pdf.add_argument("-o", "--output-dir", default=None, help="输出目录，默认写在源文件旁")
+    md_pdf.add_argument(
+        "--engine",
+        choices=("auto", "pandoc", "builtin"),
+        default="auto",
+        help="auto 优先 Pandoc，不可用时用内置渲染",
+    )
+    _add_json_option(md_pdf)
+    md_pdf.set_defaults(operation="text-markdown-to-pdf")
+
     return parser
 
 
@@ -584,6 +604,54 @@ def _run_office_ppt_to_images(args: argparse.Namespace, on_log) -> OperationResu
     )
 
 
+def _run_remove_watermark(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.batch import run as batch_run
+    from core.features.image.gemini_watermark_remover import GeminiWatermarkRemover
+
+    remover = GeminiWatermarkRemover()
+    created: list[str] = []
+
+    def worker(path):
+        target = (
+            remover.batch_output_path(path, args.output_dir)
+            if args.output_dir
+            else remover.default_output_path(path)
+        )
+        if not remover.process_image(path, target, on_log=on_log):
+            raise RuntimeError(f"处理失败: {os.path.basename(path)}")
+        created.append(target)
+
+    counts = batch_run(list(args.inputs), worker, on_log=on_log)
+    outputs = tuple(path for path in created if os.path.exists(path))
+    return _result_from_counts(
+        counts,
+        outputs,
+        success_message="成功处理 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+
+
+def _run_markdown_to_pdf(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.features.text.markdown_to_pdf import MarkdownToPdf
+    from core.plugins import PluginManager
+
+    converter = MarkdownToPdf(PluginManager())
+    if args.engine == "pandoc" and not converter.is_pandoc_ready():
+        return OperationResult.failure(
+            "Pandoc 或 PDF 引擎不可用，请改用 --engine builtin", failed=len(args.inputs)
+        )
+
+    result = converter.convert(
+        list(args.inputs),
+        args.output_dir,
+        force_builtin=args.engine == "builtin",
+        on_log=on_log,
+        should_cancel=lambda: False,
+    )
+    return replace(result, data={"engine": converter.engine})
+
+
 def _run_office_doc_to_docx(args: argparse.Namespace, on_log) -> OperationResult:
     from core.features.office.doc_to_docx_converter import DocToDocxConverter
 
@@ -866,6 +934,12 @@ def _execute(args: argparse.Namespace, should_cancel: Callable[[], bool]) -> Ope
 
     if args.operation == "office-doc-to-docx":
         return _run_office_doc_to_docx(args, on_log)
+
+    if args.operation == "image-remove-watermark":
+        return _run_remove_watermark(args, on_log)
+
+    if args.operation == "text-markdown-to-pdf":
+        return _run_markdown_to_pdf(args, on_log)
 
     raise ValueError(f"未知命令: {args.operation}")
 

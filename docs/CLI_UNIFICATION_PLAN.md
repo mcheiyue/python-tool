@@ -195,8 +195,8 @@ README 现状：`README.md:71-77` 只有 4 条源码调用示例和 1 条 `Offic
 | 14 | PNG 转 SVG | `core/features/image/image_vectorizer.py` | `office-toolkit image-vectorize` | Q0 | 已接入；vtracer 已在发行产物中实测可用 |
 | 15 | 图片格式转换 | `core/features/image/image_converter.py` | `office-toolkit image-convert`（保留；分组别名 `image convert`） | Q0 | 已接入 |
 | 16 | 图片转 PDF | `core/features/pdf/image_to_pdf_converter.py` | `office-toolkit image-to-pdf` | Q0 | 已接入；`--single` 切每图一个 PDF，默认合并 |
-| 17 | 图片去水印 | `core/features/image/gemini_watermark_remover.py` | `office-toolkit image remove-watermark` | Q0 | 需新建核心入口；`GeminiWatermarkRemover` 只有单文件 `process_image`，批处理靠 GUI 页面循环；依赖 `assets/watermark/bg_48.png`、`bg_96.png` 与 NumPy |
-| 18 | Markdown 转 PDF | 无核心入口，逻辑内联在 `ui/interfaces/text/markdown_interface.py:364-401` | `office-toolkit text markdown-to-pdf` | Q1 | 需新建核心入口；现为 GUI 内联逻辑 + `pdf_converter` 插件 + `has_pdf_engine` 检查 |
+| 17 | 图片去水印 | `core/features/image/gemini_watermark_remover.py` | `image-remove-watermark` | Q0 | 已接入（阶段 4）；新增 `process_batch` 与共用的 `default_output_path`/`batch_output_path`，GUI 仍用线程池调单文件、CLI 走串行批处理，命名一致 |
+| 18 | Markdown 转 PDF | `core/features/text/markdown_to_pdf.py` | `text-markdown-to-pdf` | Q1 | 已接入（阶段 4）；新增核心入口，`--engine auto/pandoc/builtin`，`data.engine` 报告实际引擎 |
 | 19 | Markdown ↔ HTML | `core/features/text/markdown_converter.py` | `text-markdown-html` | Q1 | 已接入（阶段 2）；默认内置库，`--use-pandoc` 显式切换 |
 | 20 | Markdown 批量转 PDF | `core/features/text/markdown_pdf_pandoc.py` | `text-markdown-batch-pdf` | Q1 | 已接入（阶段 2）；`--pdf-engine`/`--template`/`--no-math`/`--no-highlight` 已映射 |
 | 21 | TXT 转 PDF | `core/features/text/txt_converter.py` | `office-toolkit text-txt-to-pdf` | Q0 | 已接入；FPDF + `FontFinder.find_cjk_font()`，缺字体时中文可能乱码（不报错，仅日志警告） |
@@ -204,11 +204,11 @@ README 现状：`README.md:71-77` 只有 4 条源码调用示例和 1 条 `Offic
 | 23 | 批量重命名 | `core/features/utils/batch_rename.py` | `office-toolkit files-rename-preview` | Q0 | 已接入（预览子操作）；`apply` 与 plan 文件机制经决策不在本轮范围（第 12 节第 5 项） |
 | 24 | 剪贴板图片助手 | `ui/interfaces/utils/clipboard_interface.py`、`core/features/image/clipboard_handler.py` | 不定义 | — | 不接入；依赖活动桌面剪贴板，不属于文件处理命令 |
 
-覆盖统计：已接入 21 项（#1–#16、#19–#23），待接入 0 项，需新建核心入口 2 项（#17、#18），不接入 1 项（#24）。按 Qt 级别：Q0 共 13 项，Q1 共 10 项，GUI 专属 1 项。
+覆盖统计：已接入 23 项（#1–#23），待接入 0 项，需新建核心入口 0 项，不接入 1 项（#24）。按 Qt 级别：Q0 共 13 项，Q1 共 10 项，GUI 专属 1 项。
 
 Q0/Q1 判定方式：对每个功能模块在独立子进程中 import 并实例化核心类，检查 `PyQt6` 是否进入 `sys.modules`。已实测 21 个模块，`app.cli` 亦为 CLEAN。实测推翻了按目录推断的两处结论：#2 `ppt_image_exporter` 与 #4 `doc_to_docx_converter` 使用 comtypes + 回调，不经过 `ExternalToolManager`，实际为 Q0。
 
-#18 无核心模块可测，按 GUI 内联路径与插件依赖推定 Q1，阶段 4 抽出核心函数后须复测。
+#18 抽出核心入口后实测：`markdown_to_pdf` 模块级导入不加载 PyQt6，但 `convert()` 经 `PluginManager` 取 Pandoc 插件时必然加载（`pandoc_plugin` → `app.container`），故运行时仍为 Q1，与推定一致。#17 补测为 Q0。
 
 “已接入”按可执行子操作核算，不按菜单卡片数。#10 已核实页面只有页码范围拆分一条路径（见第 12 节），故整体计入“已接入”；若后续新增提取模式，需重新核算为“待接入”。
 
@@ -527,6 +527,27 @@ Qt 分级按第 5.4 节默认方案维持 Q1：接受加载 Qt，但不建 `QApp
   - **#17 图片去水印**：`GeminiWatermarkRemover` 只有单文件 `process_image`，需新增批处理入口（供 GUI 页面与 CLI 共用），并确保 `assets/watermark/` 已进 CLI 产物。
 - 剪贴板助手默认保持 GUI 专属；如需 CLI，只承诺活动桌面会话中的显式命令。
 - 发行验收：`--help` 命令集合检查、代表性纯文件 smoke、系统依赖的可用/缺失双环境验证、README 补齐退出码与 JSON 说明。
+
+**完成记录（阶段 4）**
+
+新增两个核心入口，24 项功能除 #24（剪贴板，按决策不接入）外全部具备命令。
+
+**#17 图片去水印**：`GeminiWatermarkRemover` 原有单文件 `process_image`，批处理循环在 GUI 页面里。新增 `process_batch`，并把输出命名抽成 `default_output_path`（`<name>_clean<ext>`）与 `batch_output_path`（在 `default_output_path` 基础上换目录），GUI 与 CLI 共用同一套命名，不会出现两处各拼一遍文件名而分叉。CLI 走 `core.batch.run` 串行批处理，单个文件失败计入 `failed` 而不中断其余文件。GUI 侧仍用线程池调单文件，未改动——线程池并发与串行批处理是两种执行策略，硬统一会改变现有并发行为。
+
+**#18 Markdown 转 PDF**：逻辑原内联在 `markdown_interface.py`（`pdf_converter` 插件 + `has_pdf_engine` 检查 + `QPrinter` 降级）。新增 `core/features/text/markdown_to_pdf.py`：
+
+- 引擎顺序与 GUI 一致：优先带 PDF 引擎的 Pandoc 插件，其次内置转换。
+- `--engine auto/pandoc/builtin`：`pandoc` 在不可用时直接失败并说明；`builtin` **强制**跳过 Pandoc。
+- 内置路径手写单页 PDF（Helvetica / Latin-1），用 `atomic_output` 落盘保证不写坏旧文件；非 ASCII 字符会丢失，故 `data.engine` 如实报告，日志也明说「非 ASCII 字符会丢失」，不把降级当增强。
+- 写文件前 `os.makedirs` 建目录。
+
+实测中修掉一个真实缺陷：`--engine builtin` 原先不生效——`convert()` 只判断 Pandoc 是否可用，不读 `force_builtin`，导致用户明确要求内置渲染却被 Pandoc 处理（或反之报错）。补 `force_builtin` 参数后 `data.engine` 与请求一致。
+
+Qt 级别复测：#17 为 Q0（模块级导入不加载 PyQt6）；#18 模块级导入同样不加载 PyQt6，但 `convert()` 经 `PluginManager` 取 Pandoc 插件时必然加载（`pandoc_plugin` → `app.container`），故运行时仍为 Q1，与阶段 0 推定一致。
+
+验证：`tests/test_cli.py` 新增 8 条（去水印默认/指定目录/多文件/缺输入、Markdown 转 PDF 内置渲染与页数断言/输出目录/Pandoc 要求/JSON ASCII），全量 `300 passed + 3 skipped`。
+
+未完成：`assets/watermark/` 与 `pypinyin` 尚未纳入 CLI 产物打包（`assets` 整目录在阶段 2 已加，需在真实产物中复核去水印命令）；`pymupdf` 打包参数冲突仍未修。
 
 阶段可按依赖拆分提交；每阶段只有在核心结果、GUI 回归、CLI 子进程行为及必要发行检查通过后才算完成。
 

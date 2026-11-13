@@ -107,7 +107,8 @@ jobs:
             "text-markdown-batch-pdf","office-libreoffice-convert",
             "office-word-markdown","text-markdown-html",
             "office-ppt-to-pdf","office-word-to-pdf","office-excel-to-pdf",
-            "office-ppt-to-images","office-doc-to-docx"
+            "office-ppt-to-images","office-doc-to-docx",
+            "image-remove-watermark","text-markdown-to-pdf"
           )
           $missing = $expected | Where-Object { $help -notmatch [regex]::Escape($_) }
           if ($missing) {

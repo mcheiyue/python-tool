@@ -901,3 +901,170 @@ def test_cli_office_reports_cancelled_when_interrupted(monkeypatch, tmp_path):
     )
 
     assert result.status.value == "cancelled"
+
+
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _make_png(path, size=(1200, 1200)):
+    from PIL import Image
+
+    Image.new("RGB", size, (40, 70, 100)).save(path)
+
+
+def _run_watermark(tmp_path, *extra):
+    from app.cli import _execute, build_parser
+
+    source = tmp_path / "shot.png"
+    _make_png(source)
+    args = build_parser().parse_args(
+        ["image-remove-watermark", str(source), *extra, "--json"]
+    )
+    return _execute(args, lambda: False), source
+
+
+def test_cli_remove_watermark_writes_beside_source(tmp_path):
+    result, source = _run_watermark(tmp_path)
+
+    expected = source.with_name("shot_clean.png")
+    assert result.status.value == "success"
+    assert result.outputs == (str(expected),)
+    assert expected.is_file()
+
+
+def test_cli_remove_watermark_honours_output_dir(tmp_path):
+    target_dir = tmp_path / "out"
+    result, _ = _run_watermark(tmp_path, "-o", str(target_dir))
+
+    expected = target_dir / "shot_clean.png"
+    assert result.status.value == "success"
+    assert result.outputs == (str(expected),)
+    assert expected.is_file()
+
+
+def test_cli_remove_watermark_reports_missing_input(tmp_path):
+    from app.cli import _execute, build_parser
+
+    missing = tmp_path / "nope.png"
+    args = build_parser().parse_args(
+        ["image-remove-watermark", str(missing), "--json"]
+    )
+
+    result = _execute(args, lambda: False)
+
+    assert result.status.value == "failed"
+    assert result.failed == 1
+
+
+def test_cli_remove_watermark_processes_every_file(tmp_path):
+    from app.cli import _execute, build_parser
+    from PIL import Image
+
+    sources = []
+    for name in ("a.png", "b.png"):
+        path = tmp_path / name
+        Image.new("RGB", (600, 600), (20, 40, 60)).save(path)
+        sources.append(str(path))
+
+    args = build_parser().parse_args(
+        ["image-remove-watermark", *sources, "--json"]
+    )
+    result = _execute(args, lambda: False)
+
+    assert result.status.value == "success"
+    assert result.succeeded == 2
+    assert len(result.outputs) == 2
+
+
+def test_cli_markdown_to_pdf_builtin_writes_single_page(tmp_path):
+    from app.cli import _execute, build_parser
+    from pypdf import PdfReader
+
+    source = tmp_path / "note.md"
+    source.write_text("# Title\n\nHello world.\n", encoding="utf-8")
+    args = build_parser().parse_args(
+        ["text-markdown-to-pdf", str(source), "--engine", "builtin", "--json"]
+    )
+
+    result = _execute(args, lambda: False)
+
+    expected = tmp_path / "note.pdf"
+    assert result.status.value == "success"
+    assert result.outputs == (str(expected),)
+    assert result.data["engine"] == "builtin"
+    reader = PdfReader(str(expected))
+    assert len(reader.pages) == 1
+    assert "Hello world" in reader.pages[0].extract_text()
+
+
+def test_cli_markdown_to_pdf_reports_pandoc_requirement(tmp_path):
+    from app.cli import _execute, build_parser
+
+    source = tmp_path / "note.md"
+    source.write_text("text\n", encoding="utf-8")
+    args = build_parser().parse_args(
+        ["text-markdown-to-pdf", str(source), "--engine", "pandoc", "--json"]
+    )
+
+    result = _execute(args, lambda: False)
+
+    if result.status.value == "failed":
+        assert "Pandoc" in result.message
+    else:
+        assert result.data["engine"] == "pandoc"
+
+
+def test_cli_markdown_to_pdf_honours_output_dir(tmp_path):
+    from app.cli import _execute, build_parser
+
+    source = tmp_path / "note.md"
+    source.write_text("body\n", encoding="utf-8")
+    target_dir = tmp_path / "pdf"
+    args = build_parser().parse_args(
+        [
+            "text-markdown-to-pdf",
+            str(source),
+            "-o",
+            str(target_dir),
+            "--engine",
+            "builtin",
+            "--json",
+        ]
+    )
+
+    result = _execute(args, lambda: False)
+
+    expected = target_dir / "note.pdf"
+    assert result.status.value == "success"
+    assert result.outputs == (str(expected),)
+    assert expected.is_file()
+
+
+def test_cli_markdown_to_pdf_json_is_ascii(tmp_path):
+    import subprocess
+    import sys
+
+    source = tmp_path / "note.md"
+    source.write_text("body\n", encoding="utf-8")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.cli",
+            "text-markdown-to-pdf",
+            str(source),
+            "--engine",
+            "builtin",
+            "--json",
+        ],
+        capture_output=True,
+        encoding="utf-8",
+        cwd=ROOT,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip().isascii()
+    assert json.loads(completed.stdout)["status"] == "success"

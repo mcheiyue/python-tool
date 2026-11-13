@@ -151,10 +151,7 @@ class GeminiWatermarkRemover:
                 
                 # Determine output path
                 if not output_path:
-                    dir_name = os.path.dirname(input_path)
-                    file_name = os.path.basename(input_path)
-                    name, ext = os.path.splitext(file_name)
-                    output_path = os.path.join(dir_name, f"{name}_clean{ext}")
+                    output_path = self.default_output_path(input_path)
                 
                 # Create output directory if needed
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -191,3 +188,26 @@ class GeminiWatermarkRemover:
             if on_finished:
                 on_finished(False, error_msg)
             return False
+
+    def default_output_path(self, input_path: str) -> str:
+        """单文件模式与批处理共用的默认输出名：<原文件名>_clean<扩展名>"""
+        dir_name = os.path.dirname(input_path)
+        name, ext = os.path.splitext(os.path.basename(input_path))
+        return os.path.join(dir_name, f"{name}_clean{ext}")
+
+    def batch_output_path(self, source: str, output_dir: str) -> str:
+        """批处理把结果集中到 output_dir，只改目录不改命名约定"""
+        return os.path.join(output_dir, os.path.basename(self.default_output_path(source)))
+
+    def process_batch(self, files, output_dir=None, *, on_log=None, on_progress=None) -> list:
+        """批量去水印，返回成功产出的路径；单个失败不影响其余文件"""
+        results = []
+        total = len(files)
+        for index, path in enumerate(files):
+            if on_progress:
+                on_progress(index + 1, total, os.path.basename(path))
+            target = self.batch_output_path(path, output_dir) if output_dir else None
+            ok = self.process_image(path, target, on_log=on_log)
+            if ok:
+                results.append(target or self.default_output_path(path))
+        return results

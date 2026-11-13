@@ -47,6 +47,7 @@ set COMMON_FLAGS=^
     --include-module=pymupdf._mupdf ^
     --include-package-data=pypinyin ^
     --include-package-data=pptx ^
+    --include-package-data=numpy ^
     --include-package-data=fpdf ^
     --include-package-data=docx ^
     --show-progress ^
@@ -154,9 +155,12 @@ python -m nuitka ^
     --include-package=openpyxl ^
     --include-package-data=docx ^
     --include-package-data=pptx ^
+    --include-package-data=numpy ^
     --include-package-data=fpdf ^
+    --include-data-dir=assets=assets ^
     --include-data-dir=config=config ^
     --include-data-file=VERSION=VERSION ^
+    --include-data-file=plugins/manifest.json=plugins/manifest.json ^
     --nofollow-import-to=pymupdf.mupdf ^
     --include-package=pymupdf ^
     --include-module=pymupdf.mupdf ^
@@ -182,6 +186,13 @@ python -m nuitka ^
     --include-module=core.features.office.word_converter ^
     --include-module=core.features.office.ppt_image_exporter ^
     --include-module=core.features.office.doc_to_docx_converter ^
+    --include-module=core.features.image.gemini_watermark_remover ^
+    --include-module=core.features.text.markdown_to_pdf ^
+    --include-module=core.plugins ^
+    --include-module=core.plugins.base ^
+    --include-module=core.plugins.pandoc_plugin ^
+    --include-module=core.plugins.mathjax_plugin ^
+    --include-module=core.plugins.highlight_plugin ^
     --include-module=core.utils.office_security ^
     --include-module=core.engines.office.base ^
     --include-module=core.engines.office.word ^
