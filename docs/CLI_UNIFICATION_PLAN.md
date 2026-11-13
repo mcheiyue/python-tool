@@ -108,7 +108,7 @@ README 现状：`README.md:71-77` 只有 4 条源码调用示例和 1 条 `Offic
 
 阶段 1 已补齐 `vtracer` 与 `fpdf` 两项，并用真实 `OfficeToolkit_CLI.exe` 冒烟通过（见第 9 节阶段 1 完成记录）。剩余 8 项按所属阶段在用到时补齐——**每新增一个命令都要同步补它的依赖收集**，否则源码通过而产物崩溃。
 
-另外，`.github/workflows/release.yml:95-102` 的发行冒烟只校验 `--help` 的返回码与关键字，**不校验命令集合**。新增命令的发行覆盖需要主动补检查，否则命令可能打包成功但入口缺失。
+另外，`.github/workflows/release.yml` 的发行冒烟已改为**校验命令集合 + 实跑 6 条命令**：`--help` 通过不代表各命令的核心模块都被打进产物，因此断言 10 条命令名齐全，并用 Pillow/pypdf 现造输入真实执行 `image-colors`、`image-vectorize`、`image-to-pdf`、`text-txt-to-pdf`、`files-rename-preview`、`merge`，任一返回非 success 即阻断发布。新增命令时须同步把命令名加入该断言。
 
 ### 3.2 当前协议差异
 
@@ -519,7 +519,7 @@ office-toolkit office libreoffice-convert <inputs...> --to pdf --output-dir <dir
 
 ### 10.4 发行与文档
 
-- 发布产物中的 `OfficeToolkit_CLI.exe --help` 成功，**且校验命令集合**（当前 `release.yml:95-102` 只检查返回码与关键字，须新增命令名断言）。
+- 发布产物中的 `OfficeToolkit_CLI.exe --help` 成功、命令名断言齐全，且 6 条代表性命令在产物中真实执行返回 success（已实现于 `release.yml`）。
 - 对每个命令的选项和运行前提更新 README 或用户指南；`BUILD_GUIDE.md` 说明源码与发行版入口。
 - README 当前只有 5 行示例（`README.md:71-77`），缺少退出码表与 JSON 结构说明，属必修项。
 - 单文件中 Python 依赖和包数据按需显式包含；系统级依赖列为运行前提，不虚称已捆绑。每个新命令合入前，必须核对 3.1 对照表并补对应收集项——`build_nuitka.bat` 的 CLI target 不会自动跟随源码导入。
@@ -556,7 +556,7 @@ office-toolkit office libreoffice-convert <inputs...> --to pdf --output-dir <dir
 | **CLI 构建漏收依赖** | #14 导入失败、#21 字体缺失、#12 渲染不可用、工具发现静默降级为“未安装”、COM 路径导入失败 | 阶段 1 已补 `vtracer`+`fpdf` 并真产物冒烟；其余 8 类按 3.1 对照表随所属阶段补齐，每项必须真产物验证 |
 | **18 项缺 `should_cancel`** | 新增命令无法 Ctrl+C 中断，长任务体验差 | 按 6.3 三类矩阵分层派工（12 项桥接 `stop()`、6 项改核心），6 项单独立项。阶段 1 的 6 条命令均属第三类，暂不支持取消 |
 | Nuitka 包数据遗漏（其他包） | 源码运行成功而发行命令崩溃 | 对发行二进制做真实命令 smoke 和产物存在性检查 |
-| 发行冒烟不校验命令集合 | 命令打包成功但入口缺失 | 在 `release.yml` 增加命令名断言 |
+| 发行冒烟不校验命令集合 | 命令打包成功但入口缺失 | 已在 `release.yml` 增加命令名断言 + 6 条命令实跑 |
 
 ## 12. 已定案事项（阶段 0 已解除阻塞）
 

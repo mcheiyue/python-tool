@@ -64,7 +64,7 @@ python main.py
 
 ### 命令行模式
 
-核心 PDF 和图像转换也可在无窗口模式运行，适合批处理、脚本和服务器任务：
+核心 PDF、图像和文本转换也可在无窗口模式运行，适合批处理、脚本和服务器任务：
 
 ```bash
 # 源码运行
@@ -72,12 +72,22 @@ python -m app.cli merge input-a.pdf input-b.pdf --output merged.pdf
 python -m app.cli split input.pdf "1-3,5" --output parts --json
 python -m app.cli extract-images input.pdf --output images --json
 python -m app.cli image-convert input.png --output output.jpg --format JPG
+python -m app.cli image-colors logo.png --count 6 --json
+python -m app.cli image-vectorize logo.png --output logo.svg
+python -m app.cli image-to-pdf page1.png page2.png --output doc.pdf
+python -m app.cli text-extract-code ./src --extensions .py,.md --output all.txt
+python -m app.cli text-txt-to-pdf notes.txt --output-dir out
+python -m app.cli files-rename-preview *.png --template "{index3}_{name}.{ext}" --json
 
 # Windows 发行包
 OfficeToolkit_CLI.exe merge input-a.pdf input-b.pdf --output merged.pdf
 ```
 
-命令返回 `0` 表示成功，`1` 表示处理失败，`130` 表示用户取消；加 `--json` 可获得包含 `status`、`message`、`outputs`、`succeeded` 和 `failed` 的机器可读结果。
+命令返回 `0` 表示成功，`1` 表示处理失败，`130` 表示用户取消；加 `--json` 可获得包含 `status`、`message`、`outputs`、`succeeded`、`failed` 的机器可读结果，非文件产出（取色结果、重命名预览计划）另在 `data` 字段返回。
+
+`merge`、`split`、`extract-images`、`image-convert` 支持 Ctrl+C 中断；其余命令当前不支持取消。
+
+`files-rename-preview` 只生成预览计划，不修改文件。
 
 ### 外部工具安装（可选）
 
