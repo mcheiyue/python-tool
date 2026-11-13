@@ -140,6 +140,8 @@ python -m nuitka ^
     --onefile ^
     --include-package=PIL ^
     --include-package=pypdf ^
+    --include-package=vtracer ^
+    --include-package-data=fpdf ^
     --include-module=core.cancellation ^
     --include-module=core.operation_result ^
     --include-module=core.utils.atomic_output ^
