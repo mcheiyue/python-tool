@@ -3,6 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 
@@ -322,3 +324,347 @@ def test_cli_files_rename_preview_reports_conflicts_as_failure(tmp_path):
     result = json.loads(completed.stdout)
     assert result["status"] == "failed"
     assert result["data"]["plan"][0]["conflict"] is True
+
+def _require_ghostscript():
+    pytest.importorskip("pytest")
+    from core.external_tools.manager import ExternalToolManager
+
+    tool = ExternalToolManager().get_tool("ghostscript")
+    path = tool.get_path() if tool and not tool.is_disabled else None
+    if not path:
+        pytest.skip("Ghostscript 未安装")
+    return path
+
+
+def test_cli_pdf_compress_publishes_smaller_file(tmp_path):
+    _require_ghostscript()
+    source = tmp_path / "doc.pdf"
+    _make_pdf(source, 2)
+
+    completed = _run_cli("pdf-compress", str(source), "--quality", "/screen", "--json")
+
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["status"] == "success"
+    assert result["succeeded"] == 1
+    output = Path(result["outputs"][0])
+    assert output.is_file()
+    assert output.name == "doc_compressed.pdf"
+    assert len(PdfReader(str(output)).pages) == 2
+
+
+def test_cli_pdf_compress_reports_missing_ghostscript(monkeypatch, tmp_path):
+    import app.cli as cli
+
+    monkeypatch.setattr(cli, "_ghostscript_path", lambda: None)
+    source = tmp_path / "doc.pdf"
+    _make_pdf(source, 1)
+
+    result = cli._execute(
+        cli.build_parser().parse_args(
+            ["pdf-compress", str(source), "--json"]
+        ),
+        lambda: False,
+    )
+
+    assert result.status.value == "failed"
+    assert "Ghostscript" in result.message
+    assert result.outputs == ()
+
+
+def test_cli_pdf_render_writes_pages(tmp_path):
+    source = tmp_path / "doc.pdf"
+    output_dir = tmp_path / "pages"
+    _make_pdf(source, 2)
+
+    completed = _run_cli(
+        "pdf-render", str(source), "--output", str(output_dir), "--dpi", "72", "--json"
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["status"] == "success"
+    assert len(result["outputs"]) == 2
+    assert all(Path(path).is_file() for path in result["outputs"])
+
+
+def test_cli_pdf_render_honours_page_range(tmp_path):
+    source = tmp_path / "doc.pdf"
+    output_dir = tmp_path / "pages"
+    _make_pdf(source, 3)
+
+    completed = _run_cli(
+        "pdf-render",
+        str(source),
+        "--output",
+        str(output_dir),
+        "--dpi",
+        "72",
+        "--first-page",
+        "2",
+        "--last-page",
+        "2",
+        "--json",
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert len(result["outputs"]) == 1
+    assert result["outputs"][0].endswith("page_0002.png")
+
+
+def test_cli_pdf_render_reports_invalid_page_range(tmp_path):
+    source = tmp_path / "doc.pdf"
+    _make_pdf(source, 2)
+
+    completed = _run_cli(
+        "pdf-render",
+        str(source),
+        "--output",
+        str(tmp_path / "pages"),
+        "--first-page",
+        "2",
+        "--last-page",
+        "1",
+        "--json",
+    )
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["status"] == "failed"
+    assert "页码范围无效" in result["message"]
+
+
+def test_cli_markdown_html_round_trip(tmp_path):
+    source = tmp_path / "note.md"
+    source.write_text("# Title\n\nSome **bold** text.\n", encoding="utf-8")
+    html_dir = tmp_path / "html"
+    md_dir = tmp_path / "md"
+
+    first = _run_cli(
+        "text-markdown-html",
+        str(source),
+        "--direction",
+        "md-to-html",
+        "--output-dir",
+        str(html_dir),
+        "--json",
+    )
+    assert first.returncode == 0, first.stderr
+    html_path = Path(json.loads(first.stdout)["outputs"][0])
+    assert html_path.is_file()
+    assert "<h1" in html_path.read_text(encoding="utf-8")
+
+    second = _run_cli(
+        "text-markdown-html",
+        str(html_path),
+        "--direction",
+        "html-to-md",
+        "--output-dir",
+        str(md_dir),
+        "--json",
+    )
+    assert second.returncode == 0, second.stderr
+    md_path = Path(json.loads(second.stdout)["outputs"][0])
+    assert md_path.is_file()
+    assert "Title" in md_path.read_text(encoding="utf-8")
+
+
+def test_cli_markdown_html_creates_missing_output_dir(tmp_path):
+    source = tmp_path / "note.md"
+    source.write_text("# T\n", encoding="utf-8")
+    output_dir = tmp_path / "nested" / "deep"
+
+    completed = _run_cli(
+        "text-markdown-html",
+        str(source),
+        "--direction",
+        "md-to-html",
+        "--output-dir",
+        str(output_dir),
+        "--json",
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert output_dir.is_dir()
+    assert Path(json.loads(completed.stdout)["outputs"][0]).is_file()
+
+
+def test_cli_markdown_batch_pdf_reports_missing_pdf_engine(tmp_path):
+    source = tmp_path / "note.md"
+    source.write_text("# T\n", encoding="utf-8")
+
+    completed = _run_cli(
+        "text-markdown-batch-pdf",
+        str(source),
+        "--pdf-engine",
+        "definitely-not-a-real-engine",
+        "--json",
+    )
+
+    assert completed.returncode == 1
+    result = json.loads(completed.stdout)
+    assert result["status"] == "failed"
+    assert "definitely-not-a-real-engine" in result["message"]
+
+
+def test_cli_markdown_batch_pdf_fails_when_pandoc_absent(monkeypatch, tmp_path):
+    import app.cli as cli
+    from core.features.text import markdown_pdf_pandoc
+
+    monkeypatch.setattr(
+        markdown_pdf_pandoc.PandocMarkdownToPdf,
+        "is_available",
+        lambda self: False,
+    )
+    source = tmp_path / "note.md"
+    source.write_text("# T\n", encoding="utf-8")
+
+    result = cli._execute(
+        cli.build_parser().parse_args(
+            ["text-markdown-batch-pdf", str(source), "--json"]
+        ),
+        lambda: False,
+    )
+
+    assert result.status.value == "failed"
+    assert "Pandoc" in result.message
+
+
+def test_cli_libreoffice_convert_reports_missing_tool(monkeypatch, tmp_path):
+    import app.cli as cli
+    from core.features.office import libreoffice_converter
+
+    monkeypatch.setattr(
+        libreoffice_converter.LibreOfficeFormatConverter,
+        "is_available",
+        lambda self: False,
+    )
+    source = tmp_path / "doc.docx"
+    source.write_bytes(b"not really docx")
+
+    result = cli._execute(
+        cli.build_parser().parse_args(
+            ["office-libreoffice-convert", str(source), "--to", "pdf", "--json"]
+        ),
+        lambda: False,
+    )
+
+    assert result.status.value == "failed"
+    assert "LibreOffice" in result.message
+
+
+def test_cli_word_markdown_reports_missing_pandoc(monkeypatch, tmp_path):
+    import app.cli as cli
+    from core.features.office import word_converter
+
+    monkeypatch.setattr(
+        word_converter.WordConverter, "is_pandoc_available", lambda self: False
+    )
+    source = tmp_path / "note.md"
+    source.write_text("# T\n", encoding="utf-8")
+
+    result = cli._execute(
+        cli.build_parser().parse_args(
+            ["office-word-markdown", str(source), "--direction", "md-to-docx", "--json"]
+        ),
+        lambda: False,
+    )
+
+    assert result.status.value == "failed"
+    assert "Pandoc" in result.message
+
+
+def _make_pdf_with_images(path, pages=2):
+    with Image.new("RGB", (32, 32), "red") as image:
+        image.save(path, "PDF")
+
+
+def test_pdf_renderer_uses_ghostscript_when_pymupdf_missing(monkeypatch, tmp_path):
+    from core.features.pdf import pdf_page_renderer
+
+    _require_ghostscript()
+    monkeypatch.setattr(pdf_page_renderer, "PYMUPDF_AVAILABLE", False)
+    monkeypatch.setattr(pdf_page_renderer, "fitz", None)
+
+    source = tmp_path / "doc.pdf"
+    _make_pdf(source, 3)
+    output_dir = tmp_path / "out"
+    renderer = pdf_page_renderer.PDFPageRenderer()
+    result = {}
+
+    renderer.render_all(
+        [str(source)],
+        str(output_dir),
+        dpi=72,
+        use_ghostscript=True,
+        on_finished=lambda ok, fail: result.update(ok=ok, fail=fail),
+    )
+
+    assert result == {"ok": 1, "fail": 0}
+    assert len(list((output_dir / "doc_pages").glob("*.png"))) == 3
+
+
+def test_ghostscript_page_count_handles_windows_path(monkeypatch, tmp_path):
+    from core.features.pdf import pdf_page_renderer
+
+    _require_ghostscript()
+    source = tmp_path / "doc.pdf"
+    _make_pdf(source, 4)
+
+    renderer = pdf_page_renderer.PDFPageRenderer()
+    assert renderer._count_pages_with_ghostscript(str(source)) == 4
+
+
+def test_cli_pdf_render_auto_falls_back_when_pymupdf_missing(monkeypatch, tmp_path):
+    from core.features.pdf import pdf_page_renderer
+
+    _require_ghostscript()
+    monkeypatch.setattr(pdf_page_renderer, "PYMUPDF_AVAILABLE", False)
+    monkeypatch.setattr(pdf_page_renderer, "fitz", None)
+    source = tmp_path / "doc.pdf"
+    _make_pdf(source, 2)
+
+    import app.cli as cli
+
+    result = cli._execute(
+        cli.build_parser().parse_args(
+            [
+                "pdf-render",
+                str(source),
+                "-o",
+                str(tmp_path / "out"),
+                "--dpi",
+                "72",
+                "--json",
+            ]
+        ),
+        lambda: False,
+    )
+
+    assert result.status.value == "success"
+    assert len(result.outputs) == 2
+
+
+def test_cli_pdf_render_auto_reports_when_no_engine(monkeypatch, tmp_path):
+    from core.features.pdf import pdf_page_renderer
+
+    monkeypatch.setattr(pdf_page_renderer, "PYMUPDF_AVAILABLE", False)
+    monkeypatch.setattr(pdf_page_renderer, "fitz", None)
+    monkeypatch.setattr(
+        pdf_page_renderer.PDFPageRenderer, "is_gs_available", lambda self: False
+    )
+    source = tmp_path / "doc.pdf"
+    _make_pdf(source, 1)
+
+    import app.cli as cli
+
+    result = cli._execute(
+        cli.build_parser().parse_args(
+            ["pdf-render", str(source), "-o", str(tmp_path / "out"), "--dpi", "72"]
+        ),
+        lambda: False,
+    )
+
+    assert result.status.value == "failed"
+    assert "渲染引擎" in result.message

@@ -68,7 +68,7 @@ Qt 级别与桌面依赖是**两个正交维度**：#2 PPT 转图片、#4 Doc �
 
 ### 3.1 CLI 已实现
 
-`app/cli.py` 当前提供 10 条根层命令：
+`app/cli.py` 当前提供 16 条根层命令：
 
 | 命令 | 核心实现 | 结果协议 | 阶段 |
 | --- | --- | --- | --- |
@@ -82,10 +82,18 @@ Qt 级别与桌面依赖是**两个正交维度**：#2 PPT 转图片、#4 Doc �
 | `text-extract-code` | `CodeExtractor` | `on_finished(ok, msg)` → `OperationResult` | 1 |
 | `text-txt-to-pdf` | `TxtConverter` | `on_finished(success, fail)` → `OperationResult` | 1 |
 | `files-rename-preview` | `BatchRenamer.preview` | `OperationResult` + `data.plan` | 1 |
+| `pdf-compress` | `GhostscriptCompressor`（Qt 信号） | `log`/`finished` → `OperationResult` | 2 |
+| `pdf-render` | `PDFPageRenderer` | `on_finished(success, fail)` → `OperationResult` | 2 |
+| `text-markdown-batch-pdf` | `PandocMarkdownToPdf` | `on_finished(success, fail)` → `OperationResult` | 2 |
+| `office-libreoffice-convert` | `LibreOfficeFormatConverter` | `on_finished(success, fail)` → `OperationResult` | 2 |
+| `office-word-markdown` | `WordConverter` | `on_finished(success, fail)` → `OperationResult` | 2 |
+| `text-markdown-html` | `MarkdownConverter` | `on_finished(success, fail)` → `OperationResult` | 2 |
 
-全部 10 条支持 `--json`、成功/失败/取消退出码。`app.cli` 导入后 `PyQt6` 不在 `sys.modules`（实测断言见 `tests/test_cli.py`），且真实 `OfficeToolkit_CLI.exe` 运行期未加载任何 Qt DLL——但该产物内含 `QtCore.pyd`/`QtGui.pyd`（PIL 的 `ImageQt` 被 Nuitka 推断带入），因此**“Qt-free”只能按运行期断言，不能按产物内容断言**。
+全部 16 条支持 `--json`、成功/失败/取消退出码。`app.cli` 导入后 `PyQt6` 不在 `sys.modules`（实测断言见 `tests/test_cli.py`），且真实 `OfficeToolkit_CLI.exe` 运行期未加载任何 Qt DLL——但该产物内含 `QtCore.pyd`/`QtGui.pyd`（PIL 的 `ImageQt` 被 Nuitka 推断带入），因此**“Qt-free”只能按运行期断言，不能按产物内容断言**。
 
-取消支持范围：仅 `merge`、`split`、`extract-images`、`image-convert` 接入 Ctrl+C（其余 6 条无 `should_cancel`，见第 6.3 节）。
+阶段 2 的 6 条命令按设计为 **Q1**：导入即加载 Qt，但既不创建 `QApplication` 也不建主窗口。实测依据：`ExternalToolManager()` 与 `GhostscriptCompressor()` 在无 `QApplication` 环境下可实例化，且 `pyqtSignal` 的 `emit` 在无事件循环时**同步**调用槽函数——`pdf-compress` 正是靠这一点把 `log`/`finished` 信号直接接到 CLI 输出。
+
+取消支持范围：`merge`、`split`、`extract-images`、`image-convert`、`pdf-compress` 接入 Ctrl+C（`pdf-compress` 经 `_register_stopper(compressor.stop)` 杀 GS 子进程）；其余 11 条无 `should_cancel`，见第 6.3 节。
 
 README 现状：`README.md:71-77` 只有 4 条源码调用示例和 1 条 `OfficeToolkit_CLI.exe` 示例，没有退出码、JSON 结构或失败语义说明。用户文档是待补项，不是既有资产。
 
@@ -93,22 +101,25 @@ README 现状：`README.md:71-77` 只有 4 条源码调用示例和 1 条 `Offic
 
 **CLI 构建与主构建的收集范围严重不一致，是阶段 1 的前置修复项。** 对照 `build_nuitka.bat` 的两段参数：
 
-| 收集项 | 主构建（`:33-51`） | CLI 构建（`:141-149`） | 后果 |
+| 收集项 | 主构建（`:33-51`） | CLI 构建 | 后果 |
 | --- | --- | --- | --- |
-| `--include-data-file=VERSION=VERSION` | 有（`:43`） | **无** | `get_app_version()` 回落 `0.0.0`。当前只有 `crash_handler` 消费它，CLI 尚无 `--version`；一旦 CLI 加版本输出或崩溃报告即失真 |
+| `--include-data-file=VERSION=VERSION` | 有（`:43`） | **已补**（阶段 2） | `get_app_version()` 回落 `0.0.0`。当前只有 `crash_handler` 消费它，CLI 尚无 `--version`；一旦 CLI 加版本输出或崩溃报告即失真 |
 | `--include-data-file=plugins/manifest.json` | 有（`:44`） | **无** | 当前 CLI 不读 manifest；若后续提供工具安装命令则必须补 |
 | `--include-data-dir=assets=assets` | 有（`:41`） | **无** | #17 去水印读 `assets/watermark/bg_48.png`、`bg_96.png` 时 `FileNotFoundError`（`gemini_watermark_remover.py:13-21`） |
-| `--include-data-dir=config=config` | 有（`:42`） | **无** | 读配置的命令失效；工具发现可能静默降级为“未安装” |
-| `--include-package=comtypes` | 有（`:34`） | **无** | #2/#4/#1/#3/#5 的 COM 路径导入失败 |
-| `--include-package=core.external_tools.ghostscript_tool` / `pandoc_tool` | 有（`:38-39`） | **无** | 外部工具发现走不到具体工具类 |
+| `--include-data-dir=config=config` | 有（`:42`） | **已补**（阶段 2） | 读配置的命令失效；工具发现可能静默降级为“未安装” |
+| `--include-package=comtypes` | 有（`:34`） | **已补**（阶段 2） | #2/#4/#1/#3/#5 的 COM 路径导入失败 |
+| `--include-package=core.external_tools.{ghostscript,pandoc,libreoffice}_tool` | 有（`:38-39`） | **已补**（阶段 2） | 外部工具发现走不到具体工具类 |
 | `--include-package-data=fpdf` | 有（`:50`） | **已补** | #21 TXT 转 PDF（阶段 1 已加） |
 | `--include-package=vtracer` | 有（`:40`） | **已补** | #14 PNG 转 SVG（阶段 1 已加） |
-| `pymupdf` 降级策略 | 有（`:45-47`：`--nofollow-import-to=pymupdf.mupdf` + `--include-module=pymupdf.mupdf` + `--include-module=pymupdf._mupdf`） | **无** | #12 页面渲染不可用；若直接加 `--include-package=pymupdf` 会重新触发 cc1 OOM |
+| `pymupdf` 降级策略 | 有（`:45-47`） | **已补**（阶段 2，`--include-package=pymupdf` + 降级两模块） | #12 页面渲染；若只加 `--include-package=pymupdf` 会重新触发 cc1 OOM |
 | `--include-package-data=pypinyin` / `pptx` / `docx` | 有（`:48-49,51`） | **无** | #1/#3/#5 与 Markdown 转 PDF 触及即崩 |
+| `--include-package=markdown` / `html2text` | 有（经 `core` 连带） | **已补**（阶段 2） | `text-markdown-html` 内置转换路径导入失败 |
 
-阶段 1 已补齐 `vtracer` 与 `fpdf` 两项，并用真实 `OfficeToolkit_CLI.exe` 冒烟通过（见第 9 节阶段 1 完成记录）。剩余 8 项按所属阶段在用到时补齐——**每新增一个命令都要同步补它的依赖收集**，否则源码通过而产物崩溃。
+**阶段 2 实测发现的打包缺陷（未修，单独立项）**：`--nofollow-import-to=pymupdf.mupdf` 与 `--include-module=pymupdf.mupdf` 互相冲突，Nuitka 报 `Not allowed to include module 'pymupdf.mupdf' due to '... --nofollow-import-to'` 并选择排除。后果是 `pymupdf/__init__.py` 内 `from . import mupdf` 失败，整个包不可导入——产物里 `pymupdf/` 只剩 `_extra.pyd`、`_mupdf.pyd` 两个文件，没有 `__init__.py`。**主构建用同一组参数，因此 GUI 的目录版/单文件版 PDF 渲染同样受影响**；本机源码运行正常，所以此前从未暴露。当前 `pdf-render` 的 `--engine auto`（默认）在 PyMuPDF 不可用时自动回退 Ghostscript，命令可用，但不是修复。
 
-另外，`.github/workflows/release.yml` 的发行冒烟已改为**校验命令集合 + 实跑 6 条命令**：`--help` 通过不代表各命令的核心模块都被打进产物，因此断言 10 条命令名齐全，并用 Pillow/pypdf 现造输入真实执行 `image-colors`、`image-vectorize`、`image-to-pdf`、`text-txt-to-pdf`、`files-rename-preview`、`merge`，任一返回非 success 即阻断发布。新增命令时须同步把命令名加入该断言。
+阶段 1 已补齐 `vtracer` 与 `fpdf`，阶段 2 补齐上表标记“已补”的 8 项，并用真实 `OfficeToolkit_CLI.exe` 冒烟通过（见第 9 节）。剩余 `plugins/manifest.json`、`assets`、`pypinyin`/`pptx`/`docx` 三项按所属阶段在用到时补齐——**每新增一个命令都要同步补它的依赖收集**，否则源码通过而产物崩溃。
+
+另外，`.github/workflows/release.yml` 的发行冒烟已改为**校验命令集合 + 实跑 9 条命令**：`--help` 通过不代表各命令的核心模块都被打进产物，因此断言 16 条命令名齐全，并用 Pillow/pypdf 现造输入真实执行 `image-colors`、`image-vectorize`、`image-to-pdf`、`text-txt-to-pdf`、`files-rename-preview`、`merge`、`pdf-compress`、`pdf-render`、`text-markdown-html`，任一返回非 success 即阻断发布。新增命令时须同步把命令名加入该断言。
 
 ### 3.2 当前协议差异
 
@@ -310,10 +321,11 @@ CLI 参数 ──> CLI 适配层 ──┘
 | 类型 | 菜单项 | 核心入口 | CLI 侧动作 |
 | --- | --- | --- | --- |
 | **已有 `should_cancel`**（4 项） | #8、#10、#11、#15 | `PDFMerger.merge`、`PDFSplitter.split`、`PDFImageExtractor.extract`、`ImageConverter.convert` | 直接传入取消查询函数 |
-| **只有 `stop()`**（12 项） | #1、#3、#5（共用 `BaseOfficeConverter.convert`）、#2、#4、#6、#7、#9、#12、#19、#20、#21 | `BaseOfficeConverter`、`PPTImageExporter`、`DocToDocxConverter`、`WordConverter`、`LibreOfficeFormatConverter`、`GhostscriptCompressor`、`PDFPageRenderer`、`MarkdownConverter`、`PandocMarkdownToPdf`、`TxtConverter` | 适配层把 `stop()` 接到取消事件 |
-| **两者都没有**（6 项） | #13、#14、#16、#17、#22、#23 | `ColorExtractor`、`ImageVectorizer`、`ImageToPdfConverter`、`GeminiWatermarkRemover`、`CodeExtractor`、`BatchRenamer` | **须修改核心代码**新增检查点 |
+| **只有 `stop()`**（12 项） | #1、#3、#5（共用 `BaseOfficeConverter.convert`）、#2、#4、#6、#7、#9、#12、#19、#20、#21 | `BaseOfficeConverter`、`PPTImageExporter`、`DocToDocxConverter`、`WordConverter`、`LibreOfficeFormatConverter`、`GhostscriptCompressor`、`PDFPageRenderer`、`MarkdownConverter`、`PandocMarkdownToPdf`、`TxtConverter` | 适配层把 `stop()` 接到取消事件 || **两者都没有**（6 项） | #13、#14、#16、#17、#22、#23 | `ColorExtractor`、`ImageVectorizer`、`ImageToPdfConverter`、`GeminiWatermarkRemover`、`CodeExtractor`、`BatchRenamer` | **须修改核心代码**新增检查点 |
 
 （#18 无核心入口，抽出后按新实现另定。）
+
+阶段 2 已为 `pdf-compress`（#9）接上取消：`BasePdfCompressor.stop()` 现在除置位 `_is_running` 外还会 `kill()` 当前 `_process`，CLI 侧通过 `_register_stopper()` 在收到 SIGINT 时调用它。理由是 Ghostscript 单文件超时上限 60 秒，纯靠文件边界检查会让 Ctrl+C 最多等满一个 GS 进程；其余 11 项仍是文件边界粒度。
 
 因此“给每项补齐取消”不是参数映射工作：6 项的取消是核心代码改动，须各自立小项并回归。这批入口的实测签名高度一致——`extract(self, root_dir, extensions, output_path, *, on_log=None, on_finished=None)`、`convert(self, ...)`、`execute(self, rename_plan, *, on_log=None, on_progress=None)`——都只有 `on_log`/`on_progress`，没有可中断点，新增 `should_cancel` 属同一手术：在循环入口加检查、在 `on_finished` 前返回取消态。
 
@@ -446,6 +458,26 @@ office-toolkit office libreoffice-convert <inputs...> --to pdf --output-dir <dir
 
 执行要求：统一进程超时、stderr 传递、取消后的子进程清理和产物核验。先实测 PyMuPDF 路径，再实测 Ghostscript 路径；工具缺失时给失败结果，不报成功计数。本阶段 6 项都只有 `stop()`（第 6.3 节第二类），CLI 适配层需把取消事件接到 `stop()`，并验证取消后子进程确实被回收。
 
+**完成记录（阶段 2）**
+
+Qt 分级按第 5.4 节默认方案维持 Q1：接受加载 Qt，但不建 `QApplication`、不建主窗口。实测确认 `pyqtSignal.emit` 在无事件循环时同步调用槽，`GhostscriptCompressor` 因此可直接把 `log`/`finished` 接到 CLI 输出。
+
+已落地 6 条命令（`pdf-compress`、`pdf-render`、`text-markdown-batch-pdf`、`office-libreoffice-convert`、`office-word-markdown`、`text-markdown-html`），全部走 `OperationResult` + `--json`。
+
+实测中修掉的三个真实缺陷：
+
+1. **输出目录不存在即失败**：`MarkdownConverter`、`WordConverter`、`LibreOfficeFormatConverter` 的 `-o/--output-dir` 不自建目录，直接写文件报 `FileNotFoundError`。CLI 侧改为在分派前 `os.makedirs(..., exist_ok=True)`——目录创建属 CLI 的参数契约，不该改核心转换器。
+2. **`--json` 丢失失败原因**：原先 `--json` 模式下 `on_log` 为 `None`，用户只看到「成功 0 个，失败 1 个」。改为 `_LogCapture` 始终收集日志（非 JSON 模式同时回显到 stderr），失败时取最后一条含错误标记的行追加到 `message`。实测 `text-markdown-batch-pdf` 现在会明确报「找不到 PDF 引擎 'xelatex'」。
+3. **`import fitz` 的 deprecation 警告污染 stdout**：PyMuPDF 1.28.2 在 `import fitz` 时向 **stdout** 打印警告，使 `--json` 输出无法解析。改为优先 `import pymupdf as fitz`，回退 `import fitz`。
+
+另修一处核心缺陷（`PDFPageRenderer`）：`render_all` 原先无条件 `fitz.open(pdf_path)`，因此即使指定 `--engine ghostscript` 也依赖 PyMuPDF；且 PyMuPDF 缺失时 `doc` 为 `None` 后仍调用 `doc[page_num]`，报 `AttributeError: 'NoneType' object has no attribute 'open'`。现补 `_count_pages_with_ghostscript()`（用 `pdfpagecount`），纯 GS 路径可独立工作。该方法须把 Windows 路径的反斜杠加倍——PostScript 字符串里反斜杠是转义符，不加倍时 GS 只返回 `ioerror`。
+
+`pdf-render` 的 `--engine` 默认改为 `auto`：优先 PyMuPDF，不可用时回退 Ghostscript，两者都不可用才失败——因为打包产物中的 PyMuPDF 当前不可导入（见第 3.1 节的参数冲突缺陷）。
+
+验证：`tests/test_cli.py` 新增 15 条测试（含 GS-only 渲染、页码范围、目录自建、失败原因透出、引擎回退），全量 `283 passed + 3 skipped`。真实 `OfficeToolkit_CLI.exe`（262 MB）实跑 9 条命令全部 `success`，JSON 全 ASCII 且 StrictUTF-8 可解析。
+
+未完成：`pymupdf` 打包参数冲突未修（主构建同病，需单独立项）；`plugins/manifest.json`、`assets`、`pypinyin`/`pptx`/`docx` 三项依赖收集留待对应阶段。
+
 ### 阶段 3：Office COM 命令
 
 范围：#1 PPT 转 PDF、#3 Word 转 PDF、#5 Excel 转 PDF（均 Q1）；#2 PPT 转图片、#4 Doc 转 Docx（Q0，但为桌面依赖）。这五项全部依赖 Office 或桌面会话，与 Qt 级别无关。
@@ -519,7 +551,7 @@ office-toolkit office libreoffice-convert <inputs...> --to pdf --output-dir <dir
 
 ### 10.4 发行与文档
 
-- 发布产物中的 `OfficeToolkit_CLI.exe --help` 成功、命令名断言齐全，且 6 条代表性命令在产物中真实执行返回 success（已实现于 `release.yml`）。
+- 发布产物中的 `OfficeToolkit_CLI.exe --help` 成功、命令名断言齐全，且 9 条代表性命令在产物中真实执行返回 success（已实现于 `release.yml`）。
 - 对每个命令的选项和运行前提更新 README 或用户指南；`BUILD_GUIDE.md` 说明源码与发行版入口。
 - README 当前只有 5 行示例（`README.md:71-77`），缺少退出码表与 JSON 结构说明，属必修项。
 - 单文件中 Python 依赖和包数据按需显式包含；系统级依赖列为运行前提，不虚称已捆绑。每个新命令合入前，必须核对 3.1 对照表并补对应收集项——`build_nuitka.bat` 的 CLI target 不会自动跟随源码导入。
@@ -544,6 +576,7 @@ office-toolkit office libreoffice-convert <inputs...> --to pdf --output-dir <dir
 | 风险 | 影响 | 应对 |
 | --- | --- | --- |
 | Qt 依赖被低估（`external_tools` 模块级导入） | 10 项命令无法满足 Q0，若按 Q0 承诺则验收失败 | 采用 Q0/Q1 分级；已用导入断言固化归属，新增命令需补测 |
+| 打包参数自我冲突（`--nofollow-import-to` 与 `--include-module` 同名） | 源码正常而产物缺模块；PyMuPDF 已中招，主构建同样受影响 | 每个新模块合入后用真实产物跑一次该命令，不只跑 `--help` |
 | 过早统一回调/信号 | GUI 接收参数变化或重复完成事件 | 保留兼容适配，逐个页面验证，不做一次性全局替换 |
 | `--json` 在参数错误时失效 | 脚本无法统一解析，自动化流程中断 | 覆写 `ArgumentParser.error()`；实现前不宣称该能力 |
 | 多层子命令破坏 `--json` 继承 | 写了 `--json` 却无 JSON 输出的静默失败 | parser 设计中一次定死层级规则（第 7 节） |

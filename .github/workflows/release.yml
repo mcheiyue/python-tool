@@ -103,7 +103,9 @@ jobs:
           $expected = @(
             "merge","split","extract-images","image-convert","image-colors",
             "image-vectorize","image-to-pdf","text-extract-code","text-txt-to-pdf",
-            "files-rename-preview"
+            "files-rename-preview","pdf-compress","pdf-render",
+            "text-markdown-batch-pdf","office-libreoffice-convert",
+            "office-word-markdown","text-markdown-html"
           )
           $missing = $expected | Where-Object { $help -notmatch [regex]::Escape($_) }
           if ($missing) {
@@ -114,14 +116,17 @@ jobs:
 
           $work = Join-Path $env:RUNNER_TEMP "cli_smoke"
           New-Item -ItemType Directory -Path $work -Force | Out-Null
-          python -c "from PIL import Image; from pathlib import Path; d=Path(r'$work'); Image.new('RGB',(32,32),(255,0,0)).save(d/'a.png'); Image.new('RGB',(32,32),(0,0,255)).save(d/'b.png'); (d/'n.txt').write_text('smoke', encoding='utf-8')"
+          python -c "from PIL import Image; from pathlib import Path; d=Path(r'$work'); Image.new('RGB',(32,32),(255,0,0)).save(d/'a.png'); Image.new('RGB',(32,32),(0,0,255)).save(d/'b.png'); (d/'n.txt').write_text('smoke', encoding='utf-8'); (d/'note.md').write_text('# t'+chr(10), encoding='utf-8')"
           $cases = @(
             @("image-colors", (Join-Path $work "a.png"), "--json"),
             @("image-vectorize", (Join-Path $work "a.png"), "-o", (Join-Path $work "o.svg"), "--json"),
             @("image-to-pdf", (Join-Path $work "a.png"), (Join-Path $work "b.png"), "-o", (Join-Path $work "o.pdf"), "--json"),
             @("text-txt-to-pdf", (Join-Path $work "n.txt"), "--json"),
             @("files-rename-preview", (Join-Path $work "a.png"), "-t", "{index3}_{name}.{ext}", "--json"),
-            @("merge", (Join-Path $work "o.pdf"), (Join-Path $work "o.pdf"), "-o", (Join-Path $work "m.pdf"), "--json")
+            @("merge", (Join-Path $work "o.pdf"), (Join-Path $work "o.pdf"), "-o", (Join-Path $work "m.pdf"), "--json"),
+            @("pdf-compress", (Join-Path $work "o.pdf"), "-q", "/screen", "--json"),
+            @("pdf-render", (Join-Path $work "o.pdf"), "-o", (Join-Path $work "pages"), "--dpi", "72", "--json"),
+            @("text-markdown-html", (Join-Path $work "note.md"), "--direction", "md-to-html", "-o", (Join-Path $work "html"), "--json")
           )
           foreach ($case in $cases) {
             $name = $case[0]

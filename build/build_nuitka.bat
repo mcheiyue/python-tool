@@ -141,7 +141,19 @@ python -m nuitka ^
     --include-package=PIL ^
     --include-package=pypdf ^
     --include-package=vtracer ^
+    --include-package=markdown ^
+    --include-package=html2text ^
+    --include-package=comtypes ^
+    --include-package=core.external_tools.ghostscript_tool ^
+    --include-package=core.external_tools.pandoc_tool ^
+    --include-package=core.external_tools.libreoffice_tool ^
     --include-package-data=fpdf ^
+    --include-data-dir=config=config ^
+    --include-data-file=VERSION=VERSION ^
+    --nofollow-import-to=pymupdf.mupdf ^
+    --include-package=pymupdf ^
+    --include-module=pymupdf.mupdf ^
+    --include-module=pymupdf._mupdf ^
     --include-module=core.cancellation ^
     --include-module=core.operation_result ^
     --include-module=core.utils.atomic_output ^
@@ -149,6 +161,20 @@ python -m nuitka ^
     --include-module=core.features.pdf.pdf_splitter ^
     --include-module=core.features.pdf.pdf_image_extractor ^
     --include-module=core.features.image.image_converter ^
+    --include-module=core.features.image.color_extractor ^
+    --include-module=core.features.image.image_vectorizer ^
+    --include-module=core.features.pdf.image_to_pdf_converter ^
+    --include-module=core.features.text.code_extractor ^
+    --include-module=core.features.text.txt_converter ^
+    --include-module=core.features.text.font_finder ^
+    --include-module=core.features.utils.batch_rename ^
+    --include-module=core.features.pdf.pdf_page_renderer ^
+    --include-module=core.features.text.markdown_pdf_pandoc ^
+    --include-module=core.features.text.markdown_converter ^
+    --include-module=core.features.office.libreoffice_converter ^
+    --include-module=core.features.office.word_converter ^
+    --include-module=core.engines.pdf.base ^
+    --include-module=core.engines.pdf.ghostscript ^
     cli_main.py || goto ERROR
 echo [OK] 命令行版编译完成
 

@@ -79,15 +79,25 @@ python -m app.cli text-extract-code ./src --extensions .py,.md --output all.txt
 python -m app.cli text-txt-to-pdf notes.txt --output-dir out
 python -m app.cli files-rename-preview *.png --template "{index3}_{name}.{ext}" --json
 
+# 需要外部工具的命令
+python -m app.cli pdf-compress big.pdf --quality /ebook --json
+python -m app.cli pdf-render doc.pdf --output pages --dpi 300 --json
+python -m app.cli text-markdown-batch-pdf *.md --output-dir pdf --json
+python -m app.cli office-libreoffice-convert a.docx --to pdf --json
+python -m app.cli office-word-markdown a.docx --direction docx-to-md --json
+python -m app.cli text-markdown-html a.md --direction md-to-html --json
+
 # Windows 发行包
 OfficeToolkit_CLI.exe merge input-a.pdf input-b.pdf --output merged.pdf
 ```
 
-命令返回 `0` 表示成功，`1` 表示处理失败，`130` 表示用户取消；加 `--json` 可获得包含 `status`、`message`、`outputs`、`succeeded`、`failed` 的机器可读结果，非文件产出（取色结果、重命名预览计划）另在 `data` 字段返回。
+命令返回 `0` 表示成功，`1` 表示处理失败，`130` 表示用户取消；加 `--json` 可获得包含 `status`、`message`、`outputs`、`succeeded`、`failed` 的机器可读结果，非文件产出（取色结果、重命名预览计划）另在 `data` 字段返回。失败时 `message` 会带上核心层的具体原因（例如「找不到 PDF 引擎 'xelatex'」），而不是只报失败计数。
 
-`merge`、`split`、`extract-images`、`image-convert` 支持 Ctrl+C 中断；其余命令当前不支持取消。
+`merge`、`split`、`extract-images`、`image-convert`、`pdf-compress` 支持 Ctrl+C 中断；其中 `pdf-compress` 会直接终止 Ghostscript 子进程，其余命令在文件边界停止。其他命令当前不支持取消。
 
 `files-rename-preview` 只生成预览计划，不修改文件。
+
+外部工具依赖：`pdf-compress` 需要 Ghostscript；`pdf-render` 默认 `--engine auto`，优先 PyMuPDF，不可用时回退 Ghostscript；`text-markdown-batch-pdf`、`office-word-markdown` 需要 Pandoc，转 PDF 还需 `--pdf-engine` 指定的引擎（如 xelatex）在 PATH 中；`office-libreoffice-convert` 需要 LibreOffice；`text-markdown-html` 默认用内置库，加 `--use-pandoc` 才需要 Pandoc。工具缺失时命令返回退出码 `1` 并说明缺什么。
 
 ### 外部工具安装（可选）
 

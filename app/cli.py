@@ -20,6 +20,22 @@ from core.features.utils.batch_rename import BatchRenamer
 from core.operation_result import OperationResult, OperationStatus
 
 CANCELLABLE = frozenset({"merge", "split", "extract-images", "image-convert"})
+INTERRUPTIBLE = CANCELLABLE | {"pdf-compress"}
+COMPRESS_QUALITIES = ("/screen", "/ebook", "/printer", "/prepress", "/default")
+_ACTIVE_STOPPERS: list[Callable[[], None]] = []
+
+
+def _register_stopper(stop: Callable[[], None]) -> None:
+    _ACTIVE_STOPPERS.append(stop)
+
+
+def _stop_active() -> None:
+    for stop in _ACTIVE_STOPPERS:
+        try:
+            stop()
+        except Exception:
+            pass
+    _ACTIVE_STOPPERS.clear()
 
 
 def _add_json_option(parser: argparse.ArgumentParser) -> None:
@@ -113,6 +129,88 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_option(rename)
     rename.set_defaults(operation="files-rename-preview")
 
+    compress = commands.add_parser("pdf-compress", help="用 Ghostscript 压缩 PDF")
+    compress.add_argument("inputs", nargs="+", help="输入 PDF 文件")
+    compress.add_argument(
+        "-q",
+        "--quality",
+        choices=COMPRESS_QUALITIES,
+        default="/printer",
+        help="压缩质量，默认 /printer",
+    )
+    _add_json_option(compress)
+    compress.set_defaults(operation="pdf-compress")
+
+    render = commands.add_parser("pdf-render", help="将 PDF 页面渲染为图片")
+    render.add_argument("inputs", nargs="+", help="输入 PDF 文件")
+    render.add_argument("-o", "--output", required=True, help="输出目录")
+    render.add_argument("--dpi", type=int, default=150, help="渲染 DPI，默认 150")
+    render.add_argument(
+        "-f",
+        "--format",
+        choices=("png", "jpg", "jpeg", "webp"),
+        default="png",
+        help="输出格式，默认 png",
+    )
+    render.add_argument("--first-page", type=int, default=None, help="起始页（1 起）")
+    render.add_argument("--last-page", type=int, default=None, help="结束页（含）")
+    render.add_argument(
+        "--engine",
+        choices=("auto", "pymupdf", "ghostscript"),
+        default="auto",
+        help="渲染引擎；默认 auto 优先 PyMuPDF，不可用时回退 Ghostscript",
+    )
+    _add_json_option(render)
+    render.set_defaults(operation="pdf-render")
+
+    md_pdf = commands.add_parser("text-markdown-batch-pdf", help="用 Pandoc 批量将 Markdown 转 PDF")
+    md_pdf.add_argument("inputs", nargs="+", help="输入 Markdown 文件")
+    md_pdf.add_argument("-o", "--output-dir", default=None, help="输出目录")
+    md_pdf.add_argument("--pdf-engine", default="xelatex", help="Pandoc PDF 引擎")
+    md_pdf.add_argument("--template", default=None, help="自定义 Pandoc 模板")
+    md_pdf.add_argument("--no-math", action="store_true", help="关闭数学公式支持")
+    md_pdf.add_argument("--no-highlight", action="store_true", help="关闭代码高亮")
+    _add_json_option(md_pdf)
+    md_pdf.set_defaults(operation="text-markdown-batch-pdf")
+
+    lo = commands.add_parser("office-libreoffice-convert", help="用 LibreOffice 批量转换格式")
+    lo.add_argument("inputs", nargs="+", help="输入文件")
+    lo.add_argument("--to", required=True, help="目标格式，例如 pdf")
+    lo.add_argument("-o", "--output-dir", default=None, help="输出目录")
+    _add_json_option(lo)
+    lo.set_defaults(operation="office-libreoffice-convert")
+
+    word_md = commands.add_parser("office-word-markdown", help="Word 与 Markdown 互转")
+    word_md.add_argument("inputs", nargs="+", help="输入文件")
+    word_md.add_argument(
+        "--direction",
+        choices=("docx-to-md", "md-to-docx"),
+        required=True,
+        help="转换方向",
+    )
+    word_md.add_argument("-o", "--output-dir", default=None, help="输出目录")
+    word_md.add_argument("--reference-doc", default=None, help="md-to-docx 的参考文档")
+    _add_json_option(word_md)
+    word_md.set_defaults(operation="office-word-markdown")
+
+    md_html = commands.add_parser("text-markdown-html", help="Markdown 与 HTML 互转")
+    md_html.add_argument("inputs", nargs="+", help="输入文件")
+    md_html.add_argument(
+        "--direction",
+        choices=("md-to-html", "html-to-md"),
+        required=True,
+        help="转换方向",
+    )
+    md_html.add_argument("-o", "--output-dir", default=None, help="输出目录")
+    md_html.add_argument(
+        "--use-pandoc",
+        action="store_true",
+        help="使用 Pandoc（需已安装），否则用内置库",
+    )
+    md_html.add_argument("--no-css", action="store_true", help="HTML 输出不内嵌样式")
+    _add_json_option(md_html)
+    md_html.set_defaults(operation="text-markdown-html")
+
     return parser
 
 
@@ -122,8 +220,40 @@ def _log_callback(json_mode: bool) -> Callable[[str], None] | None:
     return lambda message: print(message, file=sys.stderr)
 
 
+class _LogCapture:
+    """收集核心日志，使 --json 失败时也能给出原因，而不是只报失败计数。"""
+
+    _ERROR_MARKERS = ("错误", "失败", "Error", "error", "未找到", "不支持", "未安装")
+
+    def __init__(self, echo: bool) -> None:
+        self._echo = echo
+        self._lines: list[str] = []
+
+    def __call__(self, message: str) -> None:
+        text = str(message)
+        self._lines.append(text)
+        if self._echo:
+            print(text, file=sys.stderr)
+
+    def last_error(self) -> str:
+        for line in reversed(self._lines):
+            stripped = line.strip()
+            if stripped and any(marker in stripped for marker in self._ERROR_MARKERS):
+                return stripped
+        return ""
+
+    def __bool__(self) -> bool:
+        return True
+
+
 def _existing(*paths: str | None) -> tuple[str, ...]:
     return tuple(path for path in paths if path and os.path.exists(path))
+
+
+def _ensure_dir(path: str | None) -> str | None:
+    if path:
+        os.makedirs(path, exist_ok=True)
+    return path
 
 
 def _pdf_outputs_for(sources: list[str], output_dir: str | None) -> tuple[str, ...]:
@@ -193,8 +323,291 @@ def _run_counts(command: Callable[..., None]) -> tuple[int, int] | None:
     return captured["success"], captured["fail"]
 
 
+def _result_from_counts(
+    counts: tuple[int, int] | None,
+    outputs: tuple[str, ...],
+    *,
+    success_message: str,
+    failure_message: str,
+    hint: str = "",
+) -> OperationResult:
+    if counts is None:
+        return OperationResult.failure("核心操作未返回完成通知", outputs=outputs)
+    success, fail = counts
+    message = (
+        failure_message.format(success=success, fail=fail)
+        if fail
+        else success_message.format(success=success)
+    )
+    if fail and hint:
+        message = f"{message}: {hint}"
+    if success == 0:
+        return OperationResult.failure(message, succeeded=0, failed=fail)
+    if fail:
+        return OperationResult.failure(
+            message, outputs=outputs, succeeded=success, failed=fail
+        )
+    return OperationResult.success(message, outputs=outputs, succeeded=success)
+
+
+def _with_extension(sources: list[str], output_dir: str | None, extension: str) -> tuple[str, ...]:
+    paths = []
+    for source in sources:
+        directory = output_dir or os.path.dirname(os.path.abspath(source))
+        candidate = os.path.join(
+            directory, os.path.splitext(os.path.basename(source))[0] + extension
+        )
+        if os.path.exists(candidate):
+            paths.append(candidate)
+    return tuple(paths)
+
+
+def _rendered_outputs(sources: list[str], output_dir: str) -> tuple[str, ...]:
+    paths = []
+    for source in sources:
+        folder = os.path.join(
+            output_dir, os.path.splitext(os.path.basename(source))[0] + "_pages"
+        )
+        if os.path.isdir(folder):
+            paths.extend(
+                sorted(
+                    os.path.join(folder, name)
+                    for name in os.listdir(folder)
+                    if os.path.isfile(os.path.join(folder, name))
+                )
+            )
+    return tuple(paths)
+
+
+def _ghostscript_path() -> str | None:
+    from core.external_tools.manager import ExternalToolManager
+
+    tool = ExternalToolManager().get_tool("ghostscript")
+    if tool is None or tool.is_disabled:
+        return None
+    path = tool.get_path()
+    return path if path and os.path.exists(path) else None
+
+
+def _run_pdf_compress(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.engines.pdf.ghostscript import GhostscriptCompressor
+
+    gs_path = _ghostscript_path()
+    if not gs_path:
+        return OperationResult.failure(
+            "未找到 Ghostscript 可执行文件，请先在设置中安装或禁用状态后重试",
+            failed=len(args.inputs),
+        )
+
+    compressor = GhostscriptCompressor()
+    if on_log:
+        compressor.log.connect(on_log)
+    _register_stopper(compressor.stop)
+    counts: dict[str, int] = {}
+
+    def on_finished(success, fail):
+        counts["success"] = success
+        counts["fail"] = fail
+
+    compressor.finished.connect(on_finished)
+    produced = compressor.compress(list(args.inputs), args.quality, gs_path=gs_path)
+    outputs = tuple(produced or ())
+    return _result_from_counts(
+        (counts["success"], counts["fail"]) if counts else None,
+        outputs,
+        success_message="成功压缩 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+    )
+
+
+def _run_pdf_render(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.features.pdf.pdf_page_renderer import PDFPageRenderer
+
+    renderer = PDFPageRenderer()
+    pymupdf_ok = PDFPageRenderer.is_available()
+    gs_ok = renderer.is_gs_available()
+
+    if args.engine == "pymupdf" and not pymupdf_ok:
+        return OperationResult.failure(
+            "PyMuPDF 不可用，请改用 --engine ghostscript",
+            failed=len(args.inputs),
+        )
+    if args.engine == "ghostscript" and not gs_ok:
+        return OperationResult.failure(
+            "未找到可用的 Ghostscript，请改用 --engine pymupdf 或先安装 Ghostscript",
+            failed=len(args.inputs),
+        )
+    if args.engine == "auto" and not (pymupdf_ok or gs_ok):
+        return OperationResult.failure(
+            "未找到可用的 PDF 渲染引擎（PyMuPDF 或 Ghostscript）",
+            failed=len(args.inputs),
+        )
+    use_ghostscript = args.engine == "ghostscript" or (
+        args.engine == "auto" and not pymupdf_ok and gs_ok
+    )
+
+    page_range = None
+    if args.first_page is not None or args.last_page is not None:
+        start = (args.first_page or 1) - 1
+        end = args.last_page if args.last_page is not None else start + 10**6
+        if start < 0 or end <= start:
+            return OperationResult.failure("页码范围无效", failed=len(args.inputs))
+        page_range = (start, end)
+
+    counts = _run_counts(
+        lambda **kw: renderer.render_all(
+            list(args.inputs),
+            args.output,
+            dpi=args.dpi,
+            output_format=args.format,
+            page_range=page_range,
+            use_ghostscript=use_ghostscript,
+            on_log=on_log,
+            **kw,
+        )
+    )
+    return _result_from_counts(
+        counts,
+        _rendered_outputs(list(args.inputs), args.output),
+        success_message="成功渲染 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+
+
+def _run_markdown_batch_pdf(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.features.text.markdown_pdf_pandoc import PandocMarkdownToPdf
+
+    converter = PandocMarkdownToPdf()
+    if not converter.is_available():
+        return OperationResult.failure(
+            "Pandoc 未安装或已禁用，请先在设置中安装", failed=len(args.inputs)
+        )
+    counts = _run_counts(
+        lambda **kw: converter.convert_batch(
+            list(args.inputs),
+            args.output_dir,
+            enable_math=not args.no_math,
+            enable_highlight=not args.no_highlight,
+            pdf_engine=args.pdf_engine,
+            template=args.template,
+            on_log=on_log,
+            **kw,
+        )
+    )
+    return _result_from_counts(
+        counts,
+        _with_extension(list(args.inputs), args.output_dir, ".pdf"),
+        success_message="成功转换 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+
+
+def _run_libreoffice_convert(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.features.office.libreoffice_converter import LibreOfficeFormatConverter
+
+    converter = LibreOfficeFormatConverter()
+    if not converter.is_available():
+        return OperationResult.failure(
+            "LibreOffice 未安装或不可用，请先在设置中安装", failed=len(args.inputs)
+        )
+    counts = _run_counts(
+        lambda **kw: converter.convert_batch(
+            list(args.inputs),
+            args.to,
+            args.output_dir,
+            on_log=on_log,
+            **kw,
+        )
+    )
+    return _result_from_counts(
+        counts,
+        _with_extension(list(args.inputs), args.output_dir, "." + args.to.lstrip(".")),
+        success_message="成功转换 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+
+
+def _run_word_markdown(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.features.office.word_converter import WordConverter
+
+    converter = WordConverter()
+    if not converter.is_pandoc_available():
+        return OperationResult.failure(
+            "Pandoc 未安装，Word 与 Markdown 互转需要 Pandoc", failed=len(args.inputs)
+        )
+    if args.direction == "docx-to-md":
+        counts = _run_counts(
+            lambda **kw: converter.convert_docx_to_markdown(
+                list(args.inputs), args.output_dir, on_log=on_log, **kw
+            )
+        )
+        extension = ".md"
+    else:
+        counts = _run_counts(
+            lambda **kw: converter.convert_markdown_to_docx(
+                list(args.inputs),
+                args.output_dir,
+                args.reference_doc,
+                on_log=on_log,
+                **kw,
+            )
+        )
+        extension = ".docx"
+    return _result_from_counts(
+        counts,
+        _with_extension(list(args.inputs), args.output_dir, extension),
+        success_message="成功转换 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+
+
+def _run_markdown_html(args: argparse.Namespace, on_log) -> OperationResult:
+    from core.features.text.markdown_converter import MarkdownConverter
+
+    converter = MarkdownConverter()
+    if args.use_pandoc and not converter.is_pandoc_available():
+        return OperationResult.failure(
+            "指定了 --use-pandoc 但 Pandoc 未安装", failed=len(args.inputs)
+        )
+    if args.direction == "md-to-html":
+        counts = _run_counts(
+            lambda **kw: converter.convert_markdown_to_html(
+                list(args.inputs),
+                args.output_dir,
+                use_pandoc=args.use_pandoc,
+                include_css=not args.no_css,
+                on_log=on_log,
+                **kw,
+            )
+        )
+        extension = ".html"
+    else:
+        counts = _run_counts(
+            lambda **kw: converter.convert_html_to_markdown(
+                list(args.inputs),
+                args.output_dir,
+                use_pandoc=args.use_pandoc,
+                on_log=on_log,
+                **kw,
+            )
+        )
+        extension = ".md"
+    return _result_from_counts(
+        counts,
+        _with_extension(list(args.inputs), args.output_dir, extension),
+        success_message="成功转换 {success} 个文件",
+        failure_message="成功 {success} 个，失败 {fail} 个",
+        hint=on_log.last_error(),
+    )
+
+
 def _execute(args: argparse.Namespace, should_cancel: Callable[[], bool]) -> OperationResult:
-    on_log = _log_callback(args.json)
+    on_log = _LogCapture(echo=not args.json)
+    _ensure_dir(getattr(args, "output_dir", None))
 
     if args.operation == "merge":
         return PDFMerger().merge(
@@ -299,6 +712,24 @@ def _execute(args: argparse.Namespace, should_cancel: Callable[[], bool]) -> Ope
             data={"plan": plan},
         )
 
+    if args.operation == "pdf-compress":
+        return _run_pdf_compress(args, on_log)
+
+    if args.operation == "pdf-render":
+        return _run_pdf_render(args, on_log)
+
+    if args.operation == "text-markdown-batch-pdf":
+        return _run_markdown_batch_pdf(args, on_log)
+
+    if args.operation == "office-libreoffice-convert":
+        return _run_libreoffice_convert(args, on_log)
+
+    if args.operation == "office-word-markdown":
+        return _run_word_markdown(args, on_log)
+
+    if args.operation == "text-markdown-html":
+        return _run_markdown_html(args, on_log)
+
     raise ValueError(f"未知命令: {args.operation}")
 
 
@@ -324,18 +755,22 @@ def main(argv: list[str] | None = None) -> int:
 
     def request_cancel(_signum, _frame):
         cancelled.set()
+        _stop_active()
 
-    if args.operation in CANCELLABLE:
+    if args.operation in INTERRUPTIBLE:
         signal.signal(signal.SIGINT, request_cancel)
     try:
         try:
             result = _execute(args, cancelled.is_set)
         except (CancelledError, KeyboardInterrupt):
+            _stop_active()
             result = OperationResult.cancelled()
         except Exception as error:
+            _stop_active()
             result = OperationResult.failure(str(error))
         return _emit_result(result, args.json)
     finally:
+        _ACTIVE_STOPPERS.clear()
         signal.signal(signal.SIGINT, previous_handler)
 
 
