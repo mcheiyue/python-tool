@@ -13,8 +13,19 @@ set CCFLAGS=-O1
 
 REM 定义公共参数 (避免重复)
 REM comtypes.gen 不纳入：应用全程 CreateObject(dynamic=True)，不生成/不读 typelib；该目录在干净机器上不存在，纳入会让构建 FATAL
-REM pymupdf.mupdf 不编译成 C：6 万行模块生成的 C 超 100MB，gcc cc1 必 OOM（Nuitka issue #3243）；
-REM 改为以字节码包含，运行时仍可正常 import
+REM pymupdf.mupdf is NOT compiled to C: its generated C is >100MB and gcc cc1 OOMs (Nuitka issue #3243).
+REM It also cannot be added back with --include-module: --nofollow-import-to wins and vetoes the
+REM same-name include, so pymupdf/__init__.py's relative import of mupdf fails permanently and the
+REM whole package becomes unimportable. Correct fix: ship it as a TOP-LEVEL data file. __init__.py
+REM falls back to a bare 'import mupdf', and mupdf.py itself does 'import _mupdf'; both resolve from
+REM sys.path[0]. Missing either file means ImportError at runtime only (never in source runs).
+REM pymupdf._mupdf must be nofollow too, otherwise --include-package=pymupdf copies the 13MB
+REM _mupdf.pyd into pymupdf/ as well and the distribution carries two copies.
+for /f "delims=" %%i in ('python -c "import os,pymupdf;print(os.path.dirname(pymupdf.__file__))"') do set PYMUPDF_DIR=%%i
+if not defined PYMUPDF_DIR (
+    echo [ERROR] 无法定位 pymupdf 安装目录，请确认已 pip install pymupdf
+    exit /b 1
+)
 set COMMON_FLAGS=^
     --mingw64 ^
     --assume-yes-for-downloads ^
@@ -43,8 +54,10 @@ set COMMON_FLAGS=^
     --include-data-file=VERSION=VERSION ^
     --include-data-file=plugins/manifest.json=plugins/manifest.json ^
     --nofollow-import-to=pymupdf.mupdf ^
-    --include-module=pymupdf.mupdf ^
-    --include-module=pymupdf._mupdf ^
+    --nofollow-import-to=pymupdf._mupdf ^
+    --include-package=pymupdf ^
+    "--include-data-files=%PYMUPDF_DIR%\mupdf.py=mupdf.py" ^
+    "--include-data-files=%PYMUPDF_DIR%\_mupdf.pyd=_mupdf.pyd" ^
     --include-package-data=pypinyin ^
     --include-package-data=pptx ^
     --include-package-data=numpy ^
@@ -162,9 +175,10 @@ python -m nuitka ^
     --include-data-file=VERSION=VERSION ^
     --include-data-file=plugins/manifest.json=plugins/manifest.json ^
     --nofollow-import-to=pymupdf.mupdf ^
+    --nofollow-import-to=pymupdf._mupdf ^
     --include-package=pymupdf ^
-    --include-module=pymupdf.mupdf ^
-    --include-module=pymupdf._mupdf ^
+    "--include-data-files=%PYMUPDF_DIR%\mupdf.py=mupdf.py" ^
+    "--include-data-files=%PYMUPDF_DIR%\_mupdf.pyd=_mupdf.pyd" ^
     --include-module=core.cancellation ^
     --include-module=core.operation_result ^
     --include-module=core.utils.atomic_output ^
