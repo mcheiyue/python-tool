@@ -44,6 +44,17 @@ jobs:
       - name: 安装 Inno Setup
         run: choco install innosetup --version=6.7.1 --allow-downgrade --no-progress -y
 
+      # pdf-compress 冒烟依赖 Ghostscript（没有它只能跳过，那就等于不测）。
+      # GhostscriptTool 会扫描 Program Files\gs\gs*\bin，choco 装完正好落在这个位置。
+      - name: 安装 Ghostscript
+        shell: pwsh
+        run: |
+          choco install ghostscript --no-progress -y
+          # 用应用自己的发现逻辑验证，避免装到别处导致 2 小时后才在冒烟里失败
+          $path = python -c "from core.external_tools.ghostscript_tool import GhostscriptTool; print(GhostscriptTool().get_path() or '')"
+          if (-not $path) { Write-Error "Ghostscript 安装后仍无法被发现"; exit 1 }
+          Write-Host "Ghostscript -> $path"
+
       # choco 的 Inno Setup 不带中文语言文件，installer.iss 引用它后 ISCC 会失败
       - name: 补装 Inno 中文语言文件
         shell: pwsh
