@@ -128,7 +128,9 @@ jobs:
             @("files-rename-preview", (Join-Path $work "a.png"), "-t", "{index3}_{name}.{ext}", "--json"),
             @("merge", (Join-Path $work "o.pdf"), (Join-Path $work "o.pdf"), "-o", (Join-Path $work "m.pdf"), "--json"),
             @("pdf-compress", (Join-Path $work "o.pdf"), "-q", "/screen", "--json"),
-            @("pdf-render", (Join-Path $work "o.pdf"), "-o", (Join-Path $work "pages"), "--dpi", "72", "--json"),
+            # 必须指定 --engine pymupdf：auto 会在 PyMuPDF 缺失时静默回退 Ghostscript，
+            # 那样即使产物里的 pymupdf 完全不可导入也会“成功”，漏掉 v0.0.13 那类缺陷。
+            @("pdf-render", (Join-Path $work "o.pdf"), "-o", (Join-Path $work "pages"), "--dpi", "72", "--engine", "pymupdf", "--json"),
             @("text-markdown-html", (Join-Path $work "note.md"), "--direction", "md-to-html", "-o", (Join-Path $work "html"), "--json")
           )
           foreach ($case in $cases) {

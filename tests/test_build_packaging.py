@@ -28,3 +28,14 @@ def test_pymupdf_mupdf_is_shipped_as_top_level_data_not_include_module():
 
     # 定位安装目录的探测必须存在，否则上面两条会展开成不存在的路径
     assert "PYMUPDF_DIR" in text
+
+
+def test_release_smoke_pins_pymupdf_engine():
+    """冒烟里的 pdf-render 必须显式 --engine pymupdf。
+
+    默认 auto 在 PyMuPDF 不可用时会静默回退 Ghostscript，产物里 pymupdf 完全不可
+    导入也照样返回 success，v0.0.13 就是这样把坏包发出去的。
+    """
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    line = next(l for l in text.splitlines() if '@("pdf-render"' in l)
+    assert '"--engine"' in line and '"pymupdf"' in line, line
