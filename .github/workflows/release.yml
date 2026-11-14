@@ -92,6 +92,16 @@ jobs:
             if ($out -notmatch "BENCHMARK_STARTUP_TIME_MS") { Write-Host $out; Write-Error "$dir 未真正启动"; exit 1 }
             Write-Host "$dir -> $(($out -split "`n" | Select-String 'BENCHMARK_STARTUP_TIME_MS') -join '')"
           }
+          # GUI 侧 pdf-render 依赖 pymupdf 能导入，而 mupdf 是懒加载：--benchmark 永远碰不到它。
+          # v0.0.6~v0.0.13 的安装版因此一直把「PDF 页面渲染」显示成不可用。
+          # 这两个顶层文件是导入的前提（pymupdf/__init__.py 的相对导入被 nofollow 否决后靠裸 import 兜底）。
+          foreach ($f in @("mupdf.py", "_mupdf.pyd")) {
+            if (-not (Test-Path (Join-Path $src $f))) {
+              Write-Error "GUI 产物缺少顶层 $f，pdf-render 在安装版中不可用"
+              exit 1
+            }
+          }
+          Write-Host "GUI -> pymupdf 数据文件齐全"
           $cli = (Resolve-Path "dist\cli\OfficeToolkit_CLI.exe").Path
           $help = (& $cli --help 2>&1 | Out-String)
           if ($LASTEXITCODE -ne 0) {
